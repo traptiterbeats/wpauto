@@ -1,0 +1,15 @@
+id: autopilo
+name: autopilo.ir
+description: cPanel 138 (Jupiter) · بدون API Token و SSH · PHP پیش‌فرض 8.5 · CSF فعال
+port: 2083
+auth: session
+insecure_tls: false
+max_login_attempts: 1
+# 8.5 is the server default but too new for many plugins; pin WordPress sites to 8.3/8.4.
+preferred_php: ["8.3", "8.4"]
+# Tokens probe is skipped: Manage API Tokens is not available on this host.
+probes: [user, domains, php, mysql, quota, features]
+quirks:
+  helper_upload: fileman
+  php_pin: "true"
+  memory_limit_hint: 128M

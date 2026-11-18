@@ -19,3 +19,18 @@ main{max-width:860px;margin:0 auto;padding:24px}
 .task{display:flex;align-items:center;justify-content:space-between;gap:16px}
 .task h3{margin:0 0 4px}
 .badge{border:1px solid var(--line);border-radius:999px;padding:4px 12px;color:var(--muted);font-size:13px;white-space:nowrap}
+a{color:var(--accent);text-decoration:none}
+.brand{color:var(--text);font-weight:700}
+.top nav{display:flex;gap:16px}
+.btn{background:var(--accent);color:#fff;border-radius:8px;padding:8px 14px;white-space:nowrap}
+.form{display:flex;flex-direction:column;gap:12px;margin-top:20px}
+select{background:#0c0f1b;border:1px solid var(--line);border-radius:8px;color:var(--text);padding:10px;font-size:15px}
+table.list{width:100%;border-collapse:collapse;margin:12px 0}
+table.list th,table.list td{text-align:start;padding:10px;border-bottom:1px solid var(--line)}
+.ok{color:#4ade80}.warn{color:#fbbf24}.bad{color:var(--err)}
+.inline{display:flex;align-items:center;gap:12px;margin:16px 0}
+.report{margin:16px 0}
+.checks{list-style:none;padding:0;display:flex;flex-direction:column;gap:8px}
+details.card{margin:16px 0}
+summary{cursor:pointer}
+button.danger{color:var(--err);border-color:var(--err)}

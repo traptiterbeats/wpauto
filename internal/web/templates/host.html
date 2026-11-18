@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="fa" dir="rtl">
+<head>{{template "head" .}}<title>{{.Host.Name}} | wpauto</title></head>
+<body>
+{{template "nav" .}}
+<main>
+  <h2>{{.Host.Name}}</h2>
+  <p class="muted" dir="ltr">{{.Host.Username}} @ {{.Host.URL}}</p>
+  <p class="muted">پروفایل: {{if .Profile}}{{.Profile.Name}}{{else}}{{.Host.ProfileID}} (پیدا نشد){{end}}</p>
+
+  {{if .Locked}}
+  <div class="error">ورود قبلی رد شد. برای جلوگیری از بلاک شدن IP توسط فایروال هاست، تلاش خودکار متوقف شده. رمز را اصلاح کنید تا دوباره فعال شود.</div>
+  {{else}}
+  <form method="post" action="{{.BasePath}}hosts/{{.Host.ID}}/test" class="inline">
+    <input type="hidden" name="csrf" value="{{.CSRF}}">
+    <button type="submit">تست اتصال و بررسی هاست</button>
+    <span class="muted small">فقط خواندنی است و چیزی روی هاست تغییر نمی‌کند.</span>
+  </form>
+  {{end}}
+
+  {{with .Host.LastReport}}
+  <section class="card report">
+    <h3>گزارش هاست <span class="muted small">{{.At.Format "2006-01-02 15:04"}}</span></h3>
+    <p class="{{if .ReadyForWP}}ok{{else}}warn{{end}}">{{.Recommendation}}</p>
+    <ul class="checks">
+      {{range .Checks}}<li><span class="{{if .OK}}ok{{else}}bad{{end}}">{{if .OK}}✔{{else}}✘{{end}}</span> <strong>{{.Title}}</strong> <span class="muted" dir="auto">{{.Detail}}</span></li>{{end}}
+    </ul>
+  </section>
+  {{end}}
+
+  <details class="card">
+    <summary>ویرایش اطلاعات ورود</summary>
+    <form class="form" method="post" action="{{.BasePath}}hosts/{{.Host.ID}}/edit" autocomplete="off">
+      <input type="hidden" name="csrf" value="{{.CSRF}}">
+      <label>پروفایل
+        <select name="profile">{{range .Profiles}}<option value="{{.ID}}" {{if eq .ID $.Host.ProfileID}}selected{{end}}>{{.Name}}</option>{{end}}</select>
+      </label>
+      <label>نام کاربری<input name="username" value="{{.Host.Username}}" dir="ltr"></label>
+      <label>رمز جدید (خالی = بدون تغییر)<input name="secret" type="password" dir="ltr"></label>
+      <button type="submit">ذخیره</button>
+    </form>
+  </details>
+
+  <form method="post" action="{{.BasePath}}hosts/{{.Host.ID}}/delete" onsubmit="return confirm('این هاست از پنل حذف شود؟ (روی خود هاست چیزی پاک نمی‌شود)')">
+    <input type="hidden" name="csrf" value="{{.CSRF}}">
+    <button type="submit" class="ghost danger">حذف از پنل</button>
+  </form>
+</main>
+</body>
+</html>

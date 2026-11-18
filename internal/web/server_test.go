@@ -13,6 +13,7 @@ import (
 )
 
 func TestLoginFlow(t *testing.T) {
+	t.Setenv("WPAUTO_DIR", t.TempDir())
 	cfg, pass, err := config.New(1)
 	if err != nil {
 		t.Fatal(err)
@@ -55,5 +56,74 @@ func TestRateLimit(t *testing.T) {
 	}
 	if l.blocked("1.2.3.4") == 0 {
 		t.Fatal("expected block after 5 failures")
+	}
+}
+
+func TestHostLockAfterRejectedLogin(t *testing.T) {
+	t.Setenv("WPAUTO_DIR", t.TempDir())
+	logins := 0
+	fake := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		logins++
+		w.WriteHeader(401)
+		_, _ = w.Write([]byte(`{"status":0,"message":"invalid_login"}`))
+	}))
+	defer fake.Close()
+
+	cfg, pass, _ := config.New(1)
+	s, err := New(cfg, "test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	ts := httptest.NewServer(s.Handler())
+	defer ts.Close()
+	jar, _ := cookiejar.New(nil)
+	cl := &http.Client{Jar: jar}
+	bp := ts.URL + cfg.BasePath
+	if r, _ := cl.PostForm(bp+"login", url.Values{"username": {cfg.Username}, "password": {pass}}); r.StatusCode != 200 {
+		t.Fatal("login failed")
+	}
+	u, _ := url.Parse(ts.URL + cfg.BasePath)
+	var csrf string
+	for _, c := range jar.Cookies(u) {
+		if c.Name == cookieName {
+			csrf = s.sign("csrf:" + c.Value)[:32]
+		}
+	}
+	// add host
+	r, err := cl.PostForm(bp+"hosts/add", url.Values{"csrf": {csrf}, "profile": {"generic"}, "url": {fake.URL},
+		"username": {"u"}, "secret": {"wrong"}})
+	if err != nil || r.StatusCode != 200 {
+		t.Fatalf("add: %v %d", err, r.StatusCode)
+	}
+	hosts := s.store.List()
+	if len(hosts) != 1 || hosts[0].SealedSecret == "wrong" {
+		t.Fatalf("host not stored encrypted: %+v", hosts)
+	}
+	id := hosts[0].ID
+	// two tests: only the first may reach cPanel
+	for i := 0; i < 2; i++ {
+		if _, err := cl.PostForm(bp+"hosts/"+id+"/test", url.Values{"csrf": {csrf}}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if logins != 1 {
+		t.Fatalf("expected exactly 1 login attempt, got %d", logins)
+	}
+	h, _ := s.store.Get(id)
+	if h.FailedLogins != 1 || h.LastReport == nil || h.LastReport.LoginOK {
+		t.Fatalf("unexpected host state: %+v", h)
+	}
+	for _, page := range []string{"hosts", "hosts/" + id, ""} {
+		r, _ := cl.Get(bp + page)
+		b := new(bytes.Buffer)
+		_, _ = b.ReadFrom(r.Body)
+		if r.StatusCode != 200 || !strings.Contains(b.String(), "</html>") {
+			t.Fatalf("page %q did not render fully: %d", page, r.StatusCode)
+		}
+	}
+	// missing csrf is rejected
+	r, _ = cl.PostForm(bp+"hosts/"+id+"/delete", url.Values{})
+	if r.StatusCode != 400 {
+		t.Fatalf("csrf not enforced: %d", r.StatusCode)
 	}
 }

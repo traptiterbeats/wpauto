@@ -1,0 +1,17 @@
+{{define "nav"}}
+<header class="top">
+  <a href="{{.BasePath}}" class="brand">wpauto</a>
+  <nav><a href="{{.BasePath}}">کارها</a><a href="{{.BasePath}}hosts">هاست‌ها</a></nav>
+  <span class="muted small">نسخه {{.Version}}</span>
+  <form method="post" action="{{.BasePath}}logout" class="logout">
+    <input type="hidden" name="csrf" value="{{.CSRF}}">
+    <span class="muted">{{.User}}</span>
+    <button type="submit" class="ghost">خروج</button>
+  </form>
+</header>
+{{end}}
+{{define "head"}}
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="{{.BasePath}}static/style.css">
+{{end}}

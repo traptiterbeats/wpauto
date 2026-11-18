@@ -16,12 +16,13 @@ type Task struct {
 	Title       string
 	Description string
 	Status      Status
+	Link        string
 }
 
 // Catalogue is the ordered list shown on the dashboard.
 var Catalogue = []Task{
-	{ID: "cpanel-connect", Title: "اتصال به cPanel", Description: "ورود به هاست و ذخیره‌ی امن نشست", Status: StatusSoon},
-	{ID: "host-preflight", Title: "بررسی هاست", Description: "تشخیص امکانات، نسخه‌ی PHP و محدودیت‌ها", Status: StatusSoon},
+	{ID: "cpanel-connect", Title: "اتصال به cPanel", Description: "افزودن هاست با پروفایل، ذخیره‌ی رمزنگاری‌شده و تست ورود", Status: StatusReady, Link: "hosts"},
+	{ID: "host-preflight", Title: "بررسی هاست", Description: "تشخیص امکانات، نسخه‌ی PHP، دیتابیس و فضای دیسک", Status: StatusReady, Link: "hosts"},
 	{ID: "wp-install", Title: "نصب وردپرس", Description: "ساخت دیتابیس، نصب فایل‌ها، تنظیم ادمین و تست", Status: StatusSoon},
 	{ID: "theme-install", Title: "نصب قالب و افزونه‌ها", Description: "انتخاب قالب از کاتالوگ و نصب افزونه‌های وابسته", Status: StatusSoon},
 	{ID: "ai-customize", Title: "شخصی‌سازی با هوش مصنوعی", Description: "پر کردن محتوای قالب از روی اطلاعات کسب‌وکار", Status: StatusSoon},

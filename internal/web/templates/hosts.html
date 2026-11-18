@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="fa" dir="rtl">
+<head>{{template "head" .}}<title>هاست‌ها | wpauto</title></head>
+<body>
+{{template "nav" .}}
+<main>
+  <h2>هاست‌های cPanel</h2>
+  {{if .Error}}<div class="error">{{.Error}}</div>{{end}}
+  {{if .Hosts}}
+  <table class="list">
+    <tr><th>نام</th><th>پروفایل</th><th>آدرس</th><th>وضعیت</th></tr>
+    {{range .Hosts}}
+    <tr>
+      <td><a href="{{$.BasePath}}hosts/{{.ID}}">{{.Name}}</a></td>
+      <td>{{.ProfileID}}</td>
+      <td dir="ltr">{{.URL}}</td>
+      <td>{{if .LastReport}}{{if .LastReport.ReadyForWP}}<span class="ok">آماده</span>{{else if .LastReport.LoginOK}}<span class="warn">نیاز به بررسی</span>{{else}}<span class="bad">ورود ناموفق</span>{{end}}{{else}}<span class="muted">تست نشده</span>{{end}}</td>
+    </tr>
+    {{end}}
+  </table>
+  {{else}}
+  <p class="muted">هنوز هاستی اضافه نشده.</p>
+  {{end}}
+
+  <form class="card form" method="post" action="{{.BasePath}}hosts/add" autocomplete="off">
+    <h3>افزودن هاست</h3>
+    <input type="hidden" name="csrf" value="{{.CSRF}}">
+    <label>پروفایل هاست
+      <select name="profile">
+        {{range .Profiles}}<option value="{{.ID}}">{{.Name}} — {{.Description}}</option>{{end}}
+      </select>
+    </label>
+    <label>نام (اختیاری)<input name="name" placeholder="مثلاً سایت مشتری"></label>
+    <label>آدرس cPanel<input name="url" required dir="ltr" placeholder="example.com:2083"></label>
+    <label>نام کاربری cPanel<input name="username" required dir="ltr"></label>
+    <label>رمز عبور یا API Token<input name="secret" type="password" required dir="ltr"></label>
+    <p class="muted small">رمز به‌صورت رمزنگاری‌شده (AES-256) روی سرور خودتان ذخیره می‌شود.</p>
+    <button type="submit">ذخیره</button>
+  </form>
+</main>
+</body>
+</html>

@@ -14,12 +14,15 @@ import (
 	"log"
 	"net"
 	"net/http"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/traptiterbeats/wpauto/internal/config"
+	"github.com/traptiterbeats/wpauto/internal/secretbox"
+	"github.com/traptiterbeats/wpauto/internal/store"
 	"github.com/traptiterbeats/wpauto/internal/tasks"
 )
 
@@ -38,6 +41,10 @@ type Server struct {
 	version string
 	tpl     *template.Template
 	limiter *limiter
+
+	store      *store.Store
+	box        *secretbox.Box
+	profileDir string
 }
 
 // New builds a server from the configuration.
@@ -46,7 +53,17 @@ func New(cfg *config.Config, version string) (*Server, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &Server{cfg: cfg, version: version, tpl: t, limiter: newLimiter()}, nil
+	dir := config.Dir()
+	st, err := store.Open(dir)
+	if err != nil {
+		return nil, err
+	}
+	box, err := secretbox.Open(dir)
+	if err != nil {
+		return nil, err
+	}
+	return &Server{cfg: cfg, version: version, tpl: t, limiter: newLimiter(),
+		store: st, box: box, profileDir: filepath.Join(dir, "profiles")}, nil
 }
 
 // Handler returns the routed handler mounted under the configured base path.
@@ -57,6 +74,12 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle(bp+"static/", http.StripPrefix(bp+"static/", http.FileServer(http.FS(sub))))
 	mux.HandleFunc(bp+"login", s.handleLogin)
 	mux.HandleFunc(bp+"logout", s.handleLogout)
+	mux.HandleFunc("GET "+bp+"hosts", s.requireAuth(s.handleHosts))
+	mux.HandleFunc("POST "+bp+"hosts/add", s.requireAuth(s.handleHostAdd))
+	mux.HandleFunc("GET "+bp+"hosts/{id}", s.requireAuth(s.handleHostView))
+	mux.HandleFunc("POST "+bp+"hosts/{id}/test", s.requireAuth(s.handleHostTest))
+	mux.HandleFunc("POST "+bp+"hosts/{id}/edit", s.requireAuth(s.handleHostEdit))
+	mux.HandleFunc("POST "+bp+"hosts/{id}/delete", s.requireAuth(s.handleHostDelete))
 	mux.HandleFunc(bp+"api/health", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		fmt.Fprintf(w, `{"ok":true,"version":%q}`, s.version)
@@ -70,10 +93,7 @@ func (s *Server) Handler() http.Handler {
 			http.Redirect(w, r, bp+"login", http.StatusSeeOther)
 			return
 		}
-		s.render(w, "dashboard.html", map[string]any{
-			"BasePath": bp, "Version": s.version, "User": s.cfg.Username, "Tasks": tasks.Catalogue,
-			"CSRF": s.csrf(r),
-		})
+		s.render(w, "dashboard.html", s.page(r, map[string]any{"Tasks": tasks.Catalogue}))
 	})
 	// Anything outside the secret base path looks like nothing is here.
 	root := http.NewServeMux()

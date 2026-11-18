@@ -1,0 +1,15 @@
+# Generic cPanel host. Copy this file to /etc/wpauto/profiles/<id>.yaml to make a new profile.
+id: generic
+name: cPanel عمومی
+description: هر هاست cPanel استاندارد (Jupiter یا Paper Lantern)
+port: 2083
+# session = login with username/password (works everywhere)
+# token   = cPanel API token (Manage API Tokens must be enabled on the host)
+auth: session
+insecure_tls: false
+# Stop after this many failed logins so CSF/cPHulk does not block the panel's IP.
+max_login_attempts: 1
+preferred_php: ["8.3", "8.4", "8.2"]
+probes: [user, domains, php, mysql, quota, tokens, features]
+quirks:
+  helper_upload: fileman
