@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ورود | wpauto</title>
+<link rel="stylesheet" href="{{.BasePath}}static/style.css">
+</head>
+<body class="center">
+<form class="card login" method="post" action="{{.BasePath}}login" autocomplete="off">
+  <h1>wpauto</h1>
+  <p class="muted">پنل نصب خودکار وردپرس</p>
+  {{if .Error}}<div class="error">{{.Error}}</div>{{end}}
+  <label>نام کاربری<input name="username" required autofocus dir="ltr"></label>
+  <label>رمز عبور<input name="password" type="password" required dir="ltr"></label>
+  <button type="submit">ورود</button>
+  <p class="muted small">نسخه {{.Version}}</p>
+</form>
+</body>
+</html>

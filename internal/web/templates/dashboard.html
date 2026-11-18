@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>داشبورد | wpauto</title>
+<link rel="stylesheet" href="{{.BasePath}}static/style.css">
+</head>
+<body>
+<header class="top">
+  <strong>wpauto</strong>
+  <span class="muted small">نسخه {{.Version}}</span>
+  <form method="post" action="{{.BasePath}}logout" class="logout">
+    <input type="hidden" name="csrf" value="{{.CSRF}}">
+    <span class="muted">{{.User}}</span>
+    <button type="submit" class="ghost">خروج</button>
+  </form>
+</header>
+<main>
+  <h2>کارهای قابل اجرا روی هاست</h2>
+  <p class="muted">این فهرست کم‌کم کامل می‌شود. هر کار به‌ترتیب روی هاست cPanel اجرا خواهد شد.</p>
+  <ol class="tasks">
+    {{range .Tasks}}
+    <li class="card task">
+      <div>
+        <h3>{{.Title}}</h3>
+        <p class="muted">{{.Description}}</p>
+      </div>
+      {{if eq .Status "ready"}}<button>اجرا</button>{{else}}<span class="badge">به‌زودی</span>{{end}}
+    </li>
+    {{end}}
+  </ol>
+</main>
+</body>
+</html>

@@ -1,2 +1,34 @@
 # wpauto
-Automated WordPress installer for cPanel hosts — Go web panel + terminal menu
+
+پنل نصب خودکار وردپرس روی هاست‌های cPanel، نوشته‌شده با Go.
+
+## نصب (Ubuntu 22.04 / 24.04، با دسترسی root)
+
+```bash
+bash <(curl -Ls https://raw.githubusercontent.com/traptiterbeats/wpauto/main/install.sh)
+```
+
+نصب‌کننده پورت پنل را می‌پرسد، نام کاربری و رمز تصادفی می‌سازد و آدرس پنل را نشان می‌دهد.
+
+## مدیریت
+
+```bash
+wpauto            # منوی مدیریت
+wpauto info       # آدرس پنل و وضعیت
+wpauto update     # نصب آخرین نسخه
+```
+
+منو شامل: تغییر نام کاربری و رمز، تغییر پورت، SSL (Let's Encrypt یا self-signed)، استارت/استاپ/ری‌استارت، لاگ‌ها، آپدیت و حذف.
+
+## ساخت نسخه
+
+با هر تگ `v*` (مثلاً `v0.1.0`)، GitHub Actions با GoReleaser باینری‌های `linux/amd64` و `linux/arm64` و فایل `checksums.txt` را در Releases منتشر می‌کند.
+
+## نقشه‌ی راه
+
+- [x] فاز ۱: باینری، پنل وب با ورود امن، منوی ترمینال، نصب یک‌خطی، انتشار خودکار
+- [ ] فاز ۲: اتصال به cPanel (نشست با یوزر و پسورد، UAPI)
+- [ ] فاز ۳: موتور تسک‌ها (YAML) و لاگ زنده
+- [ ] فاز ۴: نصب وردپرس و تست خودکار
+- [ ] فاز ۵: کاتالوگ قالب و افزونه
+- [ ] فاز ۶: شخصی‌سازی با هوش مصنوعی
