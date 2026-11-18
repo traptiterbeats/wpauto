@@ -4,6 +4,7 @@
 <body>
 {{template "nav" .}}
 <main>
+  <a class="back" href="{{.BasePath}}">→ بازگشت به کارها</a>
   <h2>هاست‌های cPanel</h2>
   {{if .Error}}<div class="error">{{.Error}}</div>{{end}}
   {{if .Hosts}}
