@@ -61,7 +61,12 @@ func Preflight(ctx context.Context, c *Client, probes []string, preferredPHP []s
 		return rep
 	}
 	defer c.Logout(ctx)
-	rep.LoginOK = true
+	return Probe(ctx, c, probes, preferredPHP)
+}
+
+// Probe runs the read-only probes on a client that is already signed in.
+func Probe(ctx context.Context, c *Client, probes []string, preferredPHP []string) *Report {
+	rep := &Report{At: time.Now(), LoginOK: true}
 	rep.Checks = append(rep.Checks, Check{ID: "login", Title: "ورود به cPanel", OK: true, Detail: c.BaseURL()})
 	if len(probes) == 0 {
 		probes = AllProbes

@@ -1,0 +1,14 @@
+id: host-check
+title: بررسی هاست و وردپرس‌های موجود
+description: ورود به cPanel، گزارش امکانات هاست و پیدا کردن وردپرس‌های نصب‌شده روی همه‌ی دامنه‌ها. فقط خواندنی.
+order: 10
+steps:
+  - id: login
+    title: ورود به cPanel
+    uses: cpanel.login
+  - id: preflight
+    title: بررسی امکانات هاست
+    uses: cpanel.preflight
+  - id: detect
+    title: جستجوی وردپرس‌های نصب‌شده
+    uses: wp.detect

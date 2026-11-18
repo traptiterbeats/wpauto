@@ -2,6 +2,12 @@ package web
 
 import (
 	"bytes"
+	"encoding/json"
+	"os"
+	"path/filepath"
+	"time"
+
+	"github.com/traptiterbeats/wpauto/internal/cpanel/cpaneltest"
 	"net/http"
 	"net/http/cookiejar"
 	"net/http/httptest"
@@ -125,5 +131,66 @@ func TestHostLockAfterRejectedLogin(t *testing.T) {
 	r, _ = cl.PostForm(bp+"hosts/"+id+"/delete", url.Values{})
 	if r.StatusCode != 400 {
 		t.Fatalf("csrf not enforced: %d", r.StatusCode)
+	}
+}
+
+func TestRunWorkflowFromPanel(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("WPAUTO_DIR", dir)
+	_ = os.MkdirAll(filepath.Join(dir, "profiles"), 0o700)
+	_ = os.WriteFile(filepath.Join(dir, "profiles", "fake.yaml"), []byte("id: fake\nname: fake\ninsecure_tls: true\n"), 0o600)
+	fake := cpaneltest.New(t, "kfncspot", "secret")
+	defer fake.Close()
+
+	cfg, pass, _ := config.New(1)
+	s, err := New(cfg, "test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	ts := httptest.NewServer(s.Handler())
+	defer ts.Close()
+	jar, _ := cookiejar.New(nil)
+	cl := &http.Client{Jar: jar}
+	bp := ts.URL + cfg.BasePath
+	cl.PostForm(bp+"login", url.Values{"username": {cfg.Username}, "password": {pass}})
+	u, _ := url.Parse(bp)
+	var csrf string
+	for _, c := range jar.Cookies(u) {
+		if c.Name == cookieName {
+			csrf = s.sign("csrf:" + c.Value)[:32]
+		}
+	}
+	cl.PostForm(bp+"hosts/add", url.Values{"csrf": {csrf}, "profile": {"fake"}, "url": {fake.URL}, "username": {"kfncspot"}, "secret": {"secret"}})
+	hostID := s.store.List()[0].ID
+	r, err := cl.PostForm(bp+"run/host-check", url.Values{"csrf": {csrf}, "host": {hostID}})
+	if err != nil || r.StatusCode != 200 || !strings.Contains(r.Request.URL.Path, "/runs/") {
+		t.Fatalf("start: %v %d %s", err, r.StatusCode, r.Request.URL)
+	}
+	runPath := r.Request.URL.Path
+	var state struct {
+		Status string `json:"status"`
+		Done   bool   `json:"done"`
+	}
+	for i := 0; i < 200 && !state.Done; i++ {
+		time.Sleep(20 * time.Millisecond)
+		jr, _ := cl.Get(ts.URL + runPath + "/json")
+		_ = json.NewDecoder(jr.Body).Decode(&state)
+	}
+	if state.Status != "success" {
+		t.Fatalf("run status %q", state.Status)
+	}
+	for _, page := range []string{runPath, cfg.BasePath + "runs", cfg.BasePath, cfg.BasePath + "run/wp-check-domain?host=" + hostID} {
+		r, _ := cl.Get(ts.URL + page)
+		b := new(bytes.Buffer)
+		_, _ = b.ReadFrom(r.Body)
+		if r.StatusCode != 200 || !strings.Contains(b.String(), "</html>") {
+			t.Fatalf("page %s: %d", page, r.StatusCode)
+		}
+		if page == cfg.BasePath+"run/wp-check-domain?host="+hostID && !strings.Contains(b.String(), "blog.example.com") {
+			t.Fatal("domain select not filled from last report")
+		}
+	}
+	if h, _ := s.store.Get(hostID); h.LastReport == nil || !h.LastReport.ReadyForWP {
+		t.Fatal("preflight report not saved on host")
 	}
 }

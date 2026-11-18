@@ -27,6 +27,23 @@ wpauto update     # نصب آخرین نسخه
 
 رمز هاست‌ها با AES-256-GCM در `/etc/wpauto/hosts.json` ذخیره می‌شود و کلیدش در `/etc/wpauto/secret.key` است. بعد از یک ورود ناموفق، تلاش خودکار متوقف می‌شود تا فایروال هاست (CSF/cPHulk) IP سرور را بلاک نکند.
 
+## کارها (Workflow)
+
+هر کار یک فایل YAML است: ورودی‌های فرم و مراحل پشت‌سرهم. هر مرحله یکی از «نوع مرحله»های داخلی را اجرا می‌کند و خروجی‌اش با `{{.Steps.<id>.<key>}}` در مراحل بعد قابل استفاده است. ورودی‌ها با `{{.Inputs.<name>}}`.
+
+```yaml
+id: wp-check-domain
+title: بررسی وردپرس یک دامنه
+inputs:
+  - {name: domain, label: دامنه, type: domain, required: true}
+steps:
+  - {id: login,  title: ورود,  uses: cpanel.login}
+  - {id: detect, title: بررسی, uses: wp.detect, with: {domain: "{{.Inputs.domain}}"}}
+```
+
+نوع‌های مرحله فعلی: `cpanel.login`، `cpanel.preflight`، `cpanel.uapi` (فقط فراخوانی‌های خواندنی)، `wp.detect`، `log`.
+کارهای سفارشی را در `/etc/wpauto/workflows/*.yaml` بگذارید. هر هاست هم‌زمان فقط یک کار اجرا می‌کند، لاگ زنده در مرورگر دیده می‌شود و تاریخچه در `/etc/wpauto/runs` می‌ماند.
+
 ## ساخت نسخه
 
 با هر تگ `v*` (مثلاً `v0.1.0`)، GitHub Actions با GoReleaser باینری‌های `linux/amd64` و `linux/arm64` و فایل `checksums.txt` را در Releases منتشر می‌کند.
@@ -35,7 +52,7 @@ wpauto update     # نصب آخرین نسخه
 
 - [x] فاز ۱: باینری، پنل وب با ورود امن، منوی ترمینال، نصب یک‌خطی، انتشار خودکار
 - [x] فاز ۲: اتصال به cPanel با پروفایل هاست (نشست یا API Token، UAPI) و گزارش امکانات هاست
-- [ ] فاز ۳: موتور تسک‌ها (YAML) و لاگ زنده
+- [x] فاز ۳: موتور تسک‌ها (YAML)، لاگ زنده، تاریخچه، تشخیص وردپرس نصب‌شده
 - [ ] فاز ۴: نصب وردپرس و تست خودکار
 - [ ] فاز ۵: کاتالوگ قالب و افزونه
 - [ ] فاز ۶: شخصی‌سازی با هوش مصنوعی

@@ -1,0 +1,24 @@
+id: wp-check-domain
+title: بررسی وردپرس یک دامنه
+description: بررسی می‌کند روی دامنه‌ی انتخابی وردپرس نصب است یا نه و نسخه‌اش چیست. فقط خواندنی.
+order: 20
+inputs:
+  - name: domain
+    label: دامنه
+    type: domain
+    required: true
+    help: فهرست دامنه‌ها از آخرین بررسی هاست می‌آید.
+steps:
+  - id: login
+    title: ورود به cPanel
+    uses: cpanel.login
+  - id: detect
+    title: بررسی وردپرس روی دامنه
+    uses: wp.detect
+    with:
+      domain: "{{.Inputs.domain}}"
+  - id: result
+    title: نتیجه
+    uses: log
+    with:
+      message: "تعداد وردپرس پیدا شده روی {{.Inputs.domain}}: {{.Steps.detect.count}}"

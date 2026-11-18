@@ -4,19 +4,36 @@
 <body>
 {{template "nav" .}}
 <main>
-  <h2>کارهای قابل اجرا روی هاست</h2>
-  <p class="muted">هر کار به‌ترتیب روی هاست cPanel اجرا می‌شود. کارهای «به‌زودی» در فازهای بعد فعال می‌شوند.</p>
+  {{if eq .HostCount 0}}
+  <div class="card hint">اول یک هاست اضافه کنید: <a href="{{.BasePath}}hosts">هاست‌ها</a></div>
+  {{end}}
+  <h2>کارها</h2>
   <ol class="tasks">
-    {{range .Tasks}}
+    {{range .Workflows}}
     <li class="card task">
       <div>
         <h3>{{.Title}}</h3>
         <p class="muted">{{.Description}}</p>
       </div>
-      {{if eq .Status "ready"}}<a class="btn" href="{{$.BasePath}}{{.Link}}">باز کردن</a>{{else}}<span class="badge">به‌زودی</span>{{end}}
+      <a class="btn" href="{{$.BasePath}}run/{{.ID}}">اجرا</a>
+    </li>
+    {{end}}
+    {{range .Soon}}
+    <li class="card task">
+      <div>
+        <h3>{{.Title}}</h3>
+        <p class="muted">{{.Description}}</p>
+      </div>
+      <span class="badge">به‌زودی</span>
     </li>
     {{end}}
   </ol>
+
+  {{if .Runs}}
+  <h2>آخرین اجراها</h2>
+  {{template "runtable" .}}
+  <p><a href="{{.BasePath}}runs">همه‌ی اجراها</a></p>
+  {{end}}
 </main>
 </body>
 </html>

@@ -19,6 +19,7 @@ jobs:
         with:
           go-version: stable
       - run: go vet ./...
+      - run: go test -race ./...
       - uses: goreleaser/goreleaser-action@v6
         with:
           distribution: goreleaser

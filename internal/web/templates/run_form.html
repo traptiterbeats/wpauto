@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="fa" dir="rtl">
+<head>{{template "head" .}}<title>{{.WF.Title}} | wpauto</title></head>
+<body>
+{{template "nav" .}}
+<main>
+  <a class="back" href="{{.BasePath}}">→ بازگشت به کارها</a>
+  <h2>{{.WF.Title}}</h2>
+  <p class="muted">{{.WF.Description}}</p>
+  {{if .Error}}<div class="error">{{.Error}}</div>{{end}}
+  {{if not .Hosts}}
+  <div class="card hint">هنوز هاستی ندارید. <a href="{{.BasePath}}hosts">افزودن هاست</a></div>
+  {{else}}
+  <form class="card form" method="post" action="{{.BasePath}}run/{{.WF.ID}}" autocomplete="off">
+    <input type="hidden" name="csrf" value="{{.CSRF}}">
+    <label>هاست
+      <select name="host" onchange="location.href='{{.BasePath}}run/{{.WF.ID}}?host='+this.value">
+        {{range .Hosts}}<option value="{{.ID}}" {{if eq .ID $.HostID}}selected{{end}}>{{.Name}} ({{.ProfileID}})</option>{{end}}
+      </select>
+    </label>
+    {{range .WF.Inputs}}
+      {{if eq .Type "checkbox"}}
+      <label class="check"><input type="checkbox" name="in_{{.Name}}" {{if eq .Default "true"}}checked{{end}}> {{.Label}}</label>
+      {{else if eq .Type "select"}}
+      <label>{{.Label}}<select name="in_{{.Name}}">{{$d := .Default}}{{range .Options}}<option {{if eq . $d}}selected{{end}}>{{.}}</option>{{end}}</select></label>
+      {{else if eq .Type "domain"}}
+      <label>{{.Label}}
+        {{if $.Domains}}
+        <select name="in_{{.Name}}" dir="ltr">{{range $.Domains}}<option>{{.}}</option>{{end}}</select>
+        {{else}}
+        <input name="in_{{.Name}}" dir="ltr" {{if .Required}}required{{end}} placeholder="example.com">
+        {{end}}
+      </label>
+      {{else}}
+      <label>{{.Label}}<input name="in_{{.Name}}" type="{{if eq .Type "password"}}password{{else}}text{{end}}" value="{{.Default}}" {{if .Required}}required{{end}}></label>
+      {{end}}
+      {{if .Help}}<p class="muted small">{{.Help}}</p>{{end}}
+    {{end}}
+    <ol class="muted small steps-preview">{{range .WF.Steps}}<li>{{.Title}}</li>{{end}}</ol>
+    <button type="submit">شروع</button>
+  </form>
+  {{end}}
+</main>
+</body>
+</html>

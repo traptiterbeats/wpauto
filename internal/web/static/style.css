@@ -36,3 +36,16 @@ summary{cursor:pointer}
 button.danger{color:var(--err);border-color:var(--err)}
 .back{display:inline-flex;align-items:center;gap:6px;margin-bottom:12px;border:1px solid var(--line);border-radius:8px;padding:6px 12px;color:var(--text)}
 .back:hover{border-color:var(--accent)}
+.hint{margin-bottom:16px}
+.check{flex-direction:row;align-items:center;gap:8px}
+.steps{list-style:none;padding:0;display:flex;flex-direction:column;gap:6px;margin:16px 0}
+.steps li{display:flex;align-items:center;gap:8px}
+.steps .dot{width:10px;height:10px;border-radius:50%;background:var(--line);flex:none}
+.st-running .dot{background:#fbbf24;animation:pulse 1s infinite}
+.st-success .dot{background:#4ade80}
+.st-failed .dot{background:var(--err)}
+.st-skipped{opacity:.5}
+@keyframes pulse{50%{opacity:.3}}
+.log{background:#0a0d17;border:1px solid var(--line);border-radius:10px;padding:12px;max-height:420px;overflow:auto;direction:rtl;white-space:pre-wrap;font-size:13px;font-family:ui-monospace,Menlo,Consolas,monospace}
+.lv-error{color:var(--err)}.lv-warn{color:#fbbf24}
+.steps-preview{margin:0;padding-inline-start:18px}

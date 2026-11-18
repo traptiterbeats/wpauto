@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="fa" dir="rtl">
+<head>{{template "head" .}}<title>{{.Run.Title}} | wpauto</title></head>
+<body>
+{{template "nav" .}}
+<main>
+  <a class="back" href="{{.BasePath}}runs">→ بازگشت به اجراها</a>
+  <h2>{{.Run.Title}}</h2>
+  <p class="muted">هاست: {{.Run.HostName}} · شروع: <span dir="ltr">{{.Run.StartedAt.Format "2006-01-02 15:04:05"}}</span> · وضعیت: <span id="status">{{template "status" .Run.Status}}</span></p>
+  <div id="err" class="error" {{if not .Run.Error}}hidden{{end}}>{{.Run.Error}}</div>
+
+  {{if not .Run.Done}}
+  <form method="post" action="{{.BasePath}}runs/{{.Run.ID}}/cancel" id="cancel">
+    <input type="hidden" name="csrf" value="{{.CSRF}}">
+    <button type="submit" class="ghost danger">توقف</button>
+  </form>
+  {{end}}
+
+  <ol class="steps" id="steps">
+    {{range .Run.Steps}}<li data-id="{{.ID}}" class="st-{{.Status}}"><span class="dot"></span>{{.Title}}{{if .Error}} <span class="bad small">{{.Error}}</span>{{end}}</li>{{end}}
+  </ol>
+
+  <h3>لاگ</h3>
+  <pre class="log" id="log">{{range .Run.Log}}<span class="lv-{{.Level}}">{{.T.Format "15:04:05"}}  {{.Msg}}</span>
+{{end}}</pre>
+</main>
+<script>
+(function(){
+  var done = {{.Run.Done}}, after = {{len .Run.Log}};
+  if (done) return;
+  var url = "{{.BasePath}}runs/{{.Run.ID}}/json";
+  var labels = {success:"موفق",failed:"ناموفق",running:"در حال اجرا",cancelled:"متوقف شد",skipped:"رد شد",pending:"در صف",interrupted:"قطع شد"};
+  function tick(){
+    fetch(url+"?after="+after,{credentials:"same-origin"}).then(function(r){return r.json()}).then(function(d){
+      var log = document.getElementById("log");
+      d.log.forEach(function(l){
+        var s = document.createElement("span");
+        s.className = "lv-"+l.level;
+        s.textContent = new Date(l.t).toTimeString().slice(0,8)+"  "+l.msg+"\n";
+        log.appendChild(s); after = l.n;
+      });
+      log.scrollTop = log.scrollHeight;
+      d.steps.forEach(function(st){
+        var li = document.querySelector('#steps li[data-id="'+st.id+'"]');
+        if (li) li.className = "st-"+st.status;
+      });
+      document.getElementById("status").textContent = labels[d.status]||d.status;
+      if (d.done) { location.reload(); return; }
+      setTimeout(tick, 1200);
+    }).catch(function(){ setTimeout(tick, 3000); });
+  }
+  tick();
+})();
+</script>
+</body>
+</html>

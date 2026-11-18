@@ -1,0 +1,12 @@
+<!doctype html>
+<html lang="fa" dir="rtl">
+<head>{{template "head" .}}<title>اجراها | wpauto</title></head>
+<body>
+{{template "nav" .}}
+<main>
+  <a class="back" href="{{.BasePath}}">→ بازگشت به کارها</a>
+  <h2>اجراها</h2>
+  {{if .Runs}}{{template "runtable" .}}{{else}}<p class="muted">هنوز کاری اجرا نشده.</p>{{end}}
+</main>
+</body>
+</html>
