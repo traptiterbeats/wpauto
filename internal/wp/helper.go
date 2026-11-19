@@ -81,9 +81,16 @@ func HelperPHP(token string) string {
 
 const helperSrc = `<?php
 // wpauto temporary helper. Removed automatically when the install finishes.
-@set_time_limit(600);
-@ignore_user_abort(true);
-@ini_set('display_errors', '0');
+// Hosts often list functions in disable_functions; calling one is a fatal error in PHP 8,
+// so every optional function is guarded.
+function wpauto_fn($f) {
+    if (!function_exists($f)) { return false; }
+    $d = (string)ini_get('disable_functions');
+    return $d === '' || !in_array($f, array_map('trim', explode(',', $d)), true);
+}
+if (wpauto_fn('set_time_limit')) { @set_time_limit(600); }
+if (wpauto_fn('ignore_user_abort')) { @ignore_user_abort(true); }
+if (wpauto_fn('ini_set')) { @ini_set('display_errors', '0'); }
 header('Content-Type: application/json; charset=utf-8');
 header('Cache-Control: no-store');
 header('X-Robots-Tag: noindex');
@@ -119,9 +126,9 @@ case 'ping':
     wpauto_out(true, array(
         'php' => PHP_VERSION,
         'zip' => class_exists('ZipArchive'),
-        'curl' => function_exists('curl_init'),
+        'curl' => wpauto_fn('curl_init') && wpauto_fn('curl_exec'),
         'mysqli' => extension_loaded('mysqli'),
-        'free_mb' => (int)(@disk_free_space($dir) / 1048576),
+        'free_mb' => wpauto_fn('disk_free_space') ? (int)(@disk_free_space($dir) / 1048576) : -1,
         'writable' => is_writable($dir),
         'memory_limit' => ini_get('memory_limit'),
     ));
@@ -129,7 +136,7 @@ case 'ping':
 case 'download':
     if (empty($job['zip_url'])) { wpauto_out(false, array('error' => 'job has no zip_url')); }
     @unlink($zip);
-    if (function_exists('curl_init')) {
+    if (wpauto_fn('curl_init') && wpauto_fn('curl_exec')) {
         $fp = fopen($zip, 'wb');
         $ch = curl_init($job['zip_url']);
         curl_setopt_array($ch, array(CURLOPT_FILE => $fp, CURLOPT_FOLLOWLOCATION => true, CURLOPT_CONNECTTIMEOUT => 20,

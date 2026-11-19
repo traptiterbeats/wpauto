@@ -42,7 +42,8 @@ func TestHelperEndToEnd(t *testing.T) {
 	l, _ := net.Listen("tcp", "127.0.0.1:0")
 	addr := l.Addr().String()
 	l.Close()
-	srv := exec.Command(php, "-S", addr, "-t", dir)
+	// Mimic a locked-down shared host: functions commonly listed in disable_functions.
+	srv := exec.Command(php, "-d", "disable_functions=disk_free_space,set_time_limit,ignore_user_abort,curl_exec,exec,shell_exec", "-S", addr, "-t", dir)
 	srv.Stdout, srv.Stderr = os.Stdout, os.Stderr
 	if err := srv.Start(); err != nil {
 		t.Fatal(err)
