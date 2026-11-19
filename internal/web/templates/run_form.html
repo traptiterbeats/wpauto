@@ -23,6 +23,14 @@
       <label class="check"><input type="checkbox" name="in_{{.Name}}" {{if eq .Default "true"}}checked{{end}}> {{.Label}}</label>
       {{else if eq .Type "select"}}
       <label>{{.Label}}<select name="in_{{.Name}}">{{$d := .Default}}{{$l := .Labels}}{{range .Options}}<option value="{{.}}" {{if eq . $d}}selected{{end}}>{{with index $l .}}{{.}}{{else}}{{.}}{{end}}</option>{{end}}</select></label>
+      {{else if eq .Type "theme"}}
+      <label>{{.Label}}
+        {{if $.Themes}}
+        <select name="in_{{.Name}}">{{range $.Themes}}<option value="{{.Slug}}">{{.Name}} {{.Version}}{{if .HasDemo}} · با دمو{{end}}</option>{{end}}</select>
+        {{else}}
+        <span class="muted">کاتالوگ خالی است. <a href="{{$.BasePath}}themes">افزودن قالب</a></span>
+        {{end}}
+      </label>
       {{else if eq .Type "domain"}}
       <label>{{.Label}}
         {{if $.Domains}}

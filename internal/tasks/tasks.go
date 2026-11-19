@@ -11,6 +11,5 @@ type Task struct {
 
 // Catalogue is shown on the dashboard as "coming soon".
 var Catalogue = []Task{
-	{ID: "theme-install", Title: "نصب قالب و افزونه‌ها", Description: "انتخاب قالب از کاتالوگ و نصب افزونه‌های وابسته"},
-	{ID: "ai-customize", Title: "شخصی‌سازی با هوش مصنوعی", Description: "پر کردن محتوای قالب از روی اطلاعات کسب‌وکار"},
+	{ID: "ai-customize", Title: "شخصی‌سازی با هوش مصنوعی", Description: "متن‌ها، لوگو و تصاویر دمو از روی اطلاعات کسب‌وکار، پیش از درون‌ریزی"},
 }

@@ -46,6 +46,7 @@ func (s *Server) handleRunForm(w http.ResponseWriter, r *http.Request) {
 	}
 	s.render(w, "run_form.html", s.page(r, map[string]any{
 		"WF": wf, "Hosts": hosts, "HostID": hostID, "Domains": domains, "Error": r.URL.Query().Get("err"),
+		"Themes": engine.Catalog().List(),
 	}))
 }
 

@@ -93,6 +93,12 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET "+bp+"runs/{id}", s.requireAuth(s.handleRunView))
 	mux.HandleFunc("GET "+bp+"runs/{id}/json", s.requireAuth(s.handleRunJSON))
 	mux.HandleFunc("POST "+bp+"runs/{id}/cancel", s.requireAuth(s.handleRunCancel))
+	mux.HandleFunc("GET "+bp+"themes", s.requireAuth(s.handleThemes))
+	mux.HandleFunc("POST "+bp+"themes/add", s.uploads(s.handleThemeAdd))
+	mux.HandleFunc("POST "+bp+"themes/{slug}/delete", s.requireAuth(s.handleThemeDelete))
+	mux.HandleFunc("GET "+bp+"themes/{slug}/screenshot", s.requireAuth(s.handleThemeShot))
+	mux.HandleFunc("POST "+bp+"plugins/add", s.uploads(s.handlePluginAdd))
+	mux.HandleFunc("POST "+bp+"plugins/{slug}/delete", s.requireAuth(s.handlePluginDelete))
 	mux.HandleFunc(bp+"api/health", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		fmt.Fprintf(w, `{"ok":true,"version":%q}`, s.version)

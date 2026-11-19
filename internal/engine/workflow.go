@@ -23,7 +23,7 @@ var builtinFS embed.FS
 type Input struct {
 	Name     string   `yaml:"name"`
 	Label    string   `yaml:"label"`
-	Type     string   `yaml:"type"` // text | password | select | checkbox | domain
+	Type     string   `yaml:"type"` // text | password | select | checkbox | domain | theme (catalogue)
 	Required bool     `yaml:"required"`
 	Default  string   `yaml:"default"`
 	Options  []string `yaml:"options"`
@@ -80,7 +80,7 @@ func (w *Workflow) Validate() error {
 	}
 	for _, in := range w.Inputs {
 		switch in.Type {
-		case "", "text", "password", "select", "checkbox", "domain":
+		case "", "text", "password", "select", "checkbox", "domain", "theme":
 		default:
 			return fmt.Errorf("workflow %s: input %s has unknown type %q", w.ID, in.Name, in.Type)
 		}

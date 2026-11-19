@@ -54,6 +54,9 @@ func (j Job) JSON() string {
 	return string(b)
 }
 
+// PkgDir is the folder next to the helper that receives uploaded zips (removed on cleanup).
+func PkgDir(token string) string { return ".wpauto-pkg-" + token[:16] }
+
 // Helper file names for a token.
 func HelperName(token string) string { return "wpauto-" + token[:16] + ".php" }
 
@@ -104,8 +107,74 @@ $job = is_file($jobFile) ? json_decode((string)file_get_contents($jobFile), true
 if (!is_array($job)) { $job = array(); }
 
 function wpauto_out($ok, $data = array()) {
+    while (ob_get_level() > 0) { @ob_end_clean(); }
     echo json_encode(array_merge(array('ok' => $ok), $data));
     exit;
+}
+function wpauto_arg($k) {
+    $v = isset($_GET[$k]) ? (string)$_GET[$k] : '';
+    if (!preg_match('/^[a-z0-9][a-z0-9_.-]{0,80}$/', $v) || strpos($v, '..') !== false) { wpauto_out(false, array('error' => 'bad argument: ' . $k)); }
+    return $v;
+}
+function wpauto_download($url, $dest) {
+    @unlink($dest);
+    if (wpauto_fn('curl_init') && wpauto_fn('curl_exec')) {
+        $fp = fopen($dest, 'wb');
+        $ch = curl_init($url);
+        curl_setopt_array($ch, array(CURLOPT_FILE => $fp, CURLOPT_FOLLOWLOCATION => true, CURLOPT_CONNECTTIMEOUT => 20,
+            CURLOPT_TIMEOUT => 300, CURLOPT_USERAGENT => 'wpauto', CURLOPT_FAILONERROR => true));
+        $ok = curl_exec($ch);
+        $code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $err = curl_error($ch);
+        curl_close($ch);
+        fclose($fp);
+        if (!$ok) { @unlink($dest); return 'download failed: HTTP ' . $code . ' ' . $err; }
+        return '';
+    }
+    $ctx = stream_context_create(array('http' => array('timeout' => 300, 'user_agent' => 'wpauto')));
+    if (!@copy($url, $dest, $ctx)) { @unlink($dest); return 'download failed (no curl)'; }
+    return '';
+}
+// wpauto_unzip_folder extracts a zip whose single top folder is $slug into $parent/$slug.
+// It never overwrites: an existing folder is reported and left alone.
+function wpauto_unzip_folder($zipPath, $parent, $slug) {
+    $target = $parent . '/' . $slug;
+    if (file_exists($target)) { return 'exists'; }
+    if (!class_exists('ZipArchive')) { return 'ZipArchive is not available in PHP'; }
+    if (!is_file($zipPath)) { return 'zip file missing'; }
+    $z = new ZipArchive();
+    if ($z->open($zipPath) !== true) { return 'cannot open zip'; }
+    for ($i = 0; $i < $z->numFiles; $i++) {
+        $n = str_replace('\\', '/', (string)$z->getNameIndex($i));
+        if (strpos($n, '__MACOSX/') === 0) { continue; }
+        if (strpos($n, '..') !== false || substr($n, 0, 1) === '/' || strpos($n, $slug . '/') !== 0) {
+            $z->close();
+            return 'unexpected path in zip: ' . $n;
+        }
+    }
+    $tmp = $parent . '/.wpauto-tmp-' . $slug;
+    wpauto_rrmdir($tmp);
+    if (!$z->extractTo($tmp)) { $z->close(); wpauto_rrmdir($tmp); return 'extract failed (disk full?)'; }
+    $z->close();
+    if (!@rename($tmp . '/' . $slug, $target)) { wpauto_rrmdir($tmp); return 'cannot move ' . $slug; }
+    wpauto_rrmdir($tmp);
+    return true;
+}
+function wpauto_plugin_file($slug) {
+    $list = get_plugins('/' . $slug);
+    if (!$list) { return ''; }
+    $files = array_keys($list);
+    // Prefer slug/slug.php when a folder holds several plugin files.
+    foreach ($files as $f) { if ($f === $slug . '.php') { return $slug . '/' . $f; } }
+    return $slug . '/' . $files[0];
+}
+function wpauto_sdi_state($r) {
+    if (is_wp_error($r)) {
+        $d = $r->get_error_data();
+        wpauto_out(false, array('error' => $r->get_error_message(), 'retry' => is_array($d) && !empty($d['retry']),
+            'log' => (is_array($d) && isset($d['log'])) ? $d['log'] : array()));
+    }
+    wpauto_out(true, array('state' => $r));
 }
 function wpauto_rrmdir($p) {
     if (is_link($p) || is_file($p)) { @unlink($p); return; }
@@ -121,6 +190,18 @@ register_shutdown_function(function () {
 });
 
 $a = isset($_GET['a']) ? $_GET['a'] : '';
+$pkg = $dir . '/.wpauto-pkg-' . substr($token, 0, 16);
+// Actions on an existing WordPress load it here, in global scope, as the first administrator.
+if (in_array($a, array('wp_info', 'theme_install', 'theme_activate', 'theme_remove', 'plugin_fetch', 'plugin_install',
+    'plugin_activate', 'plugin_remove', 'demo_prepare', 'demo_start', 'demo_step', 'demo_remove', 'demo_cancel'), true)) {
+    if (!is_file($dir . '/wp-load.php') || !is_file($dir . '/wp-config.php')) { wpauto_out(false, array('error' => 'WordPress is not installed in this folder')); }
+    ob_start();
+    require_once $dir . '/wp-load.php';
+    require_once ABSPATH . 'wp-admin/includes/admin.php';
+    $wpauto_admins = get_users(array('role' => 'administrator', 'number' => 1, 'orderby' => 'ID', 'fields' => 'ID'));
+    if ($wpauto_admins) { wp_set_current_user((int)$wpauto_admins[0]); }
+    if (wpauto_fn('set_time_limit')) { @set_time_limit(300); }
+}
 switch ($a) {
 case 'ping':
     wpauto_out(true, array(
@@ -135,22 +216,8 @@ case 'ping':
 
 case 'download':
     if (empty($job['zip_url'])) { wpauto_out(false, array('error' => 'job has no zip_url')); }
-    @unlink($zip);
-    if (wpauto_fn('curl_init') && wpauto_fn('curl_exec')) {
-        $fp = fopen($zip, 'wb');
-        $ch = curl_init($job['zip_url']);
-        curl_setopt_array($ch, array(CURLOPT_FILE => $fp, CURLOPT_FOLLOWLOCATION => true, CURLOPT_CONNECTTIMEOUT => 20,
-            CURLOPT_TIMEOUT => 300, CURLOPT_USERAGENT => 'wpauto', CURLOPT_FAILONERROR => true));
-        $ok = curl_exec($ch);
-        $code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        $err = curl_error($ch);
-        curl_close($ch);
-        fclose($fp);
-        if (!$ok) { @unlink($zip); wpauto_out(false, array('error' => 'download failed: HTTP ' . $code . ' ' . $err)); }
-    } else {
-        $ctx = stream_context_create(array('http' => array('timeout' => 300, 'user_agent' => 'wpauto')));
-        if (!@copy($job['zip_url'], $zip, $ctx)) { @unlink($zip); wpauto_out(false, array('error' => 'download failed (no curl)')); }
-    }
+    $err = wpauto_download($job['zip_url'], $zip);
+    if ($err !== '') { wpauto_out(false, array('error' => $err)); }
     wpauto_out(true, array('bytes' => filesize($zip)));
 
 case 'extract':
@@ -196,7 +263,99 @@ case 'install':
     update_option('permalink_structure', '/%postname%/');
     wpauto_out(true, array('user_id' => isset($r['user_id']) ? $r['user_id'] : 0, 'version' => get_bloginfo('version')));
 
+case 'wp_info':
+    $plugins = array();
+    foreach (get_plugins() as $file => $p) {
+        $slug = strpos($file, '/') !== false ? dirname($file) : basename($file, '.php');
+        $plugins[$slug] = array('file' => $file, 'version' => $p['Version'], 'active' => is_plugin_active($file));
+    }
+    $themes = array();
+    foreach (wp_get_themes() as $st => $t) { $themes[$st] = $t->get('Version'); }
+    wpauto_out(true, array('version' => get_bloginfo('version'), 'url' => home_url('/'), 'stylesheet' => get_stylesheet(),
+        'template' => get_template(), 'themes' => $themes, 'plugins' => $plugins, 'php' => PHP_VERSION));
+
+case 'plugin_fetch':
+    $slug = wpauto_arg('slug');
+    if (!is_dir($pkg) && !@mkdir($pkg, 0755)) { wpauto_out(false, array('error' => 'cannot create package folder')); }
+    $err = wpauto_download('https://downloads.wordpress.org/plugin/' . $slug . '.latest-stable.zip', $pkg . '/' . $slug . '.zip');
+    if ($err !== '') { wpauto_out(false, array('error' => $err)); }
+    wpauto_out(true, array('bytes' => filesize($pkg . '/' . $slug . '.zip')));
+
+case 'theme_install':
+case 'plugin_install':
+    $slug = wpauto_arg('slug');
+    $f = wpauto_arg('f');
+    $parent = $a === 'theme_install' ? get_theme_root() : WP_PLUGIN_DIR;
+    $r = wpauto_unzip_folder($pkg . '/' . $f, $parent, $slug);
+    @unlink($pkg . '/' . $f);
+    if ($r === 'exists') { wpauto_out(true, array('created' => false)); }
+    if ($r !== true) { wpauto_out(false, array('error' => $r)); }
+    if ($a === 'theme_install') { wp_clean_themes_cache(); } else { wp_clean_plugins_cache(); }
+    wpauto_out(true, array('created' => true));
+
+case 'plugin_activate':
+    $slug = wpauto_arg('slug');
+    $file = wpauto_plugin_file($slug);
+    if ($file === '') { wpauto_out(false, array('error' => 'plugin ' . $slug . ' is not installed')); }
+    if (is_plugin_active($file)) { wpauto_out(true, array('file' => $file, 'already' => true)); }
+    $r = activate_plugin($file);
+    if (is_wp_error($r)) { wpauto_out(false, array('error' => $r->get_error_message())); }
+    wpauto_out(true, array('file' => $file, 'already' => false));
+
+case 'plugin_remove':
+    $slug = wpauto_arg('slug');
+    $file = wpauto_plugin_file($slug);
+    if ($file !== '') { deactivate_plugins($file, true); }
+    if (!empty($_GET['delete'])) { wpauto_rrmdir(WP_PLUGIN_DIR . '/' . $slug); }
+    wpauto_out(true);
+
+case 'theme_activate':
+    $slug = wpauto_arg('slug');
+    $th = wp_get_theme($slug);
+    if (!$th->exists()) { wpauto_out(false, array('error' => 'theme ' . $slug . ' is not installed')); }
+    if ($th->errors()) { wpauto_out(false, array('error' => 'theme is broken: ' . $th->errors()->get_error_message())); }
+    $prev = get_stylesheet();
+    if ($prev !== $slug) { switch_theme($slug); }
+    wpauto_out(true, array('previous' => $prev, 'name' => $th->get('Name'), 'version' => $th->get('Version')));
+
+case 'theme_remove':
+    $slug = wpauto_arg('slug');
+    if (get_stylesheet() === $slug || get_template() === $slug) { wpauto_out(false, array('error' => 'theme is active')); }
+    wpauto_rrmdir(get_theme_root() . '/' . $slug);
+    wpauto_out(true);
+
+case 'demo_prepare':
+    $slug = wpauto_arg('slug');
+    $f = wpauto_arg('f');
+    if (!class_exists('SDI_Sources')) { wpauto_out(false, array('error' => 'Saayeh Demo Importer is not active')); }
+    $r = SDI_Sources::install_zip($slug, $pkg . '/' . $f, '', 'local');
+    @unlink($pkg . '/' . $f);
+    if (is_wp_error($r)) { wpauto_out(false, array('error' => $r->get_error_message())); }
+    SDI_Themes::reset();
+    wpauto_out(true, array('version' => isset($r['version']) ? $r['version'] : ''));
+
+case 'demo_start':
+    $slug = wpauto_arg('slug');
+    if (!class_exists('SDI_Ajax')) { wpauto_out(false, array('error' => 'Saayeh Demo Importer is not active')); }
+    $groups = array();
+    foreach (explode(',', isset($_GET['groups']) ? (string)$_GET['groups'] : '') as $g) { $g = sanitize_key($g); if ($g !== '') { $groups[] = $g; } }
+    if (!$groups) { $groups = array_keys(SDI_Importer::option_groups()); }
+    wpauto_sdi_state(SDI_Ajax::start($slug, $groups, false));
+
+case 'demo_step':
+    if (!class_exists('SDI_Ajax')) { wpauto_out(false, array('error' => 'Saayeh Demo Importer is not active')); }
+    wpauto_sdi_state(SDI_Ajax::step());
+
+case 'demo_remove':
+    if (!class_exists('SDI_Ajax')) { wpauto_out(false, array('error' => 'Saayeh Demo Importer is not active')); }
+    wpauto_sdi_state(SDI_Ajax::remove_batch(wpauto_arg('slug')));
+
+case 'demo_cancel':
+    if (class_exists('SDI_State')) { SDI_State::clear_run(); SDI_State::unlock(); }
+    wpauto_out(true);
+
 case 'cleanup':
+    wpauto_rrmdir($pkg);
     @unlink($jobFile);
     @unlink($zip);
     wpauto_rrmdir($tmp);

@@ -32,7 +32,7 @@ func init() {
 	Register("wp.files", "downloads and extracts WordPress (host downloads; panel uploads as fallback)", stepFiles)
 	Register("wp.config", "writes wp-config.php", stepConfig)
 	Register("wp.setup", "runs the WordPress installer and writes .htaccess", stepSetup)
-	Register("wp.health", "checks the home page and the login page", stepHealth)
+	Register("wp.health", "checks the home page and the login page (optional arg expect: text the home page must contain)", stepHealth)
 }
 
 // zipURLOverride is set by tests.
@@ -136,20 +136,27 @@ func stepPlan(ctx context.Context, rc *RunContext, a map[string]string) (map[str
 	if ok, ver, _ := DetectWordPress(ctx, c, out["docroot"]); ok {
 		return nil, fmt.Errorf("در %s وردپرس %s نصب است", out["docroot"], ver)
 	}
-	// Where to connect for the site before DNS resolves.
-	addr := rc.Profile.Quirks["site_addr"]
-	if addr == "" {
-		if ips, err := net.DefaultResolver.LookupHost(ctx, domain); err == nil && len(ips) > 0 {
-			addr = ips[0]
-		} else if u, err := url.Parse(c.BaseURL()); err == nil {
-			if ips, err := net.DefaultResolver.LookupHost(ctx, u.Hostname()); err == nil && len(ips) > 0 {
-				addr = ips[0]
-			}
-		}
-	}
+	addr := siteAddr(ctx, rc, c, domain)
 	out["site_addr"] = addr
 	rc.Logf("مقصد: %s%s → %s (IP: %s)", out["host"], out["path"], out["docroot"], addr)
 	return out, nil
+}
+
+// siteAddr is where to connect for a site before its DNS resolves: the profile's site_addr, else
+// the domain's IP, else the cPanel server's IP.
+func siteAddr(ctx context.Context, rc *RunContext, c *cpanel.Client, domain string) string {
+	if addr := rc.Profile.Quirks["site_addr"]; addr != "" {
+		return addr
+	}
+	if ips, err := net.DefaultResolver.LookupHost(ctx, domain); err == nil && len(ips) > 0 {
+		return ips[0]
+	}
+	if u, err := url.Parse(c.BaseURL()); err == nil {
+		if ips, err := net.DefaultResolver.LookupHost(ctx, u.Hostname()); err == nil && len(ips) > 0 {
+			return ips[0]
+		}
+	}
+	return ""
 }
 
 func first(s []string, n int) []string {
@@ -457,6 +464,13 @@ func stepHealth(ctx context.Context, rc *RunContext, a map[string]string) (map[s
 	rc.Logf("✔ صفحه‌ی ورود: HTTP %d", code)
 	if _, _, err := s.Get(ctx, "/?p=1"); err == nil {
 		rc.Logf("✔ نوشته‌ی نمونه در دسترس است")
+	}
+	if exp := a["expect"]; exp != "" {
+		if strings.Contains(body, exp) {
+			rc.Logf("✔ قالب جدید روی صفحه‌ی اصلی بارگذاری می‌شود")
+		} else {
+			rc.Warnf("نشانی %s در صفحه‌ی اصلی دیده نشد (شاید افزونه‌ی کش نسخه‌ی قدیمی را نشان می‌دهد)", exp)
+		}
 	}
 	u := strings.TrimSuffix(a["url"], "/")
 	rc.Logf("آدرس سایت: %s · پیشخوان: %s/wp-admin/", u, u)

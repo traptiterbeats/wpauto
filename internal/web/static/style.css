@@ -49,3 +49,10 @@ button.danger{color:var(--err);border-color:var(--err)}
 .log{background:#0a0d17;border:1px solid var(--line);border-radius:10px;padding:12px;max-height:420px;overflow:auto;direction:rtl;white-space:pre-wrap;font-size:13px;font-family:ui-monospace,Menlo,Consolas,monospace}
 .lv-error{color:var(--err)}.lv-warn{color:#fbbf24}
 .steps-preview{margin:0;padding-inline-start:18px}
+.themes{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:14px;margin:12px 0}
+.theme{display:flex;flex-direction:column;gap:8px;padding:0;overflow:hidden}
+.theme img,.theme .noshot{width:100%;aspect-ratio:4/3;object-fit:cover;background:#0c0f1b;display:block}
+.theme .body{padding:0 14px 14px;display:flex;flex-direction:column;gap:6px}
+.theme h3{margin:0}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+input[type=file]{padding:8px}

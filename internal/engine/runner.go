@@ -97,6 +97,7 @@ type RunContext struct {
 	undo    []action
 	finally []action
 	siteObj any
+	wpInfo  map[string]any
 }
 
 type action struct {
@@ -244,17 +245,11 @@ func (r *Runner) execute(ctx context.Context, wf *Workflow, t *Target, inputs ma
 		if p := recover(); p != nil {
 			final, finalErr = StatusFailed, fmt.Sprint("internal error: ", p)
 		}
-		// Cleanup uses a fresh context so it still runs after a cancel or timeout.
-		cctx, ccancel := context.WithTimeout(context.Background(), 3*time.Minute)
-		rc.step = "cleanup"
-		for i := len(rc.finally) - 1; i >= 0; i-- {
-			if err := rc.finally[i].fn(cctx); err != nil {
-				r.log(run, "warn", "cleanup", rc.finally[i].desc+": "+err.Error())
-			} else {
-				r.log(run, "info", "cleanup", rc.finally[i].desc)
-			}
-		}
+		// Rollback and cleanup use a fresh context so they still run after a cancel or timeout.
+		// Rollback runs first: undoing changes inside WordPress still needs the helper.
+		cctx, ccancel := context.WithTimeout(context.Background(), 10*time.Minute)
 		if final != StatusSuccess && wf.Rollback && len(rc.undo) > 0 {
+			rc.step = "rollback"
 			r.log(run, "warn", "rollback", "برگرداندن تغییرات این اجرا…")
 			for i := len(rc.undo) - 1; i >= 0; i-- {
 				if err := rc.undo[i].fn(cctx); err != nil {
@@ -262,6 +257,14 @@ func (r *Runner) execute(ctx context.Context, wf *Workflow, t *Target, inputs ma
 				} else {
 					r.log(run, "info", "rollback", "✔ "+rc.undo[i].desc)
 				}
+			}
+		}
+		rc.step = "cleanup"
+		for i := len(rc.finally) - 1; i >= 0; i-- {
+			if err := rc.finally[i].fn(cctx); err != nil {
+				r.log(run, "warn", "cleanup", rc.finally[i].desc+": "+err.Error())
+			} else {
+				r.log(run, "info", "cleanup", rc.finally[i].desc)
 			}
 		}
 		if rc.client != nil {

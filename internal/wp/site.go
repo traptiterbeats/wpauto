@@ -95,7 +95,16 @@ func (s *Site) HasValidTLS(ctx context.Context) bool {
 
 // Helper calls the helper script with an action and decodes {"ok":..., ...}.
 func (s *Site) Helper(ctx context.Context, file, token, action string) (map[string]any, error) {
-	u := s.URL(file) + "?" + url.Values{"t": {token}, "a": {action}}.Encode()
+	return s.HelperArgs(ctx, file, token, action, nil)
+}
+
+// HelperArgs is Helper with extra query arguments (slugs and file names only; never secrets).
+func (s *Site) HelperArgs(ctx context.Context, file, token, action string, args url.Values) (map[string]any, error) {
+	q := url.Values{"t": {token}, "a": {action}}
+	for k, v := range args {
+		q[k] = v
+	}
+	u := s.URL(file) + "?" + q.Encode()
 	req, _ := http.NewRequestWithContext(ctx, "GET", u, nil)
 	req.Header.Set("User-Agent", "wpauto")
 	resp, err := s.client().Do(req)

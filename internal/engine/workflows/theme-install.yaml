@@ -1,0 +1,68 @@
+id: theme-install
+title: نصب قالب و دمو
+description: یک قالب از کاتالوگ پنل را روی وردپرس موجود نصب و فعال می‌کند، افزونه‌های لازمش را می‌گذارد و دمو را با درون‌ریز سایه وارد می‌کند. اگر وسط کار خطایی پیش بیاید، قالب و افزونه‌های تازه و محتوای دمو برداشته می‌شوند و قالب قبلی برمی‌گردد.
+order: 40
+rollback: true
+inputs:
+  - name: domain
+    label: دامنه یا ساب‌دامین سایت
+    type: domain
+    required: true
+  - name: folder
+    label: پوشه (اگر وردپرس داخل پوشه است)
+    pattern: "[a-z0-9][a-z0-9._-]{0,62}"
+    help: برای ریشه‌ی دامنه خالی بگذارید. مثلاً برای example.com/test2 بنویسید test2
+  - name: theme
+    label: قالب
+    type: theme
+    required: true
+  - name: activate
+    label: قالب فعال شود
+    type: checkbox
+    default: "true"
+  - name: import_demo
+    label: دمو درون‌ریزی شود (با درون‌ریز سایه)
+    type: checkbox
+    default: "true"
+steps:
+  - id: login
+    title: ورود به cPanel
+    uses: cpanel.login
+  - id: locate
+    title: پیدا کردن وردپرس
+    uses: wp.locate
+    with:
+      domain: "{{.Inputs.domain}}"
+      folder: "{{.Inputs.folder}}"
+  - id: attach
+    title: اتصال به وردپرس
+    uses: wp.attach
+    with:
+      host: "{{.Steps.locate.host}}"
+      path: "{{.Steps.locate.path}}"
+      addr: "{{.Steps.locate.site_addr}}"
+      docroot: "{{.Steps.locate.docroot}}"
+  - id: plugins
+    title: نصب و فعال‌سازی افزونه‌ها
+    uses: theme.plugins
+    with:
+      theme: "{{.Inputs.theme}}"
+  - id: theme
+    title: نصب قالب
+    uses: theme.install
+    with:
+      theme: "{{.Inputs.theme}}"
+      activate: "{{.Inputs.activate}}"
+  - id: demo
+    title: درون‌ریزی دمو
+    uses: theme.demo
+    with:
+      theme: "{{.Inputs.theme}}"
+      activate: "{{.Inputs.activate}}"
+      import: "{{.Inputs.import_demo}}"
+  - id: health
+    title: تست سلامت سایت
+    uses: wp.health
+    with:
+      url: "{{.Steps.attach.url}}"
+      expect: '{{if eq .Inputs.activate "true"}}/themes/{{.Inputs.theme}}/{{end}}'

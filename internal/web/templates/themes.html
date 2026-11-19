@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="fa" dir="rtl">
+<head>{{template "head" .}}<title>قالب‌ها | wpauto</title></head>
+<body>
+{{template "nav" .}}
+<main>
+  <a class="back" href="{{.BasePath}}">→ بازگشت به کارها</a>
+  <h2>کاتالوگ قالب‌ها</h2>
+  <p class="muted">قالب‌هایی که اینجا هستند در کار «نصب قالب و دمو» قابل انتخاب‌اند.</p>
+  {{if .Error}}<div class="error">{{.Error}}</div>{{end}}
+  {{if .Msg}}<div class="card hint ok">{{.Msg}}</div>{{end}}
+
+  {{if .Themes}}
+  <div class="themes">
+    {{range .Themes}}
+    <div class="card theme">
+      {{if .Screenshot}}<img src="{{$.BasePath}}themes/{{.Slug}}/screenshot" alt="{{.Name}}">{{else}}<div class="noshot"></div>{{end}}
+      <div class="body">
+        <h3>{{.Name}} <span class="muted small" dir="ltr">{{.Version}}</span></h3>
+        <p class="muted small" dir="ltr">{{.Slug}}</p>
+        <div class="chips">
+          {{if .HasDemo}}<span class="badge">دمو {{.DemoVersion}}</span>{{else}}<span class="badge">بدون دمو</span>{{end}}
+          {{range .Plugins}}<span class="badge" dir="ltr">{{.Slug}}{{if eq .Source "wporg"}} · wp.org{{end}}</span>{{end}}
+        </div>
+        <form method="post" action="{{$.BasePath}}themes/{{.Slug}}/delete" onsubmit="return confirm('از کاتالوگ حذف شود؟')">
+          <input type="hidden" name="csrf" value="{{$.CSRF}}">
+          <button class="ghost danger small" type="submit">حذف از کاتالوگ</button>
+        </form>
+      </div>
+    </div>
+    {{end}}
+  </div>
+  {{else}}
+  <p class="muted">هنوز قالبی اضافه نشده.</p>
+  {{end}}
+
+  <form class="card form" method="post" action="{{.BasePath}}themes/add" enctype="multipart/form-data">
+    <h3>افزودن قالب</h3>
+    <input type="hidden" name="csrf" value="{{.CSRF}}">
+    <label>فایل zip قالب<input type="file" name="theme_zip" accept=".zip" required></label>
+    <label>بسته‌ی دموی سایه (اختیاری)<input type="file" name="demo_zip" accept=".zip"></label>
+    {{if not .HasImporter}}<p class="muted small warn">برای دمو، اول zip افزونه‌ی «درون‌ریز دمو سایه» را در کتابخانه‌ی پایین بارگذاری کنید.</p>{{end}}
+    {{if .Library}}
+    <fieldset class="card"><legend class="small">افزونه‌های کتابخانه که با این قالب نصب شوند</legend>
+      {{range .Library}}{{if ne .Slug $.Importer}}<label class="check"><input type="checkbox" name="library" value="{{.Slug}}"> {{.Name}} <span class="muted small" dir="ltr">{{.Version}}</span></label>{{end}}{{end}}
+      <p class="muted small">درون‌ریز سایه و افزونه‌هایی که دمو لازم دارد (مثل ووکامرس) خودکار اضافه می‌شوند.</p>
+    </fieldset>
+    {{end}}
+    <label>افزونه‌های wordpress.org (اختیاری)<input name="wporg" dir="ltr" placeholder="contact-form-7, elementor"></label>
+    <button type="submit">افزودن به کاتالوگ</button>
+  </form>
+
+  <h2>کتابخانه‌ی افزونه‌ها</h2>
+  <p class="muted">افزونه‌های تجاری یا اختصاصی (مثل درون‌ریز سایه) که در wordpress.org نیستند.</p>
+  {{if .Library}}
+  <table class="list">
+    <tr><th>افزونه</th><th>نامک</th><th>نسخه</th><th></th></tr>
+    {{range .Library}}
+    <tr>
+      <td>{{.Name}}</td><td dir="ltr">{{.Slug}}</td><td dir="ltr">{{.Version}}</td>
+      <td><form method="post" action="{{$.BasePath}}plugins/{{.Slug}}/delete" onsubmit="return confirm('حذف شود؟')"><input type="hidden" name="csrf" value="{{$.CSRF}}"><button class="ghost danger" type="submit">حذف</button></form></td>
+    </tr>
+    {{end}}
+  </table>
+  {{end}}
+  <form class="card form" method="post" action="{{.BasePath}}plugins/add" enctype="multipart/form-data">
+    <input type="hidden" name="csrf" value="{{.CSRF}}">
+    <label>فایل(های) zip افزونه<input type="file" name="plugin_zip" accept=".zip" multiple required></label>
+    <button type="submit">بارگذاری در کتابخانه</button>
+  </form>
+</main>
+</body>
+</html>
