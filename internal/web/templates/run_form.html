@@ -40,11 +40,9 @@
       </label>
       {{else if eq .Type "domain"}}
       <label>{{.Label}}
-        {{if $.Domains}}
-        <select name="in_{{.Name}}" dir="ltr">{{range $.Domains}}<option>{{.}}</option>{{end}}</select>
-        {{else}}
-        <input name="in_{{.Name}}" dir="ltr" {{if .Required}}required{{end}} placeholder="example.com">
-        {{end}}
+        <input name="in_{{.Name}}" list="dl_{{.Name}}" dir="ltr" {{if .Required}}required{{end}} placeholder="example.com یا test.example.com" value="{{if $.Domains}}{{index $.Domains 0}}{{end}}" autocomplete="off">
+        <datalist id="dl_{{.Name}}">{{range $.Domains}}<option value="{{.}}">{{end}}</datalist>
+        <span class="muted small">از فهرست انتخاب کنید یا هر دامنه/ساب‌دامینی را که روی این هاست هست تایپ کنید.</span>
       </label>
       {{else}}
       <label>{{.Label}}<input name="in_{{.Name}}" type="{{if eq .Type "password"}}password{{else}}text{{end}}" value="{{if ne .Type "password"}}{{.Default}}{{end}}" {{if .Required}}required{{end}} {{if eq .Type "password"}}minlength="12" autocomplete="new-password"{{end}} {{if .Pattern}}pattern="{{.Pattern}}" dir="ltr"{{end}}></label>

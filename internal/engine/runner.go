@@ -78,13 +78,16 @@ type Target struct {
 	OnLoginRejected func()
 	// OnReport stores a fresh preflight report on the host.
 	OnReport func(*cpanel.Report)
+	// OnDomain is called after a successful run that created a (sub)domain, so forms list it.
+	OnDomain func(string)
 }
 
 // RunContext is handed to each step.
 type RunContext struct {
-	Profile  *profile.Profile
-	Inputs   map[string]string
-	OnReport func(*cpanel.Report)
+	newDomain string // a (sub)domain this run created
+	Profile   *profile.Profile
+	Inputs    map[string]string
+	OnReport  func(*cpanel.Report)
 
 	// Vars holds in-memory values shared between steps that must never be persisted (passwords).
 	Vars map[string]string
@@ -271,6 +274,9 @@ func (r *Runner) execute(ctx context.Context, wf *Workflow, t *Target, inputs ma
 			rc.client.Logout(cctx)
 		}
 		ccancel()
+		if final == StatusSuccess && rc.newDomain != "" && t.OnDomain != nil {
+			t.OnDomain(rc.newDomain)
+		}
 		r.mu.Lock()
 		run.Status, run.Error, run.EndedAt = final, finalErr, time.Now()
 		delete(r.busy, t.HostID)

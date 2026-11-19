@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/url"
+	"slices"
 	"strconv"
 
 	"github.com/traptiterbeats/wpauto/internal/cpanel"
@@ -100,6 +101,13 @@ func (s *Server) handleRunStart(w http.ResponseWriter, r *http.Request) {
 		OnLoginRejected: func() { _ = s.store.Update(h.ID, func(x *store.Host) { x.FailedLogins++ }) },
 		OnReport: func(rep *cpanel.Report) {
 			_ = s.store.Update(h.ID, func(x *store.Host) { x.LastReport = rep; x.FailedLogins = 0 })
+		},
+		OnDomain: func(d string) {
+			_ = s.store.Update(h.ID, func(x *store.Host) {
+				if x.LastReport != nil && !slices.Contains(x.LastReport.Domains, d) {
+					x.LastReport.Domains = append(x.LastReport.Domains, d)
+				}
+			})
 		},
 	}
 	id, err := s.runner.Start(wf, t, inputs)

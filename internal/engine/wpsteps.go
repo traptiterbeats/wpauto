@@ -176,6 +176,7 @@ func stepSubdomain(ctx context.Context, rc *RunContext, a map[string]string) (ma
 		return nil, err
 	}
 	rc.Logf("ساب‌دامین %s ساخته شد", host)
+	rc.newDomain = host
 	docroot := a["docroot"]
 	rc.Undo("حذف ساب‌دامین "+host, func(ctx context.Context) error {
 		_, err := c.API2(ctx, "SubDomain", "delsubdomain", url.Values{"domain": {host}})
