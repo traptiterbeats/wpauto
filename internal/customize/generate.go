@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/url"
 	"regexp"
 	"strings"
 
@@ -20,7 +21,9 @@ Rules:
 - Use only facts from the client brief. Never invent prices, awards, client names, numbers, addresses or contact details; where a fact is missing write something general and true.
 - Keep each text's role and roughly its length (a short label stays short; a heading stays a heading).
 - For fields of kind "html", return HTML using only these tags: p, h2, h3, h4, ul, ol, li, strong, em, a, br, blockquote. Keep the same structure as the original where it makes sense.
+- For fields of kind "inline" use only the tags in allowed_tags ("span.grad" means <span class="grad">); keep markup minimal.
 - For "short" and "text" fields return plain text without HTML or Markdown.
+- "role" explains what a text is for; "hint" is the theme author's instruction and must be followed. Items with the same role (e.g. services.item.title) form a list: fill them in order with different content.
 - Write in the requested language with natural, fluent wording (for Persian: correct half-spaces and Persian digits).
 - Reply with ONE JSON object whose keys are exactly the field keys you were given and whose values are the new texts. No other keys, no comments.`
 
@@ -73,18 +76,84 @@ var (
 	reMarkdown = regexp.MustCompile(`(\*\*|__)(.+?)(\*\*|__)`)
 )
 
-// Clean makes a generated value safe for its kind.
-func Clean(kind, v string) string {
+var reTag = regexp.MustCompile(`<(/?)([a-zA-Z0-9]+)([^>]*)>`)
+var reClass = regexp.MustCompile(`class\s*=\s*("([^"]*)"|'([^']*)')`)
+
+// inline keeps only the allowed tags ("tag" or "tag.class") and drops every attribute but an
+// allowed class.
+func inline(v string, allow []string) string {
+	tags := map[string]map[string]bool{}
+	for _, a := range allow {
+		t, c, _ := strings.Cut(strings.ToLower(a), ".")
+		if tags[t] == nil {
+			tags[t] = map[string]bool{}
+		}
+		if c != "" {
+			tags[t][c] = true
+		}
+	}
+	return reTag.ReplaceAllStringFunc(v, func(m string) string {
+		p := reTag.FindStringSubmatch(m)
+		name := strings.ToLower(p[2])
+		classes, ok := tags[name]
+		if !ok {
+			return ""
+		}
+		if p[1] == "/" {
+			return "</" + name + ">"
+		}
+		if name == "br" {
+			return "<br>"
+		}
+		if cm := reClass.FindStringSubmatch(p[3]); cm != nil {
+			var keep []string
+			for _, c := range strings.Fields(cm[2] + cm[3]) {
+				if classes[strings.ToLower(c)] {
+					keep = append(keep, c)
+				}
+			}
+			if len(keep) > 0 {
+				return "<" + name + ` class="` + strings.Join(keep, " ") + `">`
+			}
+		}
+		return "<" + name + ">"
+	})
+}
+
+// Clean makes a value safe for its field: HTML is filtered, plain kinds lose markup, and
+// e-mail, URL and colour values that do not parse become empty.
+func Clean(f Field, v string) string {
 	v = strings.TrimSpace(v)
-	if kind == "html" {
+	switch f.Kind {
+	case "html":
 		v = reScript.ReplaceAllString(v, "")
 		v = reOnAttr.ReplaceAllString(v, "")
-		v = reJSURL.ReplaceAllString(v, `$1="#`)
-		return v
+		return reJSURL.ReplaceAllString(v, `$1="#`)
+	case "inline":
+		allow := f.Allow
+		if len(allow) == 0 {
+			allow = []string{"br", "strong", "em"}
+		}
+		return strings.Join(strings.Fields(inline(reScript.ReplaceAllString(v, ""), allow)), " ")
+	case "email":
+		if reEmail.MatchString(v) {
+			return v
+		}
+		return ""
+	case "url":
+		if u, err := url.Parse(v); err == nil && (u.Scheme == "https" || u.Scheme == "http") && u.Host != "" {
+			return v
+		}
+		return ""
+	case "color":
+		if reColor.MatchString(v) {
+			return strings.ToUpper(v)
+		}
+		return ""
 	}
 	v = reAnyTag.ReplaceAllString(v, "")
 	v = reMarkdown.ReplaceAllString(v, "$2")
-	if kind == "short" {
+	if f.Kind == "short" {
 		v = strings.Join(strings.Fields(v), " ")
 	}
 	return v
@@ -102,27 +171,26 @@ func limit(f Field) int {
 	return n
 }
 
-// FromBrief fills the fields that come straight from the brief. It returns how many it set.
-func FromBrief(fields []Field, b Brief, values map[string]string) int {
-	n := 0
+// FromBrief sets the data fields (names, contact, socials, colours) from the brief. A data field
+// the brief leaves empty is cleared, so the demo's sample e-mail or social links never reach a
+// client's site; colours, Keep fields and a missing Latin brand name (the AI writes it) stay.
+// It returns the paths it decided.
+func FromBrief(fields []Field, b Brief, values map[string]string) map[string]bool {
+	done := map[string]bool{}
 	for _, f := range fields {
-		var v string
-		switch f.From {
-		case "site_name":
-			v = b.SiteName
-		case "email":
-			v = b.Email
-		case "phone":
-			v = b.Phone
-		case "address":
-			v = b.Address
+		if !f.Data {
+			continue
 		}
-		if v = strings.TrimSpace(v); v != "" {
-			values[f.Path] = v
-			n++
+		if v := Clean(f, briefValue(b, f.Role)); v != "" {
+			values[f.Path], done[f.Path] = v, true
+			continue
 		}
+		if f.Keep || f.Role == "brand.latin" || f.Role == "site.name" || strings.HasPrefix(f.Role, "color.") {
+			continue
+		}
+		values[f.Path], done[f.Path] = "", true
 	}
-	return n
+	return done
 }
 
 // Progress reports generation progress (batch i of n).
@@ -130,14 +198,14 @@ type Progress func(done, total int)
 
 // Generate asks the model for new texts for every AI field and returns them by path.
 func Generate(ctx context.Context, c Chatter, demo *Demo, b Brief, progress Progress) (map[string]string, int, error) {
+	values := map[string]string{}
+	done := FromBrief(demo.Fields, b, values)
 	var fields []Field
 	for _, f := range demo.Fields {
-		if f.AI {
+		if f.AI && !done[f.Path] {
 			fields = append(fields, f)
 		}
 	}
-	values := map[string]string{}
-	FromBrief(demo.Fields, b, values)
 	lang := strings.TrimSpace(b.Language)
 	if lang == "" {
 		lang = "Persian (Farsi)"
@@ -156,6 +224,12 @@ func Generate(ctx context.Context, c Chatter, demo *Demo, b Brief, progress Prog
 			m := map[string]string{"key": k, "where": f.Group, "label": f.Label, "kind": f.Kind, "original": f.Original}
 			if f.Hint != "" {
 				m["hint"] = f.Hint
+			}
+			if g := roleGuide[f.Role]; g != "" {
+				m["role"] = g
+			}
+			if f.Kind == "inline" {
+				m["allowed_tags"] = strings.Join(f.Allow, ", ")
 			}
 			list = append(list, m)
 		}
@@ -185,7 +259,7 @@ func Generate(ctx context.Context, c Chatter, demo *Demo, b Brief, progress Prog
 			if !ok {
 				continue
 			}
-			s = Clean(f.Kind, s)
+			s = Clean(f, s)
 			if s == "" || len([]rune(s)) > limit(f) {
 				continue
 			}

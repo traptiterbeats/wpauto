@@ -64,13 +64,13 @@ steps:
 ۳. «نوشتن متن‌ها با هوش مصنوعی» را بزنید، متن‌ها را ببینید و هر جا لازم بود دستی اصلاح کنید.
 ۴. «نصب روی سایت» همان کار «نصب قالب و دمو» را با این پیش‌نویس باز می‌کند؛ بسته‌ی دموی ساخته‌شده به‌جای دموی اصلی درون‌ریزی می‌شود.
 
-متن‌های قابل‌تغییر خودکار از `demo.json` پیدا می‌شوند. سازنده‌ی قالب می‌تواند کنار آن `customize.json` بگذارد تا دقیق تعیین کند:
+قالب‌ها با [قرارداد شخصی‌سازی](docs/customize-contract.md) آماده می‌شوند: متن‌ها در Customizer، لوگو و رنگ اصلی، و فایل `customize.json` که هر متن را به یک نقش مشترک (مثل `hero.title` یا `contact.email`) وصل می‌کند. بدون آن، متن‌ها خودکار از `demo.json` پیدا می‌شوند. نمونه‌ی کوتاه:
 
 ```json
 {"version":1,
  "fields":[{"path":"theme_mods.hero_title","label":"تیتر اصلی","kind":"short","hint":"حداکثر ۶ کلمه"},
            {"path":"posts[slug=about].content","label":"درباره ما","kind":"html"},
-           {"path":"theme_mods.contact_email","label":"ایمیل","from":"email"}],
+           {"path":"theme_mods.contact_email","label":"ایمیل","role":"contact.email"}],
  "auto":false,
  "logo":{"theme_mod":"custom_logo","label":"لوگو"},
  "images":[{"id":"hero","label":"تصویر بالای صفحه"}]}

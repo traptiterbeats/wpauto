@@ -54,7 +54,7 @@ func TestAutoFields(t *testing.T) {
 		t.Fatalf("images/logo: %+v %s", d.Images, d.LogoMod)
 	}
 	for _, f := range d.Fields {
-		if f.Path == "theme_mods.contact_email" && (f.AI || f.From != "email") {
+		if f.Path == "theme_mods.contact_email" && (f.AI || !f.Data || f.Role != "contact.email") {
 			t.Fatal("email must come from the brief")
 		}
 	}
@@ -173,5 +173,59 @@ func TestSetGet(t *testing.T) {
 	}
 	if err := Set(root, "options.blogname", "z"); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestContract(t *testing.T) {
+	d := &Demo{JSON: map[string]any{"theme_mods": map[string]any{"sp_social_instagram": "https://instagram.com/demo", "sp_social_x": "https://x.com/demo",
+		"sp_email": "demo@demo.test", "sp_hero": "Old <span class=\"grad\">title</span>", "sp_accent": "#83B5FF"}}}
+	d.Spec = &Spec{Fields: []SpecField{
+		{Path: "theme_mods.sp_social_instagram", Role: "social.instagram"},
+		{Path: "theme_mods.sp_social_x", Role: "social.x"},
+		{Path: "theme_mods.sp_email", Role: "contact.email"},
+		{Path: "theme_mods.sp_hero", Role: "hero.title", Kind: "inline", Allow: []string{"br", "span.grad"}},
+		{Path: "theme_mods.sp_accent", Role: "color.primary"},
+		{Path: "theme_mods.sp_brand", Role: "brand.latin"},
+	}}
+	d.scan()
+	b := Brief{SiteName: "Naranj", Socials: map[string]string{"instagram": "@naranj.cafe"}}
+	vals := map[string]string{}
+	done := FromBrief(d.Fields, b, vals)
+	if vals["theme_mods.sp_social_instagram"] != "https://instagram.com/naranj.cafe" {
+		t.Fatalf("instagram: %v", vals)
+	}
+	if v, ok := vals["theme_mods.sp_social_x"]; !ok || v != "" {
+		t.Fatal("unused demo social must be cleared")
+	}
+	if v, ok := vals["theme_mods.sp_email"]; !ok || v != "" {
+		t.Fatal("demo email must be cleared")
+	}
+	if _, ok := vals["theme_mods.sp_accent"]; ok || done["theme_mods.sp_brand"] {
+		t.Fatal("colour without brief colour and missing latin name must stay for the demo / AI")
+	}
+	var hero Field
+	for _, f := range d.Fields {
+		if f.Role == "hero.title" {
+			hero = f
+		}
+		if f.Role == "brand.latin" && !f.AI {
+			t.Fatal("latin brand falls back to AI")
+		}
+	}
+	got := Clean(hero, `<h1 style="x">Fresh <span class="grad evil" onclick="x">coffee</span><br/><script>alert(1)</script><a href="javascript:x">y</a></h1>`)
+	if got != `Fresh <span class="grad">coffee</span><br>y` {
+		t.Fatalf("inline clean: %q", got)
+	}
+	if SocialURL("whatsapp", "۰۹۱۲ ۳۴۵ ۶۷۸۹") != "https://wa.me/989123456789" || SocialURL("telegram", "@abc") != "https://t.me/abc" {
+		t.Fatal("social urls")
+	}
+	if Clean(Field{Kind: "color"}, "#abc") != "#ABC" || Clean(Field{Kind: "color"}, "red") != "" || Clean(Field{Kind: "url"}, "javascript:alert(1)") != "" {
+		t.Fatal("clean kinds")
+	}
+	b.ColorPrimary = "#ff8800"
+	vals = map[string]string{}
+	FromBrief(d.Fields, b, vals)
+	if vals["theme_mods.sp_accent"] != "#FF8800" {
+		t.Fatal("brief colour")
 	}
 }

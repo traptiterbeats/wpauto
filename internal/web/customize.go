@@ -154,7 +154,7 @@ func (s *Server) handleDraft(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	data := map[string]any{"D": d, "Theme": t, "Providers": s.ai.List(),
+	data := map[string]any{"D": d, "Theme": t, "Providers": s.ai.List(), "Socials": customize.Socials,
 		"Error": r.URL.Query().Get("err"), "Msg": r.URL.Query().Get("msg")}
 	if err != nil {
 		data["Error"] = err.Error()
@@ -163,8 +163,13 @@ func (s *Server) handleDraft(w http.ResponseWriter, r *http.Request) {
 		var groups []groupView
 		idx := map[string]int{}
 		changed := 0
+		fromBrief := map[string]string{}
+		customize.FromBrief(demo.Fields, d.Brief, fromBrief)
 		for _, f := range demo.Fields {
 			v, ok := d.Values[f.Path]
+			if bv, isBrief := fromBrief[f.Path]; isBrief && f.Data {
+				v, ok = bv, true
+			}
 			if !ok {
 				v = f.Original
 			}
@@ -187,6 +192,9 @@ func (s *Server) handleDraft(w http.ResponseWriter, r *http.Request) {
 		data["Groups"], data["Slots"], data["Changed"], data["FieldCount"] = groups, slots, changed, len(demo.Fields)
 		data["LogoMod"], data["LogoText"] = demo.LogoMod, demo.LogoText
 		data["HasSpec"] = demo.Spec != nil
+		if demo.Spec != nil {
+			data["Supports"] = demo.Spec.Supports
+		}
 	}
 	s.render(w, "draft.html", s.page(r, data))
 }
@@ -284,9 +292,18 @@ func (s *Server) handleDraftOp(w http.ResponseWriter, r *http.Request) {
 	case "brief":
 		_, err := st.Update(id, func(d *customize.Draft) error {
 			f := func(k string) string { return strings.TrimSpace(r.FormValue(k)) }
-			d.Brief = customize.Brief{SiteName: f("site_name"), Business: f("business"), About: f("about"), Services: f("services"),
-				Audience: f("audience"), Tone: f("tone"), Email: f("email"), Phone: f("phone"), Address: f("address"),
-				Notes: f("notes"), Language: f("language")}
+			d.Brief = customize.Brief{SiteName: f("site_name"), BrandLatin: f("brand_latin"), Business: f("business"), About: f("about"),
+				Services: f("services"), Audience: f("audience"), Tone: f("tone"), Email: f("email"), Phone: f("phone"),
+				Address: f("address"), Hours: f("hours"), Notes: f("notes"), Language: f("language"),
+				Socials: map[string]string{}}
+			for _, sn := range customize.Socials {
+				if v := f("social_" + sn.ID); v != "" {
+					d.Brief.Socials[sn.ID] = v
+				}
+			}
+			if f("use_colors") != "" {
+				d.Brief.ColorPrimary, d.Brief.ColorSecondary = f("color_primary"), f("color_secondary")
+			}
 			if d.Brief.SiteName != "" {
 				d.Title = d.Brief.SiteName
 			}
@@ -319,14 +336,14 @@ func (s *Server) handleDraftOp(w http.ResponseWriter, r *http.Request) {
 		_, err = st.Update(id, func(d *customize.Draft) error {
 			for _, f := range demo.Fields {
 				v, ok := r.PostForm["v:"+f.Path]
-				if !ok {
+				if !ok || (f.Data && f.Role != "brand.latin") {
 					continue
 				}
 				val := strings.ReplaceAll(strings.TrimSpace(v[0]), "\r\n", "\n")
 				if val == "" || val == f.Original {
 					delete(d.Values, f.Path)
 				} else {
-					d.Values[f.Path] = customize.Clean(f.Kind, val)
+					d.Values[f.Path] = customize.Clean(f, val)
 				}
 			}
 			return nil

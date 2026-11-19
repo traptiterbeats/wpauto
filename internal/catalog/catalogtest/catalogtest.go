@@ -79,7 +79,7 @@ func RichDemo(t testing.TB, dir, theme string, withSpec bool) string {
 		files["customize.json"] = `{"version":1,"fields":[
  {"path":"theme_mods.brand_text","label":"Brand","kind":"short"},
  {"path":"posts[slug=first].title","label":"Project title"},
- {"path":"theme_mods.contact_email","label":"Email","from":"email"},
+ {"path":"theme_mods.contact_email","label":"Email","role":"contact.email"},
  {"path":"pages.9.title","label":"missing"}],
  "logo":{"theme_mod":"brand_logo","label":"Logo"}}`
 	}

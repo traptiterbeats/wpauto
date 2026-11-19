@@ -18,17 +18,22 @@ import (
 
 // Brief is what the client tells about their business.
 type Brief struct {
-	SiteName string `json:"site_name"`
-	Business string `json:"business"` // field of work
-	About    string `json:"about"`    // who they are, what makes them different
-	Services string `json:"services"` // services / products, one per line
-	Audience string `json:"audience"` // target customers
-	Tone     string `json:"tone"`     // formal, friendly, …
-	Email    string `json:"email"`
-	Phone    string `json:"phone"`
-	Address  string `json:"address"`
-	Notes    string `json:"notes"`    // anything else for the writer
-	Language string `json:"language"` // default Persian
+	SiteName       string            `json:"site_name"`
+	BrandLatin     string            `json:"brand_latin,omitempty"`
+	Business       string            `json:"business"` // field of work
+	About          string            `json:"about"`    // who they are, what makes them different
+	Services       string            `json:"services"` // services / products, one per line
+	Audience       string            `json:"audience"`
+	Tone           string            `json:"tone"`
+	Email          string            `json:"email"`
+	Phone          string            `json:"phone"`
+	Address        string            `json:"address"`
+	Hours          string            `json:"hours,omitempty"`
+	Socials        map[string]string `json:"socials,omitempty"`
+	ColorPrimary   string            `json:"color_primary,omitempty"`
+	ColorSecondary string            `json:"color_secondary,omitempty"`
+	Notes          string            `json:"notes"`
+	Language       string            `json:"language"`
 }
 
 // Draft is one client's customisation of one theme's demo.

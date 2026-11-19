@@ -17,15 +17,17 @@ import (
 
 // Field is one text in demo.json that can be changed.
 type Field struct {
-	Path     string `json:"path"`
-	Label    string `json:"label"`
-	Group    string `json:"group"`
-	Kind     string `json:"kind"` // short | text | html
-	Hint     string `json:"hint,omitempty"`
-	Original string `json:"original"`
-	AI       bool   `json:"ai"`
-	// From fills the field from the brief instead of the AI: site_name, email, phone, address.
-	From string `json:"from,omitempty"`
+	Path     string   `json:"path"`
+	Label    string   `json:"label"`
+	Group    string   `json:"group"`
+	Kind     string   `json:"kind"` // short | text | html | inline | email | url | color
+	Hint     string   `json:"hint,omitempty"`
+	Original string   `json:"original"`
+	Role     string   `json:"role,omitempty"`  // contract role, e.g. hero.title, contact.email
+	Allow    []string `json:"allow,omitempty"` // inline kind: allowed tags, "tag" or "tag.class"
+	AI       bool     `json:"ai"`              // the AI writes it
+	Data     bool     `json:"data"`            // filled from the brief (contact, socials, colours, names)
+	Keep     bool     `json:"keep,omitempty"`  // keep the demo value when the brief has none
 }
 
 // ImageSlot is a demo image the client can replace.
@@ -37,7 +39,13 @@ type ImageSlot struct {
 
 // Spec is the optional customize.json a theme author puts next to demo.json.
 type Spec struct {
-	Version int `json:"version"`
+	Contract string   `json:"contract,omitempty"` // "wpauto-customize"
+	Version  int      `json:"version"`
+	Supports []string `json:"supports,omitempty"`
+	Sections []struct {
+		ID    string `json:"id"`
+		Label string `json:"label"`
+	} `json:"sections,omitempty"`
 	// Auto also adds the automatically found fields that Fields does not list (default: only
 	// when Fields is empty).
 	Auto   *bool       `json:"auto,omitempty"`
@@ -54,13 +62,43 @@ type Spec struct {
 
 // SpecField describes one field in customize.json.
 type SpecField struct {
-	Path  string `json:"path"`
-	Label string `json:"label"`
-	Group string `json:"group,omitempty"`
-	Kind  string `json:"kind,omitempty"`
-	Hint  string `json:"hint,omitempty"`
-	AI    *bool  `json:"ai,omitempty"`
-	From  string `json:"from,omitempty"`
+	Path    string   `json:"path"`
+	Label   string   `json:"label"`
+	Section string   `json:"section,omitempty"`
+	Group   string   `json:"group,omitempty"` // free-form group label (when no sections)
+	Kind    string   `json:"kind,omitempty"`
+	Hint    string   `json:"hint,omitempty"`
+	Role    string   `json:"role,omitempty"`
+	Allow   []string `json:"allow,omitempty"`
+	AI      *bool    `json:"ai,omitempty"`
+	Keep    bool     `json:"keep,omitempty"`
+	From    string   `json:"from,omitempty"` // legacy: site_name, email, phone, address
+}
+
+var legacyFrom = map[string]string{"site_name": "site.name", "email": "contact.email", "phone": "contact.phone", "address": "contact.address"}
+
+// newField sets the AI/Data flags from the role and kind.
+func newField(f Field, ai *bool) Field {
+	if f.Kind == "" {
+		f.Kind = kindOf(f.Original)
+	}
+	switch {
+	case f.Role == "contact.email":
+		f.Kind = "email"
+	case strings.HasPrefix(f.Role, "color."):
+		f.Kind = "color"
+	case strings.HasPrefix(f.Role, "social."):
+		f.Kind = "url"
+	}
+	f.Data = dataRole(f.Role)
+	f.AI = !f.Data && f.Kind != "email" && f.Kind != "url" && f.Kind != "color"
+	if f.Role == "brand.latin" {
+		f.AI = true // written by the AI when the brief has no Latin name
+	}
+	if ai != nil {
+		f.AI = *ai && !(f.Data && f.Role != "brand.latin")
+	}
+	return f
 }
 
 // Demo is a parsed demo package.
@@ -129,6 +167,7 @@ func readJSON(f *zip.File, v any) error {
 
 var (
 	reHTML  = regexp.MustCompile(`<[a-zA-Z/][^>]*>`)
+	reColor = regexp.MustCompile(`^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$`)
 	reEmail = regexp.MustCompile(`^[^@\s]+@[^@\s]+\.[a-z]{2,}$`)
 	reToken = regexp.MustCompile(`^[a-z0-9_-]{1,12}$`)
 	rePhone = regexp.MustCompile(`^[+0-9۰-۹ ()-]{6,}$`)
@@ -172,24 +211,21 @@ func sel(list string, i int, item map[string]any) string {
 func (d *Demo) auto() []Field {
 	var out []Field
 	add := func(p, label, group, v string) {
-		f := Field{Path: p, Label: label, Group: group, Original: v, Kind: kindOf(v), AI: true}
-		switch {
-		case reEmail.MatchString(strings.TrimSpace(v)):
-			f.AI, f.From = false, "email"
-		case rePhone.MatchString(strings.TrimSpace(v)):
-			f.AI, f.From = false, "phone"
-		}
-		out = append(out, f)
+		out = append(out, newField(Field{Path: p, Label: label, Group: group, Original: v, Role: autoRole(label, v)}, nil))
 	}
 	opts, _ := d.JSON["options"].(map[string]any)
-	out = append(out, Field{Path: "options.blogname", Label: "نام سایت", Group: "عمومی", Kind: "short", Original: str(opts, "blogname"), From: "site_name"})
+	out = append(out, newField(Field{Path: "options.blogname", Label: "نام سایت", Group: "عمومی", Kind: "short", Original: str(opts, "blogname"), Role: "site.name"}, nil))
 	if v := str(opts, "blogdescription"); v != "" {
 		add("options.blogdescription", "معرفی کوتاه سایت", "عمومی", v)
 	}
 	if mods, ok := d.JSON["theme_mods"].(map[string]any); ok {
 		for _, k := range sortedKeys(mods) {
-			if v, ok := mods[k].(string); ok && (textual(v) || reEmail.MatchString(v)) {
-				add("theme_mods."+k, k, "تنظیمات قالب", v)
+			if v, ok := mods[k].(string); ok && (textual(v) || autoRole(k, v) != "") {
+				f := newField(Field{Path: "theme_mods." + k, Label: k, Group: "تنظیمات قالب", Original: v, Role: autoRole(k, v)}, nil)
+				if strings.HasPrefix(f.Role, "social.") {
+					f.Kind, f.AI = "url", false
+				}
+				out = append(out, f)
 			}
 		}
 	}
@@ -251,24 +287,30 @@ func (d *Demo) scan() {
 		d.Fields = auto
 	} else {
 		seen := map[string]bool{}
+		sections := map[string]string{}
+		for _, sec := range d.Spec.Sections {
+			sections[sec.ID] = sec.Label
+		}
 		for _, sf := range d.Spec.Fields {
 			v, err := Get(d.JSON, sf.Path)
-			if err != nil && sf.Path != "options.blogname" {
+			if err != nil && !strings.HasPrefix(sf.Path, "options.") && !strings.HasPrefix(sf.Path, "theme_mods.") {
 				continue // a path the demo does not have
 			}
-			f := Field{Path: sf.Path, Label: sf.Label, Group: sf.Group, Kind: sf.Kind, Hint: sf.Hint, Original: v, AI: true, From: sf.From}
-			if f.Kind == "" {
-				f.Kind = kindOf(v)
+			role := sf.Role
+			if role == "" {
+				role = legacyFrom[sf.From]
 			}
-			if f.Group == "" {
-				f.Group = "متن‌ها"
+			group := sf.Group
+			if l, ok := sections[sf.Section]; ok {
+				group = l
+			} else if group == "" {
+				group = sf.Section
 			}
-			if sf.AI != nil {
-				f.AI = *sf.AI
+			if group == "" {
+				group = "متن‌ها"
 			}
-			if f.From != "" {
-				f.AI = false
-			}
+			f := newField(Field{Path: sf.Path, Label: sf.Label, Group: group, Kind: sf.Kind, Hint: sf.Hint, Original: v,
+				Role: role, Allow: sf.Allow, Keep: sf.Keep}, sf.AI)
 			seen[f.Path] = true
 			d.Fields = append(d.Fields, f)
 		}

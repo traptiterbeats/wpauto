@@ -14,7 +14,10 @@
     <h3>۱. بریف مشتری</h3>
     <input type="hidden" name="csrf" value="{{.CSRF}}">
     {{with .D.Brief}}
-    <label>نام سایت / برند<input name="site_name" value="{{.SiteName}}" required></label>
+    <div class="grid2">
+      <label>نام سایت / برند<input name="site_name" value="{{.SiteName}}" required></label>
+      <label>نام برند به لاتین<input name="brand_latin" value="{{.BrandLatin}}" dir="ltr" placeholder="خالی = هوش مصنوعی می‌نویسد"></label>
+    </div>
     <label>حوزه‌ی کار<input name="business" value="{{.Business}}" placeholder="مثلاً کافه و شیرینی‌پزی در شیراز"></label>
     <label>معرفی کسب‌وکار<textarea name="about" rows="4" placeholder="چه کسی هستند، از کی، چه چیزی متمایزشان می‌کند">{{.About}}</textarea></label>
     <label>خدمات یا محصولات (هر خط یکی)<textarea name="services" rows="4">{{.Services}}</textarea></label>
@@ -25,6 +28,19 @@
       <label>تلفن<input name="phone" value="{{.Phone}}" dir="ltr"></label>
     </div>
     <label>نشانی<input name="address" value="{{.Address}}"></label>
+    <label>ساعت کاری<input name="hours" value="{{.Hours}}"></label>
+    {{end}}
+    <fieldset class="socials"><legend>شبکه‌های اجتماعی <span class="muted small">(آیدی، شماره یا لینک؛ خالی‌ها از سایت حذف می‌شوند)</span></legend>
+      <div class="grid2">
+      {{range $.Socials}}<label>{{.Label}}<input name="social_{{.ID}}" value="{{index $.D.Brief.Socials .ID}}" dir="ltr" placeholder="{{.Placeholder}}"></label>{{end}}
+      </div>
+    </fieldset>
+    {{with .D.Brief}}
+    <label class="check"><input type="checkbox" name="use_colors" {{if .ColorPrimary}}checked{{end}}> رنگ‌های برند را اعمال کن</label>
+    <div class="grid2">
+      <label>رنگ اصلی<input type="color" name="color_primary" value="{{if .ColorPrimary}}{{.ColorPrimary}}{{else}}#83b5ff{{end}}"></label>
+      <label>رنگ دوم<input type="color" name="color_secondary" value="{{if .ColorSecondary}}{{.ColorSecondary}}{{else}}#ffffff{{end}}"></label>
+    </div>
     <label>نکته‌های دیگر برای نویسنده<textarea name="notes" rows="3">{{.Notes}}</textarea></label>
     <label>زبان<input name="language" value="{{.Language}}" placeholder="فارسی"></label>
     {{end}}
@@ -81,6 +97,7 @@
     {{end}}
     {{end}}
     {{if not .HasSpec}}<p class="muted small">این دمو customize.json ندارد؛ متن‌ها خودکار از demo.json پیدا شده‌اند.</p>{{end}}
+    {{if .Supports}}<p class="muted small">این قالب از قرارداد شخصی‌سازی پشتیبانی می‌کند: <span dir="ltr">{{range $i, $s := .Supports}}{{if $i}}، {{end}}{{$s}}{{end}}</span></p>{{end}}
 
     <form method="post" action="{{.BasePath}}customize/{{.D.ID}}/values">
       <input type="hidden" name="csrf" value="{{.CSRF}}">
@@ -89,8 +106,10 @@
         <summary>{{.Name}}</summary>
         {{range .Fields}}
         <label class="field{{if .Changed}} changed{{end}}">
-          <span>{{.Label}}{{if .From}} <span class="muted small">(از بریف)</span>{{else if not .AI}} <span class="muted small">(دستی)</span>{{end}}{{if .Hint}} <span class="muted small">— {{.Hint}}</span>{{end}}</span>
-          {{if eq .Kind "short"}}<input name="v:{{.Path}}" value="{{.Value}}">{{else}}<textarea name="v:{{.Path}}" rows="{{if eq .Kind "html"}}6{{else}}3{{end}}" {{if eq .Kind "html"}}dir="auto" class="mono"{{end}}>{{.Value}}</textarea>{{end}}
+          <span>{{.Label}}{{if and .Data (ne .Role "brand.latin")}} <span class="muted small">(از بریف)</span>{{else if not .AI}} <span class="muted small">(دستی)</span>{{end}}{{if .Hint}} <span class="muted small">— {{.Hint}}</span>{{end}}</span>
+          {{if and .Data (ne .Role "brand.latin")}}<input value="{{if .Value}}{{.Value}}{{else}}— خالی؛ از سایت حذف می‌شود —{{end}}" disabled dir="ltr">
+          {{else if eq .Kind "color"}}<input name="v:{{.Path}}" value="{{.Value}}" dir="ltr">
+          {{else if or (eq .Kind "short") (eq .Kind "email") (eq .Kind "url")}}<input name="v:{{.Path}}" value="{{.Value}}" {{if ne .Kind "short"}}dir="ltr"{{end}}>{{else}}<textarea name="v:{{.Path}}" rows="{{if eq .Kind "html"}}6{{else}}3{{end}}" {{if or (eq .Kind "html") (eq .Kind "inline")}}dir="auto" class="mono"{{end}}>{{.Value}}</textarea>{{end}}
           {{if .Changed}}<details class="orig"><summary class="muted small">متن دمو</summary><div class="muted small">{{.Original}}</div></details>{{end}}
         </label>
         {{end}}

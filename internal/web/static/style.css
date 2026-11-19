@@ -71,3 +71,6 @@ details.group summary{font-weight:700}
 .field.changed input,.field.changed textarea{border-color:#4ade80}
 .orig div{white-space:pre-wrap;padding:6px 0}
 .row-actions{display:flex;gap:6px;flex-wrap:wrap}
+fieldset.socials{border:1px solid var(--line);border-radius:10px;padding:10px 12px}
+fieldset.socials legend{padding:0 6px}
+input[type=color]{height:40px;padding:2px}

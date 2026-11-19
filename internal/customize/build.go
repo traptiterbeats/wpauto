@@ -22,12 +22,22 @@ func Apply(demo *Demo, d *Draft) (map[string]any, map[string]string, error) {
 	for _, f := range demo.Fields {
 		known[f.Path] = f
 	}
+	fromBrief := map[string]string{}
+	FromBrief(demo.Fields, d.Brief, fromBrief)
 	for p, v := range d.Values {
 		f, ok := known[p]
 		if !ok {
 			continue // a field the demo no longer has
 		}
-		if err := Set(out, p, Clean(f.Kind, v)); err != nil {
+		if _, ok := fromBrief[p]; ok && f.Data {
+			continue // the brief decides
+		}
+		if err := Set(out, p, Clean(f, v)); err != nil {
+			return nil, nil, err
+		}
+	}
+	for p, v := range fromBrief {
+		if err := Set(out, p, v); err != nil {
 			return nil, nil, err
 		}
 	}

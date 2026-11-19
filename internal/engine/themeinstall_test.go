@@ -186,7 +186,7 @@ func TestThemeInstallWithDraft(t *testing.T) {
 			rc, _ := f.Open()
 			b, _ := io.ReadAll(rc)
 			rc.Close()
-			if !strings.Contains(string(b), "Client Site") {
+			if !strings.Contains(string(b), `"blogname": "Client"`) {
 				t.Fatalf("uploaded demo is not the customised package: %s", b)
 			}
 			return
