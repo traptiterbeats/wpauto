@@ -14,7 +14,7 @@
   <form class="card form" method="post" action="{{.BasePath}}run/{{.WF.ID}}" autocomplete="off">
     <input type="hidden" name="csrf" value="{{.CSRF}}">
     <label>هاست
-      <select name="host" onchange="location.href='{{.BasePath}}run/{{.WF.ID}}?host='+this.value">
+      <select name="host" onchange="location.href='{{.BasePath}}run/{{.WF.ID}}?theme={{.Q.theme}}&draft={{.Q.draft}}&host='+this.value">
         {{range .Hosts}}<option value="{{.ID}}" {{if eq .ID $.HostID}}selected{{end}}>{{.Name}} ({{.ProfileID}})</option>{{end}}
       </select>
     </label>
@@ -26,10 +26,17 @@
       {{else if eq .Type "theme"}}
       <label>{{.Label}}
         {{if $.Themes}}
-        <select name="in_{{.Name}}">{{range $.Themes}}<option value="{{.Slug}}">{{.Name}} {{.Version}}{{if .HasDemo}} · با دمو{{end}}</option>{{end}}</select>
+        <select name="in_{{.Name}}">{{range $.Themes}}<option value="{{.Slug}}" {{if eq .Slug $.Q.theme}}selected{{end}}>{{.Name}} {{.Version}}{{if .HasDemo}} · با دمو{{end}}</option>{{end}}</select>
         {{else}}
         <span class="muted">کاتالوگ خالی است. <a href="{{$.BasePath}}themes">افزودن قالب</a></span>
         {{end}}
+      </label>
+      {{else if eq .Type "draft"}}
+      <label>{{.Label}}
+        <select name="in_{{.Name}}">
+          <option value="">بدون شخصی‌سازی (دموی اصلی)</option>
+          {{range $.Drafts}}<option value="{{.ID}}" {{if eq .ID $.Q.draft}}selected{{end}}>{{.Title}} — قالب {{.Theme}}</option>{{end}}
+        </select>
       </label>
       {{else if eq .Type "domain"}}
       <label>{{.Label}}

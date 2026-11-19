@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="fa" dir="rtl">
+<head>{{template "head" .}}<title>{{.D.Title}} | شخصی‌سازی | wpauto</title></head>
+<body>
+{{template "nav" .}}
+<main>
+  <a class="back" href="{{.BasePath}}customize">→ بازگشت به پیش‌نویس‌ها</a>
+  <h2>{{.D.Title}} <span class="muted small" dir="ltr">{{.D.Theme}}</span></h2>
+  {{if .Error}}<div class="error">{{.Error}}</div>{{end}}
+  {{if .Msg}}<div class="card hint ok">{{.Msg}}</div>{{end}}
+  <nav class="tabs"><a href="#brief">۱. بریف</a><a href="#images">۲. لوگو و تصاویر</a><a href="#texts">۳. متن‌ها</a><a href="#install">۴. نصب</a></nav>
+
+  <form id="brief" class="card form" method="post" action="{{.BasePath}}customize/{{.D.ID}}/brief">
+    <h3>۱. بریف مشتری</h3>
+    <input type="hidden" name="csrf" value="{{.CSRF}}">
+    {{with .D.Brief}}
+    <label>نام سایت / برند<input name="site_name" value="{{.SiteName}}" required></label>
+    <label>حوزه‌ی کار<input name="business" value="{{.Business}}" placeholder="مثلاً کافه و شیرینی‌پزی در شیراز"></label>
+    <label>معرفی کسب‌وکار<textarea name="about" rows="4" placeholder="چه کسی هستند، از کی، چه چیزی متمایزشان می‌کند">{{.About}}</textarea></label>
+    <label>خدمات یا محصولات (هر خط یکی)<textarea name="services" rows="4">{{.Services}}</textarea></label>
+    <label>مخاطب<input name="audience" value="{{.Audience}}"></label>
+    <label>لحن<input name="tone" value="{{.Tone}}" placeholder="صمیمی، رسمی، خلاق…"></label>
+    <div class="grid2">
+      <label>ایمیل<input name="email" value="{{.Email}}" dir="ltr"></label>
+      <label>تلفن<input name="phone" value="{{.Phone}}" dir="ltr"></label>
+    </div>
+    <label>نشانی<input name="address" value="{{.Address}}"></label>
+    <label>نکته‌های دیگر برای نویسنده<textarea name="notes" rows="3">{{.Notes}}</textarea></label>
+    <label>زبان<input name="language" value="{{.Language}}" placeholder="فارسی"></label>
+    {{end}}
+    <p class="muted small">هوش مصنوعی فقط از همین اطلاعات استفاده می‌کند و قیمت، آمار یا مشتری خیالی نمی‌سازد.</p>
+    <button type="submit">ذخیره‌ی بریف</button>
+  </form>
+
+  <form id="images" class="card form" method="post" action="{{.BasePath}}customize/{{.D.ID}}/images" enctype="multipart/form-data">
+    <h3>۲. لوگو و تصاویر</h3>
+    <input type="hidden" name="csrf" value="{{.CSRF}}">
+    {{if .LogoMod}}
+    <div class="slot">
+      {{if .D.Logo}}<img src="{{.BasePath}}customize/{{.D.ID}}/file/{{.D.Logo}}" alt="logo">{{else}}<div class="noshot"></div>{{end}}
+      <label>{{.LogoText}} <span class="muted small" dir="ltr">({{.LogoMod}})</span><input type="file" name="logo" accept="image/png,image/jpeg,image/webp,image/gif"></label>
+    </div>
+    {{end}}
+    {{range $i, $s := .Slots}}
+    <div class="slot">
+      {{if .Upload}}<img src="{{$.BasePath}}customize/{{$.D.ID}}/file/{{.Upload}}" alt="">{{else}}<div class="noshot"></div>{{end}}
+      <label>{{.Label}} <span class="muted small" dir="ltr">{{.File}}</span><input type="file" name="img_{{$i}}" accept="image/png,image/jpeg,image/webp,image/gif"></label>
+    </div>
+    {{end}}
+    {{if not .Slots}}<p class="muted small">دموی این قالب تصویری ندارد که جایگزین شود.</p>{{end}}
+    <p class="muted small">تصویری که نگذارید، همان تصویر دمو می‌ماند. حداکثر ۱۰ مگابایت؛ png، jpg، webp یا gif.</p>
+    <button type="submit">بارگذاری</button>
+  </form>
+  {{if or .D.Logo .D.Images}}
+  <div class="card chips">
+    {{if .D.Logo}}<form method="post" action="{{.BasePath}}customize/{{.D.ID}}/unset"><input type="hidden" name="csrf" value="{{.CSRF}}"><input type="hidden" name="slot" value="logo"><button class="ghost small" type="submit">حذف لوگو</button></form>{{end}}
+    {{range .Slots}}{{if .Upload}}<form method="post" action="{{$.BasePath}}customize/{{$.D.ID}}/unset"><input type="hidden" name="csrf" value="{{$.CSRF}}"><input type="hidden" name="slot" value="{{.ID}}"><button class="ghost small" type="submit">برگرداندن «{{.Label}}»</button></form>{{end}}{{end}}
+  </div>
+  {{end}}
+
+  <section id="texts" class="card">
+    <h3>۳. متن‌ها <span class="muted small">{{.Changed}} از {{.FieldCount}} متن تغییر کرده</span></h3>
+    {{if eq .D.Status "generating"}}
+    <p class="warn" id="genstatus">در حال نوشتن متن‌ها با {{.D.Provider}}… <span id="genprog">{{.D.Progress}}</span></p>
+    <script>
+    (function poll(){fetch('{{.BasePath}}customize/{{.D.ID}}/status',{credentials:'same-origin'}).then(function(r){return r.json()}).then(function(j){
+      if(j.status==='generating'){document.getElementById('genprog').textContent=j.progress||'';setTimeout(poll,2500);}else{location.href='{{.BasePath}}customize/{{.D.ID}}#texts';location.reload();}
+    }).catch(function(){setTimeout(poll,5000)});})();
+    </script>
+    {{else}}
+    {{if eq .D.Status "error"}}<div class="error">{{.D.Error}}</div>{{end}}
+    {{if .Providers}}
+    <form class="inline" method="post" action="{{.BasePath}}customize/{{.D.ID}}/generate">
+      <input type="hidden" name="csrf" value="{{.CSRF}}">
+      <select name="provider">{{range .Providers}}<option value="{{.ID}}" {{if .Default}}selected{{end}}>{{.Name}} · {{.Model}}</option>{{end}}</select>
+      <button type="submit">{{if .D.Generated}}نوشتن دوباره با هوش مصنوعی{{else}}نوشتن متن‌ها با هوش مصنوعی{{end}}</button>
+    </form>
+    {{if .D.Tokens}}<p class="muted small">مصرف تا این‌جا: {{.D.Tokens}} توکن · {{.D.Provider}}</p>{{end}}
+    {{else}}
+    <p class="hint">برای نوشتن خودکار، اول در <a href="{{.BasePath}}ai">هوش مصنوعی</a> یک سرویس اضافه کنید. متن‌ها را دستی هم می‌شود نوشت.</p>
+    {{end}}
+    {{end}}
+    {{if not .HasSpec}}<p class="muted small">این دمو customize.json ندارد؛ متن‌ها خودکار از demo.json پیدا شده‌اند.</p>{{end}}
+
+    <form method="post" action="{{.BasePath}}customize/{{.D.ID}}/values">
+      <input type="hidden" name="csrf" value="{{.CSRF}}">
+      {{range .Groups}}
+      <details class="group" open>
+        <summary>{{.Name}}</summary>
+        {{range .Fields}}
+        <label class="field{{if .Changed}} changed{{end}}">
+          <span>{{.Label}}{{if .From}} <span class="muted small">(از بریف)</span>{{else if not .AI}} <span class="muted small">(دستی)</span>{{end}}{{if .Hint}} <span class="muted small">— {{.Hint}}</span>{{end}}</span>
+          {{if eq .Kind "short"}}<input name="v:{{.Path}}" value="{{.Value}}">{{else}}<textarea name="v:{{.Path}}" rows="{{if eq .Kind "html"}}6{{else}}3{{end}}" {{if eq .Kind "html"}}dir="auto" class="mono"{{end}}>{{.Value}}</textarea>{{end}}
+          {{if .Changed}}<details class="orig"><summary class="muted small">متن دمو</summary><div class="muted small">{{.Original}}</div></details>{{end}}
+        </label>
+        {{end}}
+      </details>
+      {{end}}
+      <div class="inline">
+        <button type="submit">ذخیره‌ی متن‌ها</button>
+      </div>
+    </form>
+    <form method="post" action="{{.BasePath}}customize/{{.D.ID}}/reset" onsubmit="return confirm('همه‌ی متن‌ها به دموی اصلی برگردد؟')">
+      <input type="hidden" name="csrf" value="{{.CSRF}}"><button class="ghost danger small" type="submit">برگرداندن همه به دمو</button>
+    </form>
+  </section>
+
+  <section id="install" class="card">
+    <h3>۴. نصب روی سایت</h3>
+    <p class="muted">قالب، افزونه‌ها و همین نسخه‌ی شخصی‌سازی‌شده‌ی دمو روی وردپرس مشتری نصب می‌شود.</p>
+    <div class="inline">
+      <a class="btn" href="{{.BasePath}}run/theme-install?theme={{.D.Theme}}&draft={{.D.ID}}">نصب روی سایت</a>
+      <form method="post" action="{{.BasePath}}customize/{{.D.ID}}/build"><input type="hidden" name="csrf" value="{{.CSRF}}"><button class="ghost" type="submit">دانلود بسته‌ی دموی ساخته‌شده</button></form>
+    </div>
+  </section>
+  <form method="post" action="{{.BasePath}}customize/{{.D.ID}}/delete" onsubmit="return confirm('این پیش‌نویس و تصاویرش حذف شود؟')">
+    <input type="hidden" name="csrf" value="{{.CSRF}}"><button class="ghost danger" type="submit">حذف پیش‌نویس</button>
+  </form>
+</main>
+</body>
+</html>

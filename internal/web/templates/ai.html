@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="fa" dir="rtl">
+<head>{{template "head" .}}<title>هوش مصنوعی | wpauto</title></head>
+<body>
+{{template "nav" .}}
+<main>
+  <a class="back" href="{{.BasePath}}">→ بازگشت به کارها</a>
+  <h2>سرویس‌های هوش مصنوعی</h2>
+  <p class="muted">برای نوشتن متن‌های سایت مشتری در صفحه‌ی «شخصی‌سازی». کلیدها رمزنگاری‌شده روی سرور خودتان می‌مانند.</p>
+  {{if .Error}}<div class="error">{{.Error}}</div>{{end}}
+  {{if .Msg}}<div class="card hint ok">{{.Msg}}</div>{{end}}
+  {{if .Providers}}
+  <table class="list">
+    <tr><th>نام</th><th>مدل</th><th>آدرس</th><th></th></tr>
+    {{range .Providers}}
+    <tr>
+      <td>{{.Name}}{{if .Default}} <span class="badge">پیش‌فرض</span>{{end}}</td>
+      <td dir="ltr">{{.Model}}</td>
+      <td dir="ltr" class="small">{{.BaseURL}}</td>
+      <td class="row-actions">
+        <form method="post" action="{{$.BasePath}}ai/{{.ID}}/test"><input type="hidden" name="csrf" value="{{$.CSRF}}"><button class="ghost" type="submit">تست</button></form>
+        {{if not .Default}}<form method="post" action="{{$.BasePath}}ai/{{.ID}}/default"><input type="hidden" name="csrf" value="{{$.CSRF}}"><button class="ghost" type="submit">پیش‌فرض</button></form>{{end}}
+        <form method="post" action="{{$.BasePath}}ai/{{.ID}}/delete" onsubmit="return confirm('حذف شود؟')"><input type="hidden" name="csrf" value="{{$.CSRF}}"><button class="ghost danger" type="submit">حذف</button></form>
+      </td>
+    </tr>
+    {{end}}
+  </table>
+  {{else}}
+  <p class="muted">هنوز سرویسی اضافه نشده.</p>
+  {{end}}
+
+  <form class="card form" method="post" action="{{.BasePath}}ai/add" autocomplete="off">
+    <h3>افزودن سرویس</h3>
+    <input type="hidden" name="csrf" value="{{.CSRF}}">
+    <label>نوع
+      <select name="kind" id="kind">
+        {{range .Kinds}}<option value="{{.ID}}" data-url="{{.BaseURL}}" data-model="{{.Model}}">{{.Name}}</option>{{end}}
+      </select>
+    </label>
+    <label>نام (اختیاری)<input name="name" placeholder="مثلاً OpenAI کاری"></label>
+    <label>آدرس API<input name="base_url" id="base_url" dir="ltr" placeholder="https://api.example.com/v1"></label>
+    <p class="muted small">برای سرویس‌های سازگار (مثل AvalAI، GapGPT، DeepSeek، Groq یا سرور خودتان) آدرسی را بنویسید که به /chat/completions ختم می‌شود، بدون همین بخش آخر.</p>
+    <label>مدل<input name="model" id="model" dir="ltr"></label>
+    <label>کلید API<input name="key" type="password" required dir="ltr" autocomplete="off"></label>
+    <button type="submit">ذخیره</button>
+  </form>
+  <script>
+  (function(){
+    var k=document.getElementById('kind'),u=document.getElementById('base_url'),m=document.getElementById('model');
+    function fill(){var o=k.options[k.selectedIndex];u.value=o.dataset.url;m.value=o.dataset.model;}
+    k.addEventListener('change',fill);fill();
+  })();
+  </script>
+</main>
+</body>
+</html>

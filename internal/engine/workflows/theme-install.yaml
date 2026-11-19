@@ -16,6 +16,10 @@ inputs:
     label: قالب
     type: theme
     required: true
+  - name: draft
+    label: شخصی‌سازی
+    type: draft
+    help: پیش‌نویسی که در صفحه‌ی «شخصی‌سازی» برای همین قالب ساخته‌اید؛ متن‌ها، لوگو و تصاویر مشتری جای دمو می‌نشینند.
   - name: activate
     label: قالب فعال شود
     type: checkbox
@@ -60,6 +64,7 @@ steps:
       theme: "{{.Inputs.theme}}"
       activate: "{{.Inputs.activate}}"
       import: "{{.Inputs.import_demo}}"
+      draft: "{{.Inputs.draft}}"
   - id: health
     title: تست سلامت سایت
     uses: wp.health

@@ -1,7 +1,9 @@
 package engine
 
 import (
+	"archive/zip"
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -84,7 +86,7 @@ func (f *fakeWP) server(t *testing.T, fake *cpaneltest.Fake) *httptest.Server {
 	}))
 }
 
-func runThemeInstall(t *testing.T, failAt string) (Run, *fakeWP, *cpaneltest.Fake) {
+func runThemeInstall(t *testing.T, failAt string, prep ...func(inputs map[string]string)) (Run, *fakeWP, *cpaneltest.Fake) {
 	t.Setenv("WPAUTO_DIR", t.TempDir())
 	src := t.TempDir()
 	cat := Catalog()
@@ -109,7 +111,11 @@ func runThemeInstall(t *testing.T, failAt string) (Run, *fakeWP, *cpaneltest.Fak
 	rej := 0
 	tg := target(t, fake.URL, "secret", &rej)
 	tg.Profile.Quirks = map[string]string{"site_addr": strings.TrimPrefix(site.URL, "http://")}
-	id, err := r.Start(wf, tg, map[string]string{"domain": "example.com", "theme": "mytheme", "activate": "true", "import_demo": "true"})
+	inputs := map[string]string{"domain": "example.com", "theme": "mytheme", "activate": "true", "import_demo": "true"}
+	for _, p := range prep {
+		p(inputs)
+	}
+	id, err := r.Start(wf, tg, inputs)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -147,4 +153,44 @@ func TestThemeInstallRollsBack(t *testing.T) {
 	if !strings.HasSuffix(got, want) {
 		t.Fatalf("rollback actions:\n got %s\nwant …%s", got, want)
 	}
+}
+
+func TestThemeInstallWithDraft(t *testing.T) {
+	run, _, fake := runThemeInstall(t, "", func(in map[string]string) {
+		d, err := Drafts().New("mytheme", "Client")
+		if err != nil {
+			t.Fatal(err)
+		}
+		d.Values["options.blogdescription"] = "CLIENT TAGLINE"
+		d.Values["options.blogname"] = "Client Site"
+		if err := Drafts().Save(d); err != nil {
+			t.Fatal(err)
+		}
+		in["draft"] = d.ID
+	})
+	if run.Status != StatusSuccess {
+		t.Fatalf("status %s: %s", run.Status, run.Error)
+	}
+	var data string
+	for p, c := range fake.Files {
+		if strings.HasSuffix(p, "/mytheme-demo.zip") {
+			data = c
+		}
+	}
+	zr, err := zip.NewReader(strings.NewReader(data), int64(len(data)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, f := range zr.File {
+		if f.Name == "demo.json" {
+			rc, _ := f.Open()
+			b, _ := io.ReadAll(rc)
+			rc.Close()
+			if !strings.Contains(string(b), "Client Site") {
+				t.Fatalf("uploaded demo is not the customised package: %s", b)
+			}
+			return
+		}
+	}
+	t.Fatal("demo.json missing")
 }

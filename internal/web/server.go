@@ -20,6 +20,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/traptiterbeats/wpauto/internal/ai"
 	"github.com/traptiterbeats/wpauto/internal/config"
 	"github.com/traptiterbeats/wpauto/internal/engine"
 	"github.com/traptiterbeats/wpauto/internal/secretbox"
@@ -47,6 +48,7 @@ type Server struct {
 	profileDir  string
 	runner      *engine.Runner
 	workflowDir string
+	ai          *ai.Store
 }
 
 // New builds a server from the configuration.
@@ -68,9 +70,14 @@ func New(cfg *config.Config, version string) (*Server, error) {
 	if err != nil {
 		return nil, err
 	}
+	aiStore, err := ai.OpenStore(dir, box)
+	if err != nil {
+		return nil, err
+	}
+	resetStuckDrafts()
 	return &Server{cfg: cfg, version: version, tpl: t, limiter: newLimiter(),
 		store: st, box: box, profileDir: filepath.Join(dir, "profiles"),
-		runner: runner, workflowDir: filepath.Join(dir, "workflows")}, nil
+		runner: runner, workflowDir: filepath.Join(dir, "workflows"), ai: aiStore}, nil
 }
 
 // Handler returns the routed handler mounted under the configured base path.
@@ -99,6 +106,16 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET "+bp+"themes/{slug}/screenshot", s.requireAuth(s.handleThemeShot))
 	mux.HandleFunc("POST "+bp+"plugins/add", s.uploads(s.handlePluginAdd))
 	mux.HandleFunc("POST "+bp+"plugins/{slug}/delete", s.requireAuth(s.handlePluginDelete))
+	mux.HandleFunc("GET "+bp+"ai", s.requireAuth(s.handleAI))
+	mux.HandleFunc("POST "+bp+"ai/add", s.requireAuth(s.handleAIAdd))
+	mux.HandleFunc("POST "+bp+"ai/{id}/{op}", s.requireAuth(s.handleAIOp))
+	mux.HandleFunc("GET "+bp+"customize", s.requireAuth(s.handleDrafts))
+	mux.HandleFunc("POST "+bp+"customize/new", s.requireAuth(s.handleDraftNew))
+	mux.HandleFunc("GET "+bp+"customize/{id}", s.requireAuth(s.handleDraft))
+	mux.HandleFunc("GET "+bp+"customize/{id}/file/{name}", s.requireAuth(s.handleDraftFile))
+	mux.HandleFunc("GET "+bp+"customize/{id}/status", s.requireAuth(s.handleDraftStatus))
+	mux.HandleFunc("POST "+bp+"customize/{id}/images", s.uploads(s.handleDraftImages))
+	mux.HandleFunc("POST "+bp+"customize/{id}/{op}", s.requireAuth(s.handleDraftOp))
 	mux.HandleFunc(bp+"api/health", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		fmt.Fprintf(w, `{"ok":true,"version":%q}`, s.version)

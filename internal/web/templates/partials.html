@@ -1,7 +1,7 @@
 {{define "nav"}}
 <header class="top">
   <a href="{{.BasePath}}" class="brand">wpauto</a>
-  <nav><a href="{{.BasePath}}">کارها</a><a href="{{.BasePath}}hosts">هاست‌ها</a><a href="{{.BasePath}}themes">قالب‌ها</a><a href="{{.BasePath}}runs">اجراها</a></nav>
+  <nav><a href="{{.BasePath}}">کارها</a><a href="{{.BasePath}}hosts">هاست‌ها</a><a href="{{.BasePath}}themes">قالب‌ها</a><a href="{{.BasePath}}customize">شخصی‌سازی</a><a href="{{.BasePath}}ai">هوش مصنوعی</a><a href="{{.BasePath}}runs">اجراها</a></nav>
   <span class="muted small">نسخه {{.Version}}</span>
   <form method="post" action="{{.BasePath}}logout" class="logout">
     <input type="hidden" name="csrf" value="{{.CSRF}}">

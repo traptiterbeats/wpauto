@@ -15,6 +15,7 @@ import (
 
 	"github.com/traptiterbeats/wpauto/internal/catalog"
 	"github.com/traptiterbeats/wpauto/internal/config"
+	"github.com/traptiterbeats/wpauto/internal/customize"
 	"github.com/traptiterbeats/wpauto/internal/wp"
 )
 
@@ -25,6 +26,9 @@ func init() {
 	Register("theme.install", "installs a catalogue theme and optionally activates it (rolled back on failure)", stepThemeInstall)
 	Register("theme.demo", "imports the theme's demo with Saayeh Demo Importer (removed again on failure)", stepThemeDemo)
 }
+
+// Drafts returns the customisation drafts.
+func Drafts() *customize.Store { return customize.Open(filepath.Join(config.Dir(), "drafts")) }
 
 // Catalog returns the panel's theme catalogue.
 func Catalog() *catalog.Catalog { return catalog.Open(filepath.Join(config.Dir(), "catalog")) }
@@ -321,8 +325,29 @@ func stepThemeDemo(ctx context.Context, rc *RunContext, a map[string]string) (ma
 	if a["activate"] != "true" {
 		return nil, errors.New("درون‌ریز سایه فقط برای قالب فعال کار می‌کند؛ گزینه‌ی فعال‌سازی قالب را روشن کنید")
 	}
-	name := t.Slug + "-demo.zip"
-	if err := rc.upload(ctx, t.Path(t.DemoZip), name); err != nil {
+	name, local := t.Slug+"-demo.zip", t.Path(t.DemoZip)
+	if id := strings.TrimSpace(a["draft"]); id != "" {
+		d, err := Drafts().Get(id)
+		if err != nil {
+			return nil, err
+		}
+		if d.Theme != t.Slug {
+			return nil, fmt.Errorf("پیش‌نویس «%s» برای قالب %s است، نه %s", d.Title, d.Theme, t.Slug)
+		}
+		demo, err := customize.LoadDemo(local)
+		if err != nil {
+			return nil, err
+		}
+		if local, err = customize.Build(demo, d); err != nil {
+			return nil, fmt.Errorf("ساخت بسته‌ی شخصی‌سازی‌شده: %w", err)
+		}
+		logo := "بدون لوگو"
+		if d.Logo != "" {
+			logo = "با لوگو"
+		}
+		rc.Logf("بسته‌ی شخصی‌سازی‌شده‌ی «%s» ساخته شد: %d متن، %d تصویر، %s", d.Title, len(d.Values), len(d.Images), logo)
+	}
+	if err := rc.upload(ctx, local, name); err != nil {
 		return nil, err
 	}
 	res, err := rc.helperCall(ctx, "demo_prepare", url.Values{"slug": {t.Slug}, "f": {name}})

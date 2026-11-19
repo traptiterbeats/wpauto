@@ -80,7 +80,7 @@ func (w *Workflow) Validate() error {
 	}
 	for _, in := range w.Inputs {
 		switch in.Type {
-		case "", "text", "password", "select", "checkbox", "domain", "theme":
+		case "", "text", "password", "select", "checkbox", "domain", "theme", "draft":
 		default:
 			return fmt.Errorf("workflow %s: input %s has unknown type %q", w.ID, in.Name, in.Type)
 		}
