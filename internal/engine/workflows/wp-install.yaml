@@ -1,0 +1,121 @@
+id: wp-install
+title: نصب وردپرس
+description: نصب وردپرس تازه روی یک ساب‌دامین یا پوشه‌ی جدا. به سایت‌های موجود دست نمی‌زند و اگر وسط کار خطایی پیش بیاید، هر چه ساخته شده برگردانده می‌شود.
+order: 30
+rollback: true
+inputs:
+  - name: mode
+    label: محل نصب
+    type: select
+    options: [subdomain, subfolder]
+    labels: {subdomain: "ساب‌دامین (پیشنهادی) — مثل test.example.com", subfolder: "پوشه — مثل example.com/test"}
+    default: subdomain
+  - name: domain
+    label: دامنه‌ی اصلی
+    type: domain
+    required: true
+  - name: name
+    label: نام ساب‌دامین یا پوشه
+    required: true
+    pattern: "[a-z0-9]([a-z0-9-]{0,30}[a-z0-9])?"
+    help: فقط حروف کوچک انگلیسی، عدد و خط تیره. مثلاً test
+  - name: title
+    label: عنوان سایت
+    default: سایت من
+    required: true
+  - name: locale
+    label: زبان
+    type: select
+    options: [fa_IR, en_US]
+    labels: {fa_IR: فارسی, en_US: English}
+    default: fa_IR
+  - name: admin_user
+    label: نام کاربری مدیر
+    required: true
+    help: از admin استفاده نکنید.
+  - name: admin_email
+    label: ایمیل مدیر
+    required: true
+  - name: admin_pass
+    label: رمز مدیر
+    type: password
+    required: true
+    help: حداقل ۱۲ کاراکتر. ذخیره نمی‌شود و در لاگ نمی‌آید.
+steps:
+  - id: login
+    title: ورود به cPanel
+    uses: cpanel.login
+  - id: preflight
+    title: بررسی امکانات هاست
+    uses: cpanel.preflight
+  - id: plan
+    title: بررسی مقصد نصب
+    uses: wp.plan
+    with:
+      mode: "{{.Inputs.mode}}"
+      domain: "{{.Inputs.domain}}"
+      name: "{{.Inputs.name}}"
+  - id: subdomain
+    title: ساخت ساب‌دامین
+    uses: cpanel.subdomain
+    if: '{{if eq .Inputs.mode "subdomain"}}true{{end}}'
+    with:
+      sub: "{{.Steps.plan.sub}}"
+      domain: "{{.Steps.plan.rootdomain}}"
+      dir: "{{.Steps.plan.docroot_rel}}"
+      docroot: "{{.Steps.plan.docroot}}"
+      dir_exists: "{{.Steps.plan.dir_exists}}"
+  - id: folder
+    title: ساخت پوشه
+    uses: cpanel.mkdir
+    if: '{{if eq .Inputs.mode "subfolder"}}true{{end}}'
+    with:
+      path: "{{.Steps.plan.docroot}}"
+      skip_if_exists: "{{.Steps.plan.dir_exists}}"
+  - id: php
+    title: تنظیم نسخه‌ی PHP
+    uses: cpanel.php
+    if: '{{if eq .Inputs.mode "subdomain"}}true{{end}}'
+    continue_on_error: true
+    with:
+      vhost: "{{.Steps.plan.host}}"
+      version: "{{.Steps.preflight.preferred_php}}"
+  - id: ssl
+    title: درخواست SSL رایگان
+    uses: cpanel.autossl
+    if: '{{if eq .Inputs.mode "subdomain"}}true{{end}}'
+    continue_on_error: true
+  - id: db
+    title: ساخت دیتابیس
+    uses: mysql.create
+    with:
+      prefix: "{{.Steps.preflight.db_prefix}}"
+  - id: helper
+    title: آماده‌سازی نصب روی سایت
+    uses: wp.helper
+    with: &site
+      host: "{{.Steps.plan.host}}"
+      path: "{{.Steps.plan.path}}"
+      addr: "{{.Steps.plan.site_addr}}"
+      docroot: "{{.Steps.plan.docroot}}"
+      locale: "{{.Inputs.locale}}"
+  - id: files
+    title: دانلود و باز کردن وردپرس
+    uses: wp.files
+    with: *site
+  - id: config
+    title: نوشتن wp-config.php
+    uses: wp.config
+    with:
+      docroot: "{{.Steps.plan.docroot}}"
+      db_name: "{{.Steps.db.db_name}}"
+      db_user: "{{.Steps.db.db_user}}"
+  - id: setup
+    title: نصب وردپرس و ساخت مدیر
+    uses: wp.setup
+    with: *site
+  - id: health
+    title: تست سلامت سایت
+    uses: wp.health
+    with:
+      url: "{{.Steps.helper.url}}"

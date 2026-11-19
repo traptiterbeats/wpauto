@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strings"
 	"sync"
@@ -85,11 +86,38 @@ type RunContext struct {
 	Inputs   map[string]string
 	OnReport func(*cpanel.Report)
 
-	target *Target
-	run    *Run
-	r      *Runner
-	step   string
-	client *cpanel.Client
+	// Vars holds in-memory values shared between steps that must never be persisted (passwords).
+	Vars map[string]string
+
+	target  *Target
+	run     *Run
+	r       *Runner
+	step    string
+	client  *cpanel.Client
+	undo    []action
+	finally []action
+	siteObj any
+}
+
+type action struct {
+	desc string
+	fn   func(context.Context) error
+}
+
+// Undo registers a rollback for something this run created. Undo actions run in reverse order
+// only when the run fails and the workflow has rollback: true.
+func (rc *RunContext) Undo(desc string, fn func(context.Context) error) {
+	rc.undo = append(rc.undo, action{desc, fn})
+}
+
+// Finally registers cleanup that always runs at the end (e.g. removing the helper script).
+func (rc *RunContext) Finally(desc string, fn func(context.Context) error) {
+	rc.finally = append(rc.finally, action{desc, fn})
+}
+
+// Warnf appends a warning line.
+func (rc *RunContext) Warnf(format string, a ...any) {
+	rc.r.log(rc.run, "warn", rc.step, fmt.Sprintf(format, a...))
 }
 
 // Logf appends an info line to the run log.
@@ -163,6 +191,11 @@ func (r *Runner) Start(wf *Workflow, t *Target, inputs map[string]string) (strin
 		if in.Type == "select" && v != "" && !contains(in.Options, v) {
 			return "", fmt.Errorf("مقدار «%s» نامعتبر است", in.Label)
 		}
+		if in.Pattern != "" && v != "" {
+			if re, err := regexp.Compile("^(?:" + in.Pattern + ")$"); err == nil && !re.MatchString(v) {
+				return "", fmt.Errorf("«%s» قالب درستی ندارد", in.Label)
+			}
+		}
 		inputs[in.Name] = v
 	}
 	r.mu.Lock()
@@ -203,17 +236,38 @@ func contains(list []string, v string) bool {
 }
 
 func (r *Runner) execute(ctx context.Context, wf *Workflow, t *Target, inputs map[string]string, run *Run) {
-	rc := &RunContext{Profile: t.Profile, Inputs: inputs, OnReport: t.OnReport, target: t, run: run, r: r}
+	rc := &RunContext{Profile: t.Profile, Inputs: inputs, OnReport: t.OnReport, Vars: map[string]string{}, target: t, run: run, r: r}
 	outputs := map[string]map[string]string{}
 	data := map[string]any{"Inputs": inputs, "Steps": outputs, "Host": map[string]string{"Name": t.HostName, "ID": t.HostID}}
 	final, finalErr := StatusSuccess, ""
 	defer func() {
-		if rc.client != nil {
-			rc.client.Logout(context.Background())
-		}
 		if p := recover(); p != nil {
 			final, finalErr = StatusFailed, fmt.Sprint("internal error: ", p)
 		}
+		// Cleanup uses a fresh context so it still runs after a cancel or timeout.
+		cctx, ccancel := context.WithTimeout(context.Background(), 3*time.Minute)
+		rc.step = "cleanup"
+		for i := len(rc.finally) - 1; i >= 0; i-- {
+			if err := rc.finally[i].fn(cctx); err != nil {
+				r.log(run, "warn", "cleanup", rc.finally[i].desc+": "+err.Error())
+			} else {
+				r.log(run, "info", "cleanup", rc.finally[i].desc)
+			}
+		}
+		if final != StatusSuccess && wf.Rollback && len(rc.undo) > 0 {
+			r.log(run, "warn", "rollback", "برگرداندن تغییرات این اجرا…")
+			for i := len(rc.undo) - 1; i >= 0; i-- {
+				if err := rc.undo[i].fn(cctx); err != nil {
+					r.log(run, "error", "rollback", rc.undo[i].desc+": "+err.Error())
+				} else {
+					r.log(run, "info", "rollback", "✔ "+rc.undo[i].desc)
+				}
+			}
+		}
+		if rc.client != nil {
+			rc.client.Logout(cctx)
+		}
+		ccancel()
 		r.mu.Lock()
 		run.Status, run.Error, run.EndedAt = final, finalErr, time.Now()
 		delete(r.busy, t.HostID)

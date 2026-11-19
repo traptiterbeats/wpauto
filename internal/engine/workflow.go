@@ -27,7 +27,11 @@ type Input struct {
 	Required bool     `yaml:"required"`
 	Default  string   `yaml:"default"`
 	Options  []string `yaml:"options"`
-	Help     string   `yaml:"help"`
+	// Labels shows a friendly label for each option value.
+	Labels map[string]string `yaml:"labels"`
+	// Pattern is an optional regular expression the value must match.
+	Pattern string `yaml:"pattern"`
+	Help    string `yaml:"help"`
 }
 
 // StepDef is one step in a workflow.
@@ -48,7 +52,9 @@ type Workflow struct {
 	Order       int       `yaml:"order"`
 	Inputs      []Input   `yaml:"inputs"`
 	Steps       []StepDef `yaml:"steps"`
-	Source      string    `yaml:"-"`
+	// Rollback undoes what the run created (database, subdomain, files) when a step fails.
+	Rollback bool   `yaml:"rollback"`
+	Source   string `yaml:"-"`
 }
 
 // Validate checks the workflow against the step registry.
