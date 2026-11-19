@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/tls"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -76,6 +77,54 @@ func (s *Site) Detect(ctx context.Context) error {
 	return fmt.Errorf("site %s is not reachable: %w", s.Host, lastErr)
 }
 
+// ErrNotHelper means the request reached a web server but not our helper script: the host's
+// default page (a new vhost not live yet, or https served by another vhost before SSL is issued).
+type ErrNotHelper struct {
+	Scheme string
+	Status int
+}
+
+func (e *ErrNotHelper) Error() string {
+	return fmt.Sprintf("%s: HTTP %d بدون پاسخ helper (صفحه‌ی پیش‌فرض هاست)", e.Scheme, e.Status)
+}
+
+// Ping finds the helper script, trying https then http and waiting while a new subdomain's
+// vhost goes live. It sets Scheme to the one that reached the helper. wait is the longest
+// time to keep trying; notify (optional) is called once when it starts waiting.
+func (s *Site) Ping(ctx context.Context, file, token string, wait time.Duration, notify func(error)) (map[string]any, error) {
+	deadline := time.Now().Add(wait)
+	notified := false
+	for {
+		var errs []string
+		for _, sc := range []string{"https", "http"} {
+			s.Scheme = sc
+			out, err := s.Helper(ctx, file, token, "ping")
+			if err == nil {
+				return out, nil
+			}
+			var nh *ErrNotHelper
+			if out != nil && !errors.As(err, &nh) {
+				return out, err // the helper answered with an error of its own
+			}
+			errs = append(errs, sc+": "+err.Error())
+		}
+		last := errors.New(strings.Join(errs, " · "))
+		if time.Now().After(deadline) {
+			s.Scheme = ""
+			return nil, fmt.Errorf("اسکریپت نصب روی %s در دسترس نیست: %w", s.Host, last)
+		}
+		if !notified && notify != nil {
+			notify(last)
+			notified = true
+		}
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		case <-time.After(5 * time.Second):
+		}
+	}
+}
+
 // HasValidTLS reports whether https works with a verified certificate.
 func (s *Site) HasValidTLS(ctx context.Context) bool {
 	if s.Addr != "" {
@@ -119,6 +168,9 @@ func (s *Site) HelperArgs(ctx context.Context, file, token, action string, args 
 		raw = raw[i:]
 	}
 	if err := json.Unmarshal(raw, &out); err != nil {
+		if action == "ping" {
+			return nil, &ErrNotHelper{Scheme: s.Scheme, Status: resp.StatusCode}
+		}
 		snippet := strings.TrimSpace(string(raw))
 		if len(snippet) > 200 {
 			snippet = snippet[:200]

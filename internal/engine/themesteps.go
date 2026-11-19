@@ -110,10 +110,7 @@ func stepAttach(ctx context.Context, rc *RunContext, a map[string]string) (map[s
 	if err := c.Mkdir(ctx, path.Join(docroot, pkg)); err != nil {
 		return nil, fmt.Errorf("cannot create %s: %w", pkg, err)
 	}
-	if err := s.Detect(ctx); err != nil {
-		return nil, err
-	}
-	if _, err := s.Helper(ctx, helper, token, "ping"); err != nil {
+	if _, err := s.Ping(ctx, helper, token, time.Minute, nil); err != nil {
 		return nil, err
 	}
 	info, err := rc.helperCall(ctx, "wp_info", nil)

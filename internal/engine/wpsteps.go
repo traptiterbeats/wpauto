@@ -303,17 +303,9 @@ func stepHelper(ctx context.Context, rc *RunContext, a map[string]string) (map[s
 		}
 		return c.Remove(ctx, path.Join(docroot, helper), path.Join(docroot, job), path.Join(docroot, ".wpauto-wp.zip"), path.Join(docroot, ".wpauto-x"))
 	})
-	var lastErr error
-	for i := 0; i < 6; i++ { // a new vhost can take a few seconds to be served
-		if lastErr = s.Detect(ctx); lastErr == nil {
-			break
-		}
-		time.Sleep(5 * time.Second)
-	}
-	if lastErr != nil {
-		return nil, lastErr
-	}
-	ping, err := s.Helper(ctx, helper, token, "ping")
+	ping, err := s.Ping(ctx, helper, token, 3*time.Minute, func(err error) {
+		rc.Logf("سایت هنوز اسکریپت نصب را سرو نمی‌کند (%v)؛ برای ساب‌دامین تازه چند دقیقه صبر می‌کنیم…", err)
+	})
 	if err != nil {
 		return nil, err
 	}
