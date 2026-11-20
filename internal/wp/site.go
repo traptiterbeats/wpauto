@@ -23,8 +23,13 @@ type Site struct {
 	Path   string // "/" or "/blog/"
 	Addr   string // optional IP or ip:port override
 	Scheme string // set by Detect: https or http
+	// OnBusy, when set, is told about each wait after a 503 (maintenance mode).
+	OnBusy func(attempt int, wait time.Duration)
 	hc     *http.Client
 }
+
+// BusyWaits are the pauses before repeating a helper call answered with 503.
+var BusyWaits = []time.Duration{10 * time.Second, 20 * time.Second, 30 * time.Second, 60 * time.Second}
 
 func (s *Site) client() *http.Client {
 	if s.hc != nil {
@@ -154,14 +159,33 @@ func (s *Site) HelperArgs(ctx context.Context, file, token, action string, args 
 		q[k] = v
 	}
 	u := s.URL(file) + "?" + q.Encode()
-	req, _ := http.NewRequestWithContext(ctx, "GET", u, nil)
-	req.Header.Set("User-Agent", "wpauto")
-	resp, err := s.client().Do(req)
-	if err != nil {
-		return nil, err
+	var raw []byte
+	var resp *http.Response
+	for attempt := 0; ; attempt++ {
+		req, _ := http.NewRequestWithContext(ctx, "GET", u, nil)
+		req.Header.Set("User-Agent", "wpauto")
+		r, err := s.client().Do(req)
+		if err != nil {
+			return nil, err
+		}
+		raw, _ = io.ReadAll(io.LimitReader(r.Body, 1<<20))
+		r.Body.Close()
+		resp = r
+		// 503 = WordPress maintenance mode (a core/plugin update is running, .maintenance)
+		// or the host is briefly overloaded. WordPress stops before loading plugins, so the
+		// action did not run and repeating it is safe.
+		if r.StatusCode != http.StatusServiceUnavailable || attempt >= len(BusyWaits) {
+			break
+		}
+		if s.OnBusy != nil {
+			s.OnBusy(attempt+1, BusyWaits[attempt])
+		}
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		case <-time.After(BusyWaits[attempt]):
+		}
 	}
-	defer resp.Body.Close()
-	raw, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
 	var out map[string]any
 	// Find the JSON object even if the host prepends notices.
 	if i := strings.Index(string(raw), "{\"ok\""); i >= 0 {

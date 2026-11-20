@@ -277,6 +277,9 @@ func (rc *RunContext) site(a map[string]string) *wp.Site {
 		return s
 	}
 	s := &wp.Site{Host: a["host"], Path: a["path"], Addr: a["addr"]}
+	s.OnBusy = func(n int, w time.Duration) {
+		rc.Logf("سایت موقتاً در دسترس نیست (HTTP 503، احتمالاً وردپرس در حال به‌روزرسانی است)؛ %d ثانیه صبر و تلاش دوباره (%d/%d)", int(w.Seconds()), n, len(wp.BusyWaits))
+	}
 	rc.siteObj = s
 	return s
 }

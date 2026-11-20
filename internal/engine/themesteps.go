@@ -331,6 +331,9 @@ func stepThemeDemo(ctx context.Context, rc *RunContext, a map[string]string) (ma
 		if d.Theme != t.Slug {
 			return nil, fmt.Errorf("پیش‌نویس «%s» برای قالب %s است، نه %s", d.Title, d.Theme, t.Slug)
 		}
+		if len(d.Values) == 0 && len(d.Images) == 0 && d.Logo == "" {
+			return nil, fmt.Errorf("پیش‌نویس «%s» هیچ متن، تصویر یا لوگویی ندارد؛ اگر ادامه بدهیم سایت با متن‌های دمو ساخته می‌شود. اول در شخصی‌سازی متن‌ها را بسازید و ذخیره کنید", d.Title)
+		}
 		demo, err := customize.LoadDemo(local)
 		if err != nil {
 			return nil, err
