@@ -57,7 +57,7 @@ func batches(fields []Field, maxChars int) [][]Field {
 	n := 0
 	for _, f := range fields {
 		l := len(f.Original) + 80
-		if len(cur) > 0 && (n+l > maxChars || len(cur) >= 40) {
+		if len(cur) > 0 && (n+l > maxChars || len(cur) >= 25) {
 			out = append(out, cur)
 			cur, n = nil, 0
 		}
@@ -212,12 +212,11 @@ func Generate(ctx context.Context, c Chatter, demo *Demo, b Brief, progress Prog
 	if lang == "" {
 		lang = "Persian (Farsi)"
 	}
-	groups := batches(fields, 9000)
+	groups := batches(fields, 4500)
 	tokens := 0
-	for i, batch := range groups {
-		if progress != nil {
-			progress(i, len(groups))
-		}
+	// ask sends one batch and keeps every usable text; it returns the fields the model skipped
+	// (missing key, empty, or far too long).
+	ask := func(batch []Field) ([]Field, error) {
 		list := make([]map[string]string, 0, len(batch))
 		keys := map[string]Field{}
 		for j, f := range batch {
@@ -250,22 +249,53 @@ func Generate(ctx context.Context, c Chatter, demo *Demo, b Brief, progress Prog
 			}
 			lastErr = err
 			if ctx.Err() != nil {
-				return values, tokens, ctx.Err()
+				return nil, ctx.Err()
 			}
 		}
 		if got == nil {
-			return values, tokens, fmt.Errorf("بخش %d از %d: %w", i+1, len(groups), lastErr)
+			return nil, lastErr
 		}
-		for k, f := range keys {
-			s, ok := got[k].(string)
-			if !ok {
-				continue
-			}
+		var missed []Field
+		for j, f := range batch {
+			s, _ := got[fmt.Sprintf("f%d", j+1)].(string)
 			s = Clean(f, s)
 			if s == "" || len([]rune(s)) > limit(f) {
+				missed = append(missed, f)
 				continue
 			}
 			values[f.Path] = s
+		}
+		return missed, nil
+	}
+	var missed []Field
+	for i, batch := range groups {
+		if progress != nil {
+			progress(i, len(groups))
+		}
+		m, err := ask(batch)
+		if err != nil {
+			return values, tokens, fmt.Errorf("بخش %d از %d: %w", i+1, len(groups), err)
+		}
+		missed = append(missed, m...)
+	}
+	// One more request for the texts the model skipped, so no demo text is left silently.
+	if len(missed) > 0 {
+		var still []Field
+		for _, batch := range batches(missed, 4500) {
+			m, err := ask(batch)
+			if err != nil {
+				return values, tokens, fmt.Errorf("متن‌های جامانده: %w", err)
+			}
+			still = append(still, m...)
+		}
+		if len(still) > 0 {
+			names := make([]string, 0, len(still))
+			for _, f := range still {
+				if len(names) < 5 {
+					names = append(names, f.Group+" › "+f.Label)
+				}
+			}
+			return values, tokens, fmt.Errorf("هوش مصنوعی %d متن را ننوشت (%s)", len(still), strings.Join(names, "، "))
 		}
 	}
 	if progress != nil {
