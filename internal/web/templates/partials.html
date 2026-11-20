@@ -50,10 +50,17 @@
     <h4>مسیر ساخت سایت</h4>
     {{if not .Project}}<p class="muted small">یک پروژه بسازید یا انتخاب کنید تا مرحله‌هایش این‌جا روشن شوند.</p>{{end}}
     <ol class="pipe">
-      {{range $i, $p := .Pipeline}}
+      {{range .Pipeline}}
       <li class="pp-{{.State}}">
-        <a href="{{.Link}}"><span class="dot"></span><span class="t">{{.Title}}</span></a>
-        <span class="pl-note small">{{if eq .State "running"}}در حال انجام…{{else if eq .State "failed"}}آخرین اجرا ناموفق بود{{else}}{{.Note}}{{end}}{{if and .Alt (ne .State "done")}} · <a href="{{.AltLink}}">{{.Alt}}</a>{{end}}</span>
+        <div class="pp-row">
+          <a href="{{.Link}}"><span class="dot"></span><span class="t">{{.Title}}</span></a>
+          {{if $.Project}}{{if .ByRun}}<span class="pp-tick small ok" title="با اجرای موفق انجام شد">✔</span>{{else}}
+          <form method="post" action="{{$.BasePath}}projects/{{$.Project.ID}}/mark" class="pp-tick" title="علامت انجام‌شده">
+            <input type="hidden" name="csrf" value="{{$.CSRF}}"><input type="hidden" name="back" value="{{$.Here}}"><input type="hidden" name="stage" value="{{.Key}}">
+            <input type="checkbox" name="on" {{if .Marked}}checked{{end}} onchange="this.form.submit()" aria-label="انجام شد: {{.Title}}">
+          </form>{{end}}{{end}}
+        </div>
+        <span class="pl-note small">{{if eq .State "running"}}در حال انجام…{{else if eq .State "failed"}}آخرین اجرا ناموفق بود{{else if .Marked}}دستی علامت خورد{{else}}{{.Note}}{{end}}</span>
       </li>
       {{end}}
     </ol>

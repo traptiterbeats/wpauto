@@ -13,13 +13,15 @@
   {{if .Error}}<div class="error">{{.Error}}</div>{{end}}
   {{if .Drafts}}
   <table class="list">
-    <tr><th>سایت / مشتری</th><th>قالب</th><th>متن‌های تازه</th><th>آخرین تغییر</th></tr>
+    <tr><th>سایت / مشتری</th><th>قالب</th><th>متن‌های تازه</th><th>وضعیت</th><th>آخرین تغییر</th><th></th></tr>
     {{range .Drafts}}
     <tr>
       <td><a href="{{$.BasePath}}customize/{{.ID}}">{{.Title}}</a></td>
       <td dir="ltr">{{.Theme}}</td>
       <td>{{len .Values}}{{if eq .Status "generating"}} <span class="warn">در حال نوشتن…</span>{{end}}</td>
+      <td>{{if .Finished}}<span class="ok">✔ ذخیره‌شده</span>{{else}}<span class="muted">نیمه‌کاره</span>{{end}}</td>
       <td dir="ltr">{{.Updated.Format "2006-01-02 15:04"}}</td>
+      <td><form method="post" action="{{$.BasePath}}customize/{{.ID}}/delete" onsubmit="return confirm('«{{.Title}}» و تصاویرش حذف شود؟')"><input type="hidden" name="csrf" value="{{$.CSRF}}"><button class="ghost danger small" type="submit">حذف</button></form></td>
     </tr>
     {{end}}
   </table>

@@ -154,8 +154,15 @@ func TestCustomizeFlow(t *testing.T) {
 	if !strings.Contains(page, "تازه ACME STUDIO") || !strings.Contains(get("customize/"+id+"?step=images"), "file/logo.png") {
 		t.Fatal("draft page does not show generated text and logo")
 	}
-	if !strings.Contains(page, `class="subnav on`) || !strings.Contains(page, "مسیر ساخت سایت") || !strings.Contains(page, `id="drawer"`) {
-		t.Fatal("breadcrumb steps or site-building path missing")
+	if !strings.Contains(page, `class="tab on`) || strings.Contains(page, `class="subnav`) || !strings.Contains(page, "مسیر ساخت سایت") || !strings.Contains(page, `id="drawer"`) {
+		t.Fatal("draft tabs or site-building path missing")
+	}
+	// step 4 saves the draft and returns to the list (installing is the next task, not here)
+	if r, err := cl.PostForm(base+"customize/"+id+"/finish", url.Values{"csrf": {csrfOf(t, page)}}); err != nil || !strings.Contains(r.Request.URL.String(), "/customize?msg=") {
+		t.Fatalf("finish: %v", err)
+	}
+	if !strings.Contains(get("customize"), "✔ ذخیره‌شده") {
+		t.Fatal("finished draft not marked in the list")
 	}
 	if strings.Contains(page, `<form id="brief"`) {
 		t.Fatal("texts step should show only its own part")

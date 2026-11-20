@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 )
 
 type plainBox struct{}
@@ -68,6 +69,7 @@ func TestPresetsAndErrors(t *testing.T) {
 	if _, err := st.Add(Provider{Kind: "openai"}, ""); err == nil {
 		t.Fatal("empty key must fail")
 	}
+	RetryWaits = []time.Duration{time.Millisecond}
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(429)
 		_, _ = w.Write([]byte(`{"error":{"message":"quota exceeded"}}`))
@@ -94,5 +96,24 @@ func TestModelsList(t *testing.T) {
 	}
 	if _, err := (&Client{BaseURL: srv.URL + "/v1", Key: "bad"}).Models(context.Background()); err == nil {
 		t.Fatal("401 must fail")
+	}
+}
+
+func TestRetryWhenBusy(t *testing.T) {
+	RetryWaits = []time.Duration{time.Millisecond, time.Millisecond}
+	calls := 0
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls++
+		if calls == 1 {
+			w.WriteHeader(503)
+			_, _ = w.Write([]byte(`{"error":{"message":"This model is currently experiencing high demand."}}`))
+			return
+		}
+		_, _ = w.Write([]byte(`{"choices":[{"message":{"content":"ok"},"finish_reason":"stop"}]}`))
+	}))
+	defer srv.Close()
+	out, _, err := (&Client{BaseURL: srv.URL, Model: "m", Key: "k"}).Chat(context.Background(), "s", "u", false)
+	if err != nil || out != "ok" || calls != 2 {
+		t.Fatalf("retry: %q %v calls=%d", out, err, calls)
 	}
 }

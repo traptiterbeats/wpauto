@@ -39,15 +39,16 @@ type Brief struct {
 
 // Draft is one client's customisation of one theme's demo.
 type Draft struct {
-	ID      string            `json:"id"`
-	Title   string            `json:"title"`
-	Theme   string            `json:"theme"`
-	Created time.Time         `json:"created"`
-	Updated time.Time         `json:"updated"`
-	Brief   Brief             `json:"brief"`
-	Values  map[string]string `json:"values"` // field path → new text
-	Images  map[string]string `json:"images"` // image slot id → file in the draft folder
-	Logo    string            `json:"logo,omitempty"`
+	Finished bool              `json:"finished,omitempty"` // the user saved it as done (step 4)
+	ID       string            `json:"id"`
+	Title    string            `json:"title"`
+	Theme    string            `json:"theme"`
+	Created  time.Time         `json:"created"`
+	Updated  time.Time         `json:"updated"`
+	Brief    Brief             `json:"brief"`
+	Values   map[string]string `json:"values"` // field path → new text
+	Images   map[string]string `json:"images"` // image slot id → file in the draft folder
+	Logo     string            `json:"logo,omitempty"`
 
 	Status    string `json:"status"` // "" | generating | ready | error
 	Error     string `json:"error,omitempty"`

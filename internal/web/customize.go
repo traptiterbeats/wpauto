@@ -256,7 +256,7 @@ func (s *Server) draftBack(w http.ResponseWriter, r *http.Request, id, key, msg,
 	http.Redirect(w, r, s.cfg.BasePath+"customize/"+id+q, http.StatusSeeOther)
 }
 
-var draftStepIDs = []string{"brief", "images", "texts", "install"}
+var draftStepIDs = []string{"brief", "images", "texts", "finish"}
 
 func (s *Server) handleDraft(w http.ResponseWriter, r *http.Request) {
 	d, t, demo, err := s.loadDraft(r)
@@ -326,7 +326,7 @@ func (s *Server) handleDraft(w http.ResponseWriter, r *http.Request) {
 		case d.Status == "generating":
 			step = "texts"
 		default:
-			step = "install"
+			step = "finish"
 		}
 	}
 	var nav []navItem
@@ -341,7 +341,7 @@ func (s *Server) handleDraft(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
-	data["Steps"], data["Step"], data["SubNav"], data["CrumbLink"] = steps, step, nav, s.cfg.BasePath+"customize/"+d.ID
+	data["Steps"], data["Step"], data["Tabs"], data["CrumbLink"] = steps, step, nav, s.cfg.BasePath+"customize/"+d.ID
 	s.render(w, "draft.html", s.page(r, data))
 }
 
@@ -434,7 +434,20 @@ func (s *Server) handleDraftOp(w http.ResponseWriter, r *http.Request) {
 	switch r.PathValue("op") {
 	case "delete":
 		_ = st.Delete(id)
-		http.Redirect(w, r, s.cfg.BasePath+"customize", http.StatusSeeOther)
+		if p, ok := s.projects.Active(); ok && p.DraftID == id {
+			_ = s.projects.Update(p.ID, func(x *projects.Project) { x.DraftID = "" })
+		}
+		http.Redirect(w, r, s.cfg.BasePath+"customize?msg="+url.QueryEscape("پیش‌نویس حذف شد"), http.StatusSeeOther)
+	case "finish":
+		d, err := st.Update(id, func(d *customize.Draft) error { d.Finished = true; return nil })
+		if err != nil {
+			s.draftBack(w, r, id, "err", err.Error(), "#finish")
+			return
+		}
+		if p, ok := s.projects.Active(); ok {
+			_ = s.projects.Update(p.ID, func(x *projects.Project) { x.DraftID = d.ID })
+		}
+		http.Redirect(w, r, s.cfg.BasePath+"customize?msg="+url.QueryEscape("✔ شخصی‌سازی «"+d.Title+"» ذخیره شد. مرحله‌ی بعد «نصب قالب و دمو» در کارهاست و همین پیش‌نویس در آن انتخاب می‌شود."), http.StatusSeeOther)
 	case "brief":
 		_, err := st.Update(id, func(d *customize.Draft) error { s.briefFromForm(r, d); return nil })
 		if err != nil {
@@ -494,7 +507,7 @@ func (s *Server) handleDraftOp(w http.ResponseWriter, r *http.Request) {
 			_, err = customize.Build(demo, d)
 		}
 		if err != nil {
-			s.draftBack(w, r, id, "err", err.Error(), "#install")
+			s.draftBack(w, r, id, "err", err.Error(), "#finish")
 			return
 		}
 		http.Redirect(w, r, s.cfg.BasePath+"customize/"+id+"/file/demo-custom.zip", http.StatusSeeOther)
@@ -645,7 +658,7 @@ func (s *Server) startGenerate(w http.ResponseWriter, r *http.Request, id string
 			if err != nil {
 				d.Status, d.Error = "error", err.Error()
 				if len(values) > 0 {
-					d.Error += fmt.Sprintf(" (%d متن نوشته شد و ذخیره شد)", len(values))
+					d.Error += fmt.Sprintf(" — %d متن نوشته و ذخیره شد، ولی بخش‌های ناموفق هنوز متن دموی اصلی را دارند. «نوشتن متن‌ها» را دوباره بزنید.", len(values))
 				}
 				return nil
 			}
@@ -670,7 +683,7 @@ func (s *Server) draftSteps(d *customize.Draft) []sideStep {
 		{ID: "brief", Title: "۱. بریف مشتری", State: state(b.SiteName != "" && strings.TrimSpace(b.Business+b.About+b.Services) != ""), Link: base + "brief"},
 		{ID: "images", Title: "۲. لوگو و تصاویر", State: "optional", Note: "اختیاری", Link: base + "images"},
 		{ID: "texts", Title: "۳. متن‌ها با هوش مصنوعی", State: state(d.Generated > 0), Link: base + "texts"},
-		{ID: "install", Title: "۴. نصب روی سایت", State: "todo", Link: base + "install"},
+		{ID: "finish", Title: "۴. مرور و ذخیره", State: state(d.Finished), Link: base + "finish"},
 	}
 	if d.Logo != "" || len(d.Images) > 0 {
 		steps[1].State, steps[1].Note = "done", ""
@@ -686,12 +699,6 @@ func (s *Server) draftSteps(d *customize.Draft) []sideStep {
 			steps[2].State, steps[2].Note, steps[2].Link = "blocked", "اول مدل هوش مصنوعی را انتخاب کنید", s.cfg.BasePath+"ai/"+p.ID+"/models"
 		case p.Tested() && !p.TestOK:
 			steps[2].State, steps[2].Note, steps[2].Link = "blocked", "تست هوش مصنوعی ناموفق است", s.cfg.BasePath+"ai"
-		}
-	}
-	for _, run := range s.runner.List(200) {
-		if run.WorkflowID == "theme-install" && run.Inputs["draft"] == d.ID && run.Status == engine.StatusSuccess {
-			steps[3].State, steps[3].Note = "done", run.Inputs["domain"]
-			break
 		}
 	}
 	return steps

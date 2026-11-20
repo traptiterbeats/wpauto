@@ -73,8 +73,16 @@ func TestLayoutAndPlan(t *testing.T) {
 		t.Fatal(err)
 	}
 	home := get("")
-	if !strings.Contains(home, "پروژه‌ی فعال: <strong>سیس</strong>") || strings.Count(home, `class="pp-todo"`) != 4 || !strings.Contains(home, `id="drawer"`) {
+	if !strings.Contains(home, "پروژه‌ی فعال: <strong>سیس</strong>") || strings.Count(home, `class="pp-todo"`) != 5 || !strings.Contains(home, `id="drawer"`) {
 		t.Fatalf("project not active or stages not dark")
+	}
+	// ticking a stage by hand lights it
+	p, _ := s.projects.Active()
+	if _, err := cl.PostForm(base+"projects/"+p.ID+"/mark", url.Values{"stage": {"wpinstall"}, "on": {"on"}, "csrf": {csrfOf(t, home)}}); err != nil {
+		t.Fatal(err)
+	}
+	if h := get(""); strings.Count(h, `class="pp-todo"`) != 4 || !strings.Contains(h, "دستی علامت خورد") {
+		t.Fatal("manual tick did not light the stage")
 	}
 	if _, err := s.store.Add(store.Host{Name: "h", ProfileID: "generic", URL: "https://example.com:2083", Username: "u"}); err != nil {
 		t.Fatal(err)

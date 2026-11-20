@@ -91,7 +91,8 @@ type sideStep struct {
 // pipeStep is one stage of building the active project's site, shown in the fixed side panel.
 type pipeStep struct {
 	Key, Title, Link, State, Note string // State: todo | running | done | failed
-	Alt, AltLink                  string // another way to complete the stage (e.g. just verify)
+	Marked                        bool   // ticked by hand
+	ByRun                         bool   // a successful run completed it
 }
 
 // navItem is one clickable part of the current section, shown in the breadcrumb bar.
@@ -101,15 +102,19 @@ type navItem struct {
 }
 
 // stageOf maps a workflow to the project stage it completes.
-var stageOf = map[string]string{"host-check": "host", "wp-check-domain": "wp", "wp-install": "wp", "theme-install": "theme"}
+var stageOf = map[string]string{"host-check": "host", "wp-install": "wpinstall", "wp-check-domain": "wpcheck", "theme-install": "theme"}
+
+// pipelineKeys are the stages in the order they are done.
+var pipelineKeys = []string{"host", "wpinstall", "wpcheck", "customize", "theme"}
 
 // pipeline lights the stages of the active project: dark until a run of that stage succeeds for
-// this project (a check counts as much as an install), so a new project starts all dark.
+// this project or the user ticks it by hand, so a new project starts all dark.
 func (s *Server) pipeline(p *projects.Project) []pipeStep {
 	bp := s.cfg.BasePath
 	steps := []pipeStep{
 		{Key: "host", Title: "بررسی هاست", Link: bp + "run/host-check"},
-		{Key: "wp", Title: "وردپرس", Link: bp + "run/wp-install", Note: "نصب تازه", Alt: "یا تأیید وردپرس موجود", AltLink: bp + "run/wp-check-domain"},
+		{Key: "wpinstall", Title: "نصب وردپرس", Link: bp + "run/wp-install", Note: "اگر وردپرس از قبل هست، تیک بزنید"},
+		{Key: "wpcheck", Title: "بررسی وردپرس", Link: bp + "run/wp-check-domain"},
 		{Key: "customize", Title: "شخصی‌سازی برای مشتری", Link: bp + "customize"},
 		{Key: "theme", Title: "نصب قالب و دمو", Link: bp + "run/theme-install"},
 	}
@@ -119,6 +124,10 @@ func (s *Server) pipeline(p *projects.Project) []pipeStep {
 	if p == nil {
 		return steps
 	}
+	idx := map[string]int{}
+	for i, k := range pipelineKeys {
+		idx[k] = i
+	}
 	q := "?project=" + p.ID
 	if p.HostID != "" {
 		q += "&host=" + p.HostID
@@ -127,11 +136,7 @@ func (s *Server) pipeline(p *projects.Project) []pipeStep {
 		if steps[i].Key != "customize" {
 			steps[i].Link += q
 		}
-		if steps[i].AltLink != "" {
-			steps[i].AltLink += q
-		}
 	}
-	idx := map[string]int{"host": 0, "wp": 1, "customize": 2, "theme": 3}
 	// runs come newest first: the newest run decides running/failed, any success means done
 	seen := map[string]bool{}
 	for _, run := range s.runner.List(500) {
@@ -145,28 +150,36 @@ func (s *Server) pipeline(p *projects.Project) []pipeStep {
 		st := &steps[idx[k]]
 		switch {
 		case run.Status == engine.StatusSuccess:
-			st.State = "done"
+			st.State, st.ByRun = "done", true
 		case !seen[k] && !run.Done():
 			st.State = "running"
 		case !seen[k] && st.State == "todo":
 			st.State = "failed"
 		}
-		if run.Status == engine.StatusSuccess && run.WorkflowID == "wp-check-domain" {
-			st.Note = "تأیید شد"
-		}
 		seen[k] = true
 	}
 	if p.DraftID != "" {
-		st := &steps[2]
+		st := &steps[idx["customize"]]
 		st.Link = bp + "customize/" + p.DraftID
 		if d, err := engine.Drafts().Get(p.DraftID); err == nil {
 			switch {
 			case d.Status == "generating":
 				st.State = "running"
-			case d.Generated > 0:
-				st.State = "done"
+			case d.Finished || d.Generated > 0:
+				st.State, st.ByRun = "done", true
 			}
-			steps[3].Link += "&theme=" + d.Theme + "&draft=" + d.ID
+			steps[idx["theme"]].Link += "&theme=" + d.Theme + "&draft=" + d.ID
+		}
+	}
+	for i := range steps {
+		if p.Marked[steps[i].Key] {
+			steps[i].Marked = true
+			if steps[i].State != "running" {
+				steps[i].State = "done"
+			}
+		}
+		if steps[i].State == "done" {
+			steps[i].Note = ""
 		}
 	}
 	return steps

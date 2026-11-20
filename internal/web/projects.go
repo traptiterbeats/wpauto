@@ -3,6 +3,7 @@ package web
 import (
 	"net/http"
 	"net/url"
+	"slices"
 	"strings"
 
 	"github.com/traptiterbeats/wpauto/internal/projects"
@@ -39,6 +40,22 @@ func (s *Server) handleProjectOp(w http.ResponseWriter, r *http.Request) {
 		err = s.projects.SetActive(id)
 	case "delete":
 		err, msg = s.projects.Delete(id), "پروژه حذف شد؛ اجراها و پیش‌نویس‌هایش سر جایشان هستند."
+	case "mark":
+		stage, on := r.FormValue("stage"), r.FormValue("on") != ""
+		if !slices.Contains(pipelineKeys, stage) {
+			http.NotFound(w, r)
+			return
+		}
+		err = s.projects.Update(id, func(p *projects.Project) {
+			if p.Marked == nil {
+				p.Marked = map[string]bool{}
+			}
+			if on {
+				p.Marked[stage] = true
+			} else {
+				delete(p.Marked, stage)
+			}
+		})
 	default:
 		http.NotFound(w, r)
 		return

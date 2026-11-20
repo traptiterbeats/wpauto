@@ -17,13 +17,15 @@ import (
 
 // Project is one client site.
 type Project struct {
-	ID      string    `json:"id"`
-	Name    string    `json:"name"`
-	HostID  string    `json:"host_id,omitempty"`
-	Domain  string    `json:"domain,omitempty"` // site domain or subdomain
-	Folder  string    `json:"folder,omitempty"` // when WordPress is in a folder of Domain
-	DraftID string    `json:"draft_id,omitempty"`
-	Created time.Time `json:"created"`
+	ID      string `json:"id"`
+	Name    string `json:"name"`
+	HostID  string `json:"host_id,omitempty"`
+	Domain  string `json:"domain,omitempty"` // site domain or subdomain
+	Folder  string `json:"folder,omitempty"` // when WordPress is in a folder of Domain
+	DraftID string `json:"draft_id,omitempty"`
+	// Marked holds stages the user ticked as done by hand (e.g. WordPress was already there).
+	Marked  map[string]bool `json:"marked,omitempty"`
+	Created time.Time       `json:"created"`
 }
 
 // Site is the address shown to the user (domain/folder).

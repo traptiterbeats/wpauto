@@ -267,11 +267,47 @@ func (c *Client) Chat(ctx context.Context, system, user string, jsonMode bool) (
 	if jsonMode {
 		body["response_format"] = map[string]string{"type": "json_object"}
 	}
-	out, u, err := c.post(ctx, body)
+	out, u, err := c.postRetry(ctx, body)
 	var ae *APIError
 	if jsonMode && errors.As(err, &ae) && ae.Status == 400 && strings.Contains(strings.ToLower(ae.Msg), "response_format") {
 		delete(body, "response_format")
+		out, u, err = c.postRetry(ctx, body)
+	}
+	return out, u, err
+}
+
+// RetryWaits are the pauses before retrying a request the API refused because it was busy
+// (HTTP 429, 500, 502, 503, 504). Overload errors like Gemini's "high demand" pass in seconds.
+var RetryWaits = []time.Duration{5 * time.Second, 15 * time.Second, 40 * time.Second}
+
+// Busy reports whether err is a temporary overload worth retrying later.
+func Busy(err error) bool {
+	var ae *APIError
+	if !errors.As(err, &ae) {
+		return false
+	}
+	switch ae.Status {
+	case 429, 500, 502, 503, 504:
+		return true
+	}
+	return false
+}
+
+func (c *Client) postRetry(ctx context.Context, body map[string]any) (string, Usage, error) {
+	out, u, err := c.post(ctx, body)
+	for _, wait := range RetryWaits {
+		if !Busy(err) {
+			break
+		}
+		select {
+		case <-ctx.Done():
+			return out, u, err
+		case <-time.After(wait):
+		}
 		out, u, err = c.post(ctx, body)
+	}
+	if Busy(err) {
+		err = fmt.Errorf("%w — سرویس هوش مصنوعی فعلاً شلوغ است (%d بار دوباره امتحان شد). چند دقیقه‌ی دیگر دوباره بزنید یا در «هوش مصنوعی» مدل/سرویس دیگری را پیش‌فرض کنید", err, len(RetryWaits))
 	}
 	return out, u, err
 }
