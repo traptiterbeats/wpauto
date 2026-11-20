@@ -39,7 +39,7 @@ func TestLayoutAndPlan(t *testing.T) {
 		r.Body.Close()
 		return string(b)
 	}
-	for p, want := range map[string]string{"": "کارها", "hosts": "هاست‌ها", "themes": "قالب‌ها", "customize": "شخصی‌سازی", "ai": "هوش مصنوعی", "runs": "کارها", "projects": "پروژه‌ها", "wordpress": "کارها"} {
+	for p, want := range map[string]string{"": "کارها", "hosts": "هاست‌ها", "themes": "قالب‌ها", "customize": "شخصی‌سازی", "ai": "هوش مصنوعی", "runs": "کارها", "projects": "پروژه‌ها", "wordpress": "وردپرس‌ها"} {
 		page := get(p)
 		if !strings.Contains(page, `class="on" aria-current="page">`+want+`<`) {
 			t.Errorf("%q: active menu %q missing", p, want)

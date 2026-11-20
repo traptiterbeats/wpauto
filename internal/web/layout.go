@@ -22,6 +22,7 @@ var sections = []section{
 	{"themes", "قالب‌ها", "themes"},
 	{"customize", "شخصی‌سازی", "customize"},
 	{"ai", "هوش مصنوعی", "ai"},
+	{"wordpress", "وردپرس‌ها", "wordpress"},
 }
 
 // sectionFor maps a request path (below the base path) to its menu.
