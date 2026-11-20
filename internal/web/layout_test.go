@@ -54,6 +54,10 @@ func TestLayoutAndPlan(t *testing.T) {
 	if wpPage := get("wordpress"); !strings.Contains(wpPage, "وردپرس‌های هاست") {
 		t.Fatal("wordpress page")
 	}
+	// every POST form on the page carries the CSRF token
+	if wpPage := get("wordpress"); strings.Count(wpPage, `method="post"`) != strings.Count(wpPage, `name="csrf"`) {
+		t.Fatal("wordpress form without csrf")
+	}
 	if strings.Contains(get(""), "run/wp-remove") {
 		t.Fatal("hidden workflow listed on home")
 	}

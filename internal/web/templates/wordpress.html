@@ -16,6 +16,7 @@
     </label>
   </form>
   <form method="post" action="{{.BasePath}}wordpress/scan">
+    <input type="hidden" name="csrf" value="{{.CSRF}}">
     <input type="hidden" name="host" value="{{.HostID}}">
     <button type="submit">{{if .Scan}}گشتن دوباره{{else}}پیدا کردن همه‌ی وردپرس‌ها{{end}}</button>
     {{with .Scan}}<span class="small muted">آخرین جستجو: <span dir="ltr">{{.StartedAt.Format "01-02 15:04"}}</span> · <a href="{{$.BasePath}}runs/{{.ID}}">لاگ</a></span>{{end}}
@@ -23,6 +24,7 @@
   {{if .Scan}}
   {{if .Sites}}
   <form method="post" action="{{.BasePath}}wordpress/remove" class="card">
+    <input type="hidden" name="csrf" value="{{.CSRF}}">
     <input type="hidden" name="host" value="{{.HostID}}">
     <table class="list">
       <thead><tr><th></th><th>سایت</th><th>نسخه</th><th>مسیر</th></tr></thead>
