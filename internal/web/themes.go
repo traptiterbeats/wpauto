@@ -38,8 +38,8 @@ func (s *Server) handleThemes(w http.ResponseWriter, r *http.Request) {
 	cat := engine.Catalog()
 	s.render(w, "themes.html", s.page(r, map[string]any{
 		"Themes": cat.List(), "Library": cat.Library(), "Importer": catalog.ImporterSlug,
-		"HasImporter": cat.LibraryPath(catalog.ImporterSlug) != "",
-		"Error":       r.URL.Query().Get("err"), "Msg": r.URL.Query().Get("msg"),
+		"HasImporter": cat.LibraryPath(catalog.ImporterSlug) != "", "Std": standards(),
+		"Error": r.URL.Query().Get("err"), "Msg": r.URL.Query().Get("msg"),
 	}))
 }
 

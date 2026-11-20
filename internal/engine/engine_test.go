@@ -61,7 +61,7 @@ func TestHostCheckFindsWordPress(t *testing.T) {
 	if run.Status != StatusSuccess {
 		t.Fatalf("status %s: %s", run.Status, run.Error)
 	}
-	if run.Steps[2].Outputs["count"] != "1" || run.Steps[2].Outputs["domains"] != "example.com" {
+	if run.Steps[2].Outputs["count"] != "2" || run.Steps[2].Outputs["domains"] != "example.com,example.com/shop" {
 		t.Fatalf("detect outputs: %v", run.Steps[2].Outputs)
 	}
 	if gotReport == nil || !gotReport.ReadyForWP {

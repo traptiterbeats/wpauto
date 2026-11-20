@@ -9,7 +9,7 @@
   {{template "flash" .}}
   <a class="back" href="{{.BasePath}}">→ بازگشت به کارها</a>
   <h2>شخصی‌سازی دمو برای مشتری</h2>
-  <p class="muted">بریف مشتری، لوگو و تصاویرش را بدهید تا متن‌های دمو با هوش مصنوعی برای او نوشته شود. بعد در «نصب قالب و دمو» همین پیش‌نویس را انتخاب کنید.</p>
+  <p class="muted">مرحله‌ی ۳ از ساخت سایت، پیش از نصب قالب: درباره‌ی مشتری بنویسید تا بریف و همه‌ی متن‌های دمو با هوش مصنوعی برای او نوشته شود. در مرحله‌ی بعد («نصب قالب و دمو») همین پیش‌نویس نصب می‌شود.</p>
   {{if .Error}}<div class="error">{{.Error}}</div>{{end}}
   {{if .Drafts}}
   <table class="list">
@@ -30,7 +30,7 @@
     <input type="hidden" name="csrf" value="{{.CSRF}}">
     <label>نام سایت یا مشتری<input name="title" required placeholder="مثلاً کافه نارنج"></label>
     <label>قالب
-      <select name="theme">{{range .Themes}}<option value="{{.Slug}}">{{.Name}} {{.Version}}</option>{{end}}</select>
+      <select name="theme">{{range .Themes}}<option value="{{.Slug}}">{{.Name}} {{.Version}}{{with index $.Std .Slug}}{{if not .OK}} — ✘ استاندارد نیست{{end}}{{end}}</option>{{end}}</select>
     </label>
     <button type="submit">ساختن</button>
   </form>

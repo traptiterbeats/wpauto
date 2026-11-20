@@ -168,17 +168,31 @@ type WPInstall struct {
 
 var wpVersionRe = regexp.MustCompile(`\$wp_version\s*=\s*'([^']+)'`)
 
+type dirEntry struct {
+	File string `json:"file"`
+	Type string `json:"type"`
+}
+
+func listDir(ctx context.Context, c *cpanel.Client, dir string) ([]dirEntry, error) {
+	data, err := c.Call(ctx, "Fileman", "list_files", url.Values{"dir": {dir}})
+	if err != nil {
+		return nil, err
+	}
+	var files []dirEntry
+	_ = json.Unmarshal(data, &files)
+	return files, nil
+}
+
+// skipSubdirs are folders inside a document root that are never a WordPress install of their own.
+var skipSubdirs = map[string]bool{"cgi-bin": true, ".well-known": true, "wp-admin": true, "wp-content": true, "wp-includes": true,
+	"assets": true, "css": true, "js": true, "images": true, "img": true, "fonts": true, "vendor": true, "node_modules": true, "tmp": true, "logs": true}
+
 // DetectWordPress checks a directory for wp-config.php + wp-includes and reads the version.
 func DetectWordPress(ctx context.Context, c *cpanel.Client, dir string) (bool, string, error) {
-	data, err := c.Call(ctx, "Fileman", "list_files", url.Values{"dir": {dir}})
+	files, err := listDir(ctx, c, dir)
 	if err != nil {
 		return false, "", err
 	}
-	var files []struct {
-		File string `json:"file"`
-		Type string `json:"type"`
-	}
-	_ = json.Unmarshal(data, &files)
 	hasConfig, hasIncludes := false, false
 	for _, f := range files {
 		switch {
@@ -214,25 +228,57 @@ func stepWPDetect(ctx context.Context, rc *RunContext, args map[string]string) (
 		return nil, err
 	}
 	want := strings.TrimSpace(args["domain"])
+	wantDomain, wantPath, _ := strings.Cut(want, "/")
+	wantPath = strings.Trim(wantPath, "/")
+	isRoot := map[string]bool{}
+	for _, r := range roots {
+		isRoot[path.Clean(r.Root)] = true
+	}
 	var found []string
 	checked := 0
+	check := func(label, dir string) {
+		ok, ver, err := DetectWordPress(ctx, c, dir)
+		switch {
+		case err != nil:
+			rc.Logf("⚠ %s: %v", label, err)
+		case ok:
+			rc.Logf("وردپرس %s روی %s پیدا شد (%s)", ver, label, dir)
+			found = append(found, label)
+		case wantPath != "" || !strings.Contains(label, "/"):
+			rc.Logf("%s: وردپرسی نیست (%s)", label, dir)
+		}
+		time.Sleep(200 * time.Millisecond) // be gentle with shared hosts
+	}
 	for _, r := range roots {
-		if want != "" && r.Domain != want {
+		if want != "" && r.Domain != wantDomain {
 			continue
 		}
 		checked++
-		ok, ver, err := DetectWordPress(ctx, c, r.Root)
-		if err != nil {
-			rc.Logf("⚠ %s: %v", r.Domain, err)
+		if wantPath != "" {
+			check(r.Domain+"/"+wantPath, path.Join(r.Root, wantPath))
 			continue
 		}
-		if ok {
-			rc.Logf("وردپرس %s روی %s پیدا شد (%s)", ver, r.Domain, r.Root)
-			found = append(found, r.Domain)
-		} else {
-			rc.Logf("%s: وردپرسی نیست (%s)", r.Domain, r.Root)
+		check(r.Domain, r.Root)
+		// installs in a folder of this domain (e.g. domain.com/blog), one level deep
+		files, err := listDir(ctx, c, r.Root)
+		if err != nil {
+			continue
 		}
-		time.Sleep(200 * time.Millisecond) // be gentle with shared hosts
+		n := 0
+		for _, f := range files {
+			if f.Type != "dir" || skipSubdirs[f.File] || strings.HasPrefix(f.File, ".") {
+				continue
+			}
+			sub := path.Join(r.Root, f.File)
+			if isRoot[sub] { // another domain's document root (usual for subdomains)
+				continue
+			}
+			if n++; n > 40 {
+				rc.Logf("⚠ %s: پوشه‌ها زیادند؛ فقط ۴۰ پوشه‌ی اول بررسی شد", r.Domain)
+				break
+			}
+			check(r.Domain+"/"+f.File, sub)
+		}
 	}
 	if want != "" && checked == 0 {
 		return nil, fmt.Errorf("domain %s is not on this account", want)

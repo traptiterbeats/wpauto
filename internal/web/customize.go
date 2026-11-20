@@ -154,6 +154,35 @@ func resetStuckDrafts() {
 	}
 }
 
+// stdView says whether a theme's demo follows the customisation standard.
+type stdView struct {
+	OK      bool
+	Missing []string
+	NoDemo  bool
+}
+
+// standards checks every catalogue theme's demo against the customisation standard.
+func standards() map[string]stdView {
+	out := map[string]stdView{}
+	for _, t := range engine.Catalog().List() {
+		if !t.HasDemo() {
+			out[t.Slug] = stdView{NoDemo: true}
+			continue
+		}
+		demo, err := customize.LoadDemo(t.Path(t.DemoZip))
+		if err != nil {
+			out[t.Slug] = stdView{Missing: []string{err.Error()}}
+			continue
+		}
+		ok, missing := demo.Standard()
+		if !ok && len(missing) == 0 {
+			missing = []string{"customize.json با قرارداد wpauto-customize"}
+		}
+		out[t.Slug] = stdView{OK: ok, Missing: missing}
+	}
+	return out
+}
+
 func (s *Server) handleDrafts(w http.ResponseWriter, r *http.Request) {
 	var themes []*catalog.Theme
 	for _, t := range engine.Catalog().List() {
@@ -162,7 +191,7 @@ func (s *Server) handleDrafts(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	s.render(w, "drafts.html", s.page(r, map[string]any{
-		"Drafts": engine.Drafts().List(), "Themes": themes, "Error": r.URL.Query().Get("err"),
+		"Drafts": engine.Drafts().List(), "Themes": themes, "Error": r.URL.Query().Get("err"), "Std": standards(),
 	}))
 }
 
@@ -214,9 +243,16 @@ func (s *Server) loadDraft(r *http.Request) (*customize.Draft, *catalog.Theme, *
 	return d, t, demo, err
 }
 
+// draftBack returns to one step of a draft ("#texts" → ?step=texts) with a message.
 func (s *Server) draftBack(w http.ResponseWriter, r *http.Request, id, key, msg, anchor string) {
-	http.Redirect(w, r, s.cfg.BasePath+"customize/"+id+"?"+key+"="+url.QueryEscape(msg)+anchor, http.StatusSeeOther)
+	q := "?" + key + "=" + url.QueryEscape(msg)
+	if step := strings.TrimPrefix(anchor, "#"); step != "" {
+		q += "&step=" + url.QueryEscape(step)
+	}
+	http.Redirect(w, r, s.cfg.BasePath+"customize/"+id+q, http.StatusSeeOther)
 }
+
+var draftStepIDs = []string{"brief", "images", "texts", "install"}
 
 func (s *Server) handleDraft(w http.ResponseWriter, r *http.Request) {
 	d, t, demo, err := s.loadDraft(r)
@@ -262,11 +298,46 @@ func (s *Server) handleDraft(w http.ResponseWriter, r *http.Request) {
 		data["Groups"], data["Slots"], data["Changed"], data["FieldCount"] = groups, slots, changed, len(demo.Fields)
 		data["LogoMod"], data["LogoText"] = demo.LogoMod, demo.LogoText
 		data["HasSpec"] = demo.Spec != nil
+		ok, missing := demo.Standard()
+		if !ok && len(missing) == 0 {
+			missing = []string{"customize.json با قرارداد wpauto-customize"}
+		}
+		data["StdOK"], data["StdMissing"] = ok, missing
 		if demo.Spec != nil {
 			data["Supports"] = demo.Spec.Supports
 		}
 	}
-	data["Steps"] = s.draftSteps(d)
+	steps := s.draftSteps(d)
+	step := r.URL.Query().Get("step")
+	valid := false
+	for _, id := range draftStepIDs {
+		valid = valid || id == step
+	}
+	if !valid {
+		switch {
+		case steps[0].State != "done":
+			step = "brief"
+		case d.Generated == 0 && d.Status != "generating":
+			step = "texts"
+		case d.Status == "generating":
+			step = "texts"
+		default:
+			step = "install"
+		}
+	}
+	var nav []navItem
+	for i, st := range steps {
+		nav = append(nav, navItem{Title: st.Title, Link: st.Link, Active: draftStepIDs[i] == step, Done: st.State == "done"})
+		if draftStepIDs[i] == step {
+			if i > 0 {
+				data["PrevStep"] = nav[i-1]
+			}
+			if i+1 < len(steps) {
+				data["NextStep"] = navItem{Title: steps[i+1].Title, Link: steps[i+1].Link}
+			}
+		}
+	}
+	data["Steps"], data["Step"], data["SubNav"], data["CrumbLink"] = steps, step, nav, s.cfg.BasePath+"customize/"+d.ID
 	s.render(w, "draft.html", s.page(r, data))
 }
 
@@ -590,11 +661,12 @@ func (s *Server) draftSteps(d *customize.Draft) []sideStep {
 		return "todo"
 	}
 	b := d.Brief
+	base := s.cfg.BasePath + "customize/" + d.ID + "?step="
 	steps := []sideStep{
-		{ID: "brief", Title: "۱. بریف مشتری", State: state(b.SiteName != "" && strings.TrimSpace(b.Business+b.About+b.Services) != ""), Link: "#brief"},
-		{ID: "images", Title: "۲. لوگو و تصاویر", State: "optional", Note: "اختیاری", Link: "#images"},
-		{ID: "texts", Title: "۳. متن‌ها با هوش مصنوعی", State: state(d.Generated > 0), Link: "#texts"},
-		{ID: "install", Title: "۴. نصب روی سایت", State: "todo", Link: "#install"},
+		{ID: "brief", Title: "۱. بریف مشتری", State: state(b.SiteName != "" && strings.TrimSpace(b.Business+b.About+b.Services) != ""), Link: base + "brief"},
+		{ID: "images", Title: "۲. لوگو و تصاویر", State: "optional", Note: "اختیاری", Link: base + "images"},
+		{ID: "texts", Title: "۳. متن‌ها با هوش مصنوعی", State: state(d.Generated > 0), Link: base + "texts"},
+		{ID: "install", Title: "۴. نصب روی سایت", State: "todo", Link: base + "install"},
 	}
 	if d.Logo != "" || len(d.Images) > 0 {
 		steps[1].State, steps[1].Note = "done", ""

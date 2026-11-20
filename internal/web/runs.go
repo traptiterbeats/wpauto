@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"net/url"
 	"slices"
+	"sort"
 	"strconv"
 
 	"github.com/traptiterbeats/wpauto/internal/cpanel"
@@ -22,9 +23,28 @@ func (s *Server) workflows() []*engine.Workflow {
 	return list
 }
 
+// dashItem is one card on the dashboard: a workflow or a panel page, in site-building order.
+type dashItem struct {
+	Title, Description, Link string
+	Soon                     bool
+	order                    int
+}
+
+func dashItems(wfs []*engine.Workflow) []dashItem {
+	var out []dashItem
+	for _, wf := range wfs {
+		out = append(out, dashItem{Title: wf.Title, Description: wf.Description, Link: "run/" + wf.ID, order: wf.Order})
+	}
+	for _, t := range tasks.Catalogue {
+		out = append(out, dashItem{Title: t.Title, Description: t.Description, Link: t.Link, Soon: t.Link == "", order: t.Order})
+	}
+	sort.SliceStable(out, func(i, j int) bool { return out[i].order < out[j].order })
+	return out
+}
+
 func (s *Server) handleDashboard(w http.ResponseWriter, r *http.Request) {
 	s.render(w, "dashboard.html", s.page(r, map[string]any{
-		"Workflows": s.workflows(), "Soon": tasks.Catalogue, "Runs": s.runner.List(5), "HostCount": len(s.store.List()),
+		"Items": dashItems(s.workflows()), "Runs": s.runner.List(5), "HostCount": len(s.store.List()),
 	}))
 }
 

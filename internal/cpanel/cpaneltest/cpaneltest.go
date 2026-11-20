@@ -117,7 +117,9 @@ func New(t *testing.T, user, pass string) *Fake {
 		case "Fileman/list_files":
 			switch r.FormValue("dir") {
 			case home + "/public_html":
-				ok(w, []map[string]any{{"file": "wp-config.php", "type": "file"}, {"file": "wp-includes", "type": "dir"}, {"file": "index.php", "type": "file"}})
+				ok(w, []map[string]any{{"file": "wp-config.php", "type": "file"}, {"file": "wp-includes", "type": "dir"}, {"file": "index.php", "type": "file"}, {"file": "shop", "type": "dir"}, {"file": "cgi-bin", "type": "dir"}})
+			case home + "/public_html/shop":
+				ok(w, []map[string]any{{"file": "wp-config.php", "type": "file"}, {"file": "wp-includes", "type": "dir"}})
 			case home + "/blog":
 				ok(w, []map[string]any{{"file": "index.html", "type": "file"}})
 			default:

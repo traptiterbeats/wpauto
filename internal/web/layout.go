@@ -4,6 +4,8 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/traptiterbeats/wpauto/internal/customize"
+
 	"github.com/traptiterbeats/wpauto/internal/ai"
 	"github.com/traptiterbeats/wpauto/internal/engine"
 )
@@ -86,13 +88,86 @@ type sideStep struct {
 	Link  string `json:"link,omitempty"`
 }
 
+// pipeStep is one stage of building a client's site, shown in order in the side panel.
+type pipeStep struct {
+	Key, Title, Link, State, Note string // State: done | todo
+	Current                       bool
+}
+
+// navItem is one clickable part of the current section, shown in the breadcrumb bar.
+type navItem struct {
+	Title, Link  string
+	Active, Done bool
+}
+
+// pipeline builds the site-building path: host → WordPress → customise → theme. The stage the
+// page belongs to is marked current; its own step list is shown nested under it.
+func (s *Server) pipeline(rel string, d map[string]any, rd readiness) []pipeStep {
+	bp := s.cfg.BasePath
+	ok := map[string]bool{}
+	for _, run := range s.runner.List(200) {
+		if run.Status == engine.StatusSuccess {
+			ok[run.WorkflowID] = true
+		}
+	}
+	custDone := false
+	for _, dr := range engine.Drafts().List() {
+		if dr.Generated > 0 || len(dr.Values) > 0 {
+			custDone = true
+		}
+	}
+	custLink, themeLink := bp+"customize", bp+"run/theme-install"
+	if dr, isDraft := d["D"].(*customize.Draft); isDraft && dr != nil {
+		custLink = bp + "customize/" + dr.ID
+		themeLink += "?theme=" + dr.Theme + "&draft=" + dr.ID
+		custDone = dr.Generated > 0 || len(dr.Values) > 0
+	}
+	st := func(done bool) string {
+		if done {
+			return "done"
+		}
+		return "todo"
+	}
+	p := []pipeStep{
+		{Key: "host", Title: "۱. هاست و بررسی آن", Link: bp + "hosts", State: st(rd.CheckedHosts > 0)},
+		{Key: "wp", Title: "۲. نصب وردپرس", Link: bp + "run/wp-install", State: st(ok["wp-install"]), Note: "اگر وردپرس از قبل نصب است، لازم نیست"},
+		{Key: "customize", Title: "۳. شخصی‌سازی برای مشتری", Link: custLink, State: st(custDone)},
+		{Key: "theme", Title: "۴. نصب قالب و دموی شخصی‌شده", Link: themeLink, State: st(ok["theme-install"])},
+	}
+	cur := ""
+	first, rest, _ := strings.Cut(rel, "/")
+	switch {
+	case first == "hosts" || rel == "run/host-check" || rel == "run/wp-check-domain":
+		cur = "host"
+	case rel == "run/wp-install":
+		cur = "wp"
+	case first == "customize":
+		cur = "customize"
+	case rel == "run/theme-install":
+		cur = "theme"
+	case first == "runs" && rest != "":
+		if run, isRun := d["Run"].(*engine.Run); isRun && run != nil {
+			cur = map[string]string{"host-check": "host", "wp-check-domain": "host", "wp-install": "wp", "theme-install": "theme"}[run.WorkflowID]
+		}
+	}
+	for i := range p {
+		p[i].Current = p[i].Key == cur
+		if p[i].State == "done" {
+			p[i].Note = ""
+		}
+	}
+	return p
+}
+
 // layout adds the menu, breadcrumb and side panel data every page uses.
 func (s *Server) layout(r *http.Request, d map[string]any) {
 	rel := strings.TrimPrefix(r.URL.Path, s.cfg.BasePath)
 	sec := sectionFor(rel)
 	d["Sections"] = sections
 	d["Section"] = sec
-	d["Ready"] = s.readiness()
+	rd := s.readiness()
+	d["Ready"] = rd
+	d["Pipeline"] = s.pipeline(rel, d, rd)
 	d["Here"] = r.URL.Path
 	if _, ok := d["Crumb"]; !ok {
 		d["Crumb"] = ""

@@ -11,27 +11,35 @@
 </header>
 <div class="crumbs">
   <span class="muted small">شما این‌جا هستید:</span>
-  <a href="{{.BasePath}}{{.Section.Path}}">{{.Section.Title}}</a>{{if .Crumb}}<span class="sep">‹</span><strong>{{.Crumb}}</strong>{{end}}
+  <a href="{{.BasePath}}{{.Section.Path}}">{{.Section.Title}}</a>{{if .Crumb}}<span class="sep">‹</span>{{if .CrumbLink}}<a href="{{.CrumbLink}}">{{.Crumb}}</a>{{else}}<strong>{{.Crumb}}</strong>{{end}}{{end}}
+  {{range .SubNav}}<span class="sep">‹</span><a href="{{.Link}}" class="subnav{{if .Active}} on{{end}}{{if .Done}} done{{end}}" {{if .Active}}aria-current="step"{{end}}>{{.Title}}</a>{{end}}
 </div>
 {{end}}
 {{define "aside"}}
 <aside class="side">
-  {{if .Run}}
   <section class="side-card">
-    <h4>مراحل این اجرا</h4>
-    <ol class="plan" id="steps">
-      {{range .Run.Steps}}<li data-id="{{.ID}}" class="st-{{.Status}}"><span class="dot"></span><span class="t">{{.Title}}</span>{{if .Error}} <span class="bad small">{{.Error}}</span>{{end}}</li>{{end}}
+    <h4>مسیر ساخت سایت</h4>
+    <ol class="pipe">
+      {{range .Pipeline}}
+      <li class="pp-{{.State}}{{if .Current}} current{{end}}">
+        <a href="{{.Link}}"><span class="dot"></span><span class="t">{{.Title}}</span></a>
+        {{if and .Note (not .Current)}}<span class="pl-note small">{{.Note}}</span>{{end}}
+        {{if .Current}}
+          {{if $.Run}}
+          <ol class="plan sub" id="steps">
+            {{range $.Run.Steps}}<li data-id="{{.ID}}" class="st-{{.Status}}"><span class="dot"></span><span class="t">{{.Title}}</span>{{if .Error}} <span class="bad small">{{.Error}}</span>{{end}}</li>{{end}}
+          </ol>
+          {{else if $.Steps}}
+          <ol class="plan sub" id="plan">
+            {{range $.Steps}}<li data-id="{{.ID}}" class="pl-{{.State}}"><span class="dot"></span><span class="t">{{if .Link}}<a href="{{.Link}}">{{.Title}}</a>{{else}}{{.Title}}{{end}}</span><span class="pl-note small">{{.Note}}</span></li>{{end}}
+          </ol>
+          {{if not $.D}}<p class="muted small">مرحله‌های کم‌رنگ با تنظیمات فعلی فرم لازم نیستند.</p>{{end}}
+          {{end}}
+        {{end}}
+      </li>
+      {{end}}
     </ol>
   </section>
-  {{else if .Steps}}
-  <section class="side-card">
-    <h4>{{if .D}}مراحل این پروژه{{else}}مراحل این کار{{end}}</h4>
-    <ol class="plan" id="plan">
-      {{range .Steps}}<li data-id="{{.ID}}" class="pl-{{.State}}"><span class="dot"></span><span class="t">{{if .Link}}<a href="{{.Link}}">{{.Title}}</a>{{else}}{{.Title}}{{end}}</span><span class="pl-note small">{{.Note}}</span></li>{{end}}
-    </ol>
-    {{if not .D}}<p class="muted small">مرحله‌های کم‌رنگ با تنظیمات فعلی فرم لازم نیستند و اجرا نمی‌شوند.</p>{{end}}
-  </section>
-  {{end}}
   <section class="side-card">
     <h4>آمادگی پنل</h4>
     <ul class="ready">

@@ -12,22 +12,13 @@
   {{end}}
   <h2>کارها</h2>
   <ol class="tasks">
-    {{range .Workflows}}
+    {{range .Items}}
     <li class="card task">
       <div>
         <h3>{{.Title}}</h3>
         <p class="muted">{{.Description}}</p>
       </div>
-      <a class="btn" href="{{$.BasePath}}run/{{.ID}}">اجرا</a>
-    </li>
-    {{end}}
-    {{range .Soon}}
-    <li class="card task">
-      <div>
-        <h3>{{.Title}}</h3>
-        <p class="muted">{{.Description}}</p>
-      </div>
-      {{if .Link}}<a class="btn" href="{{$.BasePath}}{{.Link}}">شروع</a>{{else}}<span class="badge">به‌زودی</span>{{end}}
+      {{if .Soon}}<span class="badge">به‌زودی</span>{{else}}<a class="btn" href="{{$.BasePath}}{{.Link}}">{{if eq .Link "customize"}}شروع{{else}}اجرا{{end}}</a>{{end}}
     </li>
     {{end}}
   </ol>

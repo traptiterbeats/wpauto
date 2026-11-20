@@ -11,8 +11,9 @@
   <h2>{{.D.Title}} <span class="muted small" dir="ltr">{{.D.Theme}}</span></h2>
   {{if .Error}}<div class="error">{{.Error}}</div>{{end}}
   {{if .Msg}}<div class="card hint ok">{{.Msg}}</div>{{end}}
-  <nav class="tabs"><a href="#brief">۱. بریف</a><a href="#images">۲. لوگو و تصاویر</a><a href="#texts">۳. متن‌ها</a><a href="#install">۴. نصب</a></nav>
+  {{if and (not .StdOK) .StdMissing}}<div class="error">این قالب با استاندارد شخصی‌سازی کامل هماهنگ نیست؛ این بخش‌ها با هوش مصنوعی عوض نمی‌شوند و متن دموی اصلی روی سایت می‌ماند: {{range $i, $m := .StdMissing}}{{if $i}}، {{end}}{{$m}}{{end}}. نسخه‌ی استاندارد قالب را در «قالب‌ها» بگذارید.</div>{{end}}
 
+  {{if eq .Step "brief"}}
   <form id="brief" class="card form" method="post" action="{{.BasePath}}customize/{{.D.ID}}/brief">
     <h3>۱. بریف مشتری</h3>
     <input type="hidden" name="csrf" value="{{.CSRF}}">
@@ -69,6 +70,8 @@
     <button type="submit">ذخیره‌ی بریف</button>
   </form>
 
+  {{end}}
+  {{if eq .Step "images"}}
   <form id="images" class="card form" method="post" action="{{.BasePath}}customize/{{.D.ID}}/images" enctype="multipart/form-data">
     <h3>۲. لوگو و تصاویر</h3>
     <input type="hidden" name="csrf" value="{{.CSRF}}">
@@ -95,13 +98,15 @@
   </div>
   {{end}}
 
+  {{end}}
+  {{if eq .Step "texts"}}
   <section id="texts" class="card">
     <h3>۳. متن‌ها <span class="muted small">{{.Changed}} از {{.FieldCount}} متن تغییر کرده</span></h3>
     {{if eq .D.Status "generating"}}
     <p class="warn" id="genstatus">در حال نوشتن متن‌ها با {{.D.Provider}}… <span id="genprog">{{.D.Progress}}</span></p>
     <script>
     (function poll(){fetch('{{.BasePath}}customize/{{.D.ID}}/status',{credentials:'same-origin'}).then(function(r){return r.json()}).then(function(j){
-      if(j.status==='generating'){document.getElementById('genprog').textContent=j.progress||'';setTimeout(poll,2500);}else{location.href='{{.BasePath}}customize/{{.D.ID}}#texts';location.reload();}
+      if(j.status==='generating'){document.getElementById('genprog').textContent=j.progress||'';setTimeout(poll,2500);}else{location.href='{{.BasePath}}customize/{{.D.ID}}?step=texts';}
     }).catch(function(){setTimeout(poll,5000)});})();
     </script>
     {{else}}
@@ -146,6 +151,8 @@
     </form>
   </section>
 
+  {{end}}
+  {{if eq .Step "install"}}
   <section id="install" class="card">
     <h3>۴. نصب روی سایت</h3>
     <p class="muted">قالب، افزونه‌ها و همین نسخه‌ی شخصی‌سازی‌شده‌ی دمو روی وردپرس مشتری نصب می‌شود.</p>
@@ -154,6 +161,11 @@
       <form method="post" action="{{.BasePath}}customize/{{.D.ID}}/build"><input type="hidden" name="csrf" value="{{.CSRF}}"><button class="ghost" type="submit">دانلود بسته‌ی دموی ساخته‌شده</button></form>
     </div>
   </section>
+  {{end}}
+  <nav class="stepnav">
+    {{with .PrevStep}}<a class="btn ghost" href="{{.Link}}">→ {{.Title}}</a>{{else}}<span></span>{{end}}
+    {{with .NextStep}}<a class="btn" href="{{.Link}}">{{.Title}} ←</a>{{else}}<a class="btn" href="{{.BasePath}}run/theme-install?theme={{.D.Theme}}&draft={{.D.ID}}">مرحله‌ی بعد: نصب قالب و دمو ←</a>{{end}}
+  </nav>
   <form method="post" action="{{.BasePath}}customize/{{.D.ID}}/delete" onsubmit="return confirm('این پیش‌نویس و تصاویرش حذف شود؟')">
     <input type="hidden" name="csrf" value="{{.CSRF}}"><button class="ghost danger" type="submit">حذف پیش‌نویس</button>
   </form>

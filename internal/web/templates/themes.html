@@ -23,8 +23,10 @@
         <p class="muted small" dir="ltr">{{.Slug}}</p>
         <div class="chips">
           {{if .HasDemo}}<span class="badge">دمو {{.DemoVersion}}</span>{{else}}<span class="badge">بدون دمو</span>{{end}}
+          {{with index $.Std .Slug}}{{if .OK}}<span class="badge ok">✔ استاندارد شخصی‌سازی</span>{{else if not .NoDemo}}<span class="badge bad" title="جاافتاده: {{range $i, $m := .Missing}}{{if $i}}، {{end}}{{$m}}{{end}}">✘ استاندارد نیست</span>{{end}}{{end}}
           {{range .Plugins}}<span class="badge" dir="ltr">{{.Slug}}{{if eq .Source "wporg"}} · wp.org{{end}}</span>{{end}}
         </div>
+        {{with index $.Std .Slug}}{{if and (not .OK) (not .NoDemo)}}<p class="small bad">با شخصی‌سازی کامل هماهنگ نیست؛ این متن‌ها متن دمو می‌مانند: {{range $i, $m := .Missing}}{{if $i}}، {{end}}{{$m}}{{end}}. نسخه‌ای از قالب را بگذارید که قرارداد wpauto-customize را کامل دارد.</p>{{end}}{{end}}
         <form method="post" action="{{$.BasePath}}themes/{{.Slug}}/delete" onsubmit="return confirm('از کاتالوگ حذف شود؟')">
           <input type="hidden" name="csrf" value="{{$.CSRF}}">
           <button class="ghost danger small" type="submit">حذف از کاتالوگ</button>

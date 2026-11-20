@@ -122,7 +122,7 @@ func TestCustomizeFlow(t *testing.T) {
 		t.Fatalf("draft id from %s", r.Request.URL.Path)
 	}
 	post("customize/"+id+"/autofill", url.Values{"story": {"یک کافه در شیراز، اینستاگرام @naranj"}, "site_name": {"کافه نارنج"}})
-	if body := get("customize/" + id); !strings.Contains(body, "کافه‌ای دنج") || !strings.Contains(body, `value="@naranj"`) || strings.Contains(body, "made@up.test") || strings.Contains(body, "0711-000") {
+	if body := get("customize/" + id + "?step=brief"); !strings.Contains(body, "کافه‌ای دنج") || !strings.Contains(body, `value="@naranj"`) || strings.Contains(body, "made@up.test") || strings.Contains(body, "0711-000") {
 		t.Fatal("autofill did not fill the brief, or invented contact details")
 	}
 	post("customize/"+id+"/brief", url.Values{"site_name": {"کافه نارنج"}, "business": {"کافه"}, "email": {"hi@naranj.test"}})
@@ -150,9 +150,15 @@ func TestCustomizeFlow(t *testing.T) {
 		}
 		time.Sleep(30 * time.Millisecond)
 	}
-	page := get("customize/" + id)
-	if !strings.Contains(page, "تازه ACME STUDIO") || !strings.Contains(page, "file/logo.png") {
+	page := get("customize/" + id + "?step=texts")
+	if !strings.Contains(page, "تازه ACME STUDIO") || !strings.Contains(get("customize/"+id+"?step=images"), "file/logo.png") {
 		t.Fatal("draft page does not show generated text and logo")
+	}
+	if !strings.Contains(page, `class="subnav on`) || !strings.Contains(page, "مسیر ساخت سایت") || !strings.Contains(page, `pp-done current`) {
+		t.Fatal("breadcrumb steps or site-building path missing")
+	}
+	if strings.Contains(page, `<form id="brief"`) {
+		t.Fatal("texts step should show only its own part")
 	}
 	post("customize/"+id+"/values", url.Values{"v:theme_mods.brand_text": {"NARANJ"}})
 	d, _ := engine.Drafts().Get(id)

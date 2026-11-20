@@ -52,3 +52,13 @@
 ## بدون customize.json
 
 wpauto متن‌ها را خودکار از demo.json پیدا می‌کند (عنوان و متن برگه‌ها و نوشته‌ها، متای متنی، منو، theme_modهای متنی، ایمیل و لینک شبکه‌های اجتماعی از روی نام کلید). برای کیفیت بهتر customize.json بگذارید.
+
+## Required core roles (standard check)
+
+The panel marks a theme "استاندارد شخصی‌سازی" only when its demo has `customize.json` with
+`"contract": "wpauto-customize"` and fields for all of these roles: `site.name`, `hero.title`,
+`hero.subtitle`, `about.text` (or another `about.*` text), `services.item.title`, `contact.title`.
+Every visible text of the theme must be a Customizer theme_mod (or post/menu content) listed in
+`customize.json`; a text hard-coded in a template can never follow the client's brief, so a
+carpentry site would keep the demo's software wording. Themes that fail the check are flagged in
+«قالب‌ها», in the new-draft form and on the draft page.
