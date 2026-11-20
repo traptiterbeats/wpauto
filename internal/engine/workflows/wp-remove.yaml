@@ -1,0 +1,18 @@
+id: wp-remove
+title: حذف کامل وردپرس‌های تستی
+description: وردپرس‌های انتخاب‌شده را بدون بکاپ و برای همیشه پاک می‌کند - فایل‌ها، دیتابیس، کاربر دیتابیس و ساب‌دامین خودشان. پوشه‌ی سایت‌های دیگر و دامنه‌ی اصلی دست نمی‌خورد.
+order: 91
+hidden: true
+inputs:
+  - name: sites
+    label: مسیر وردپرس‌ها
+    required: true
+steps:
+  - id: login
+    title: ورود به cPanel
+    uses: cpanel.login
+  - id: remove
+    title: حذف وردپرس‌ها
+    uses: wp.remove
+    with:
+      sites: "{{.Inputs.sites}}"

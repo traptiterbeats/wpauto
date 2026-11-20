@@ -107,6 +107,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET "+bp+"runs/{id}", s.requireAuth(s.handleRunView))
 	mux.HandleFunc("GET "+bp+"runs/{id}/json", s.requireAuth(s.handleRunJSON))
 	mux.HandleFunc("POST "+bp+"runs/{id}/cancel", s.requireAuth(s.handleRunCancel))
+	mux.HandleFunc("GET "+bp+"wordpress", s.requireAuth(s.handleWordPress))
+	mux.HandleFunc("POST "+bp+"wordpress/{op}", s.requireAuth(s.handleWordPressOp))
 	mux.HandleFunc("GET "+bp+"projects", s.requireAuth(s.handleProjects))
 	mux.HandleFunc("POST "+bp+"projects/new", s.requireAuth(s.handleProjectNew))
 	mux.HandleFunc("POST "+bp+"projects/{id}/{op}", s.requireAuth(s.handleProjectOp))

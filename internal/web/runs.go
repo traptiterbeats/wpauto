@@ -35,6 +35,9 @@ type dashItem struct {
 func dashItems(wfs []*engine.Workflow) []dashItem {
 	var out []dashItem
 	for _, wf := range wfs {
+		if wf.Hidden {
+			continue
+		}
 		out = append(out, dashItem{Title: wf.Title, Description: wf.Description, Link: "run/" + wf.ID, order: wf.Order})
 	}
 	for _, t := range tasks.Catalogue {

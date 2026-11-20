@@ -7,7 +7,7 @@
 {{template "aside" .}}
 <main>
   {{template "flash" .}}
-  <a class="back" href="{{.BasePath}}">→ بازگشت به کارها</a>
+  {{if or (eq .Run.WorkflowID "wp-scan") (eq .Run.WorkflowID "wp-remove")}}<a class="back" href="{{.BasePath}}wordpress?host={{.Run.HostID}}">→ بازگشت به وردپرس‌های هاست</a>{{else}}<a class="back" href="{{.BasePath}}">→ بازگشت به کارها</a>{{end}}
   <h2>{{.Run.Title}}</h2>
   <p class="muted">{{with .RunProject}}پروژه: <strong>{{.Name}}</strong> · {{end}}هاست: {{.Run.HostName}} · شروع: <span dir="ltr">{{.Run.StartedAt.Format "2006-01-02 15:04:05"}}</span> · وضعیت: <span id="status">{{template "status" .Run.Status}}</span></p>
   <div id="err" class="error" {{if not .Run.Error}}hidden{{end}}>{{.Run.Error}}</div>

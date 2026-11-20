@@ -1,0 +1,19 @@
+id: wp-scan
+title: پیدا کردن همه‌ی وردپرس‌های هاست
+description: همه‌ی دامنه‌ها، ساب‌دامین‌ها و پوشه‌های اول آن‌ها را می‌گردد و فهرست وردپرس‌ها را می‌سازد. فقط خواندنی؛ حذف از صفحه‌ی «وردپرس‌های هاست».
+order: 90
+hidden: true
+steps:
+  - id: login
+    title: ورود به cPanel
+    uses: cpanel.login
+  - id: detect
+    title: گشتن همه‌ی دامنه‌ها
+    uses: wp.detect
+    with:
+      domain: ""
+  - id: result
+    title: نتیجه
+    uses: log
+    with:
+      message: "تعداد وردپرس‌های پیدا شده: {{.Steps.detect.count}}"

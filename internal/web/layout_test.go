@@ -39,7 +39,7 @@ func TestLayoutAndPlan(t *testing.T) {
 		r.Body.Close()
 		return string(b)
 	}
-	for p, want := range map[string]string{"": "کارها", "hosts": "هاست‌ها", "themes": "قالب‌ها", "customize": "شخصی‌سازی", "ai": "هوش مصنوعی", "runs": "کارها", "projects": "پروژه‌ها"} {
+	for p, want := range map[string]string{"": "کارها", "hosts": "هاست‌ها", "themes": "قالب‌ها", "customize": "شخصی‌سازی", "ai": "هوش مصنوعی", "runs": "کارها", "projects": "پروژه‌ها", "wordpress": "کارها"} {
 		page := get(p)
 		if !strings.Contains(page, `class="on" aria-current="page">`+want+`<`) {
 			t.Errorf("%q: active menu %q missing", p, want)
@@ -50,6 +50,12 @@ func TestLayoutAndPlan(t *testing.T) {
 		if !strings.Contains(page, "وصل نیست") {
 			t.Errorf("%q: AI not-connected state missing", p)
 		}
+	}
+	if wpPage := get("wordpress"); !strings.Contains(wpPage, "وردپرس‌های هاست") {
+		t.Fatal("wordpress page")
+	}
+	if strings.Contains(get(""), "run/wp-remove") {
+		t.Fatal("hidden workflow listed on home")
 	}
 	form := get("run/wp-install")
 	if !strings.Contains(form, "<strong>نصب وردپرس</strong>") || !strings.Contains(form, `data-id="folder" class="pl-no"`) {

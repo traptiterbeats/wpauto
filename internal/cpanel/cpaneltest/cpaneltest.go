@@ -146,6 +146,11 @@ func New(t *testing.T, user, pass string) *Fake {
 			"Mysql/delete_database", "Mysql/delete_user":
 			ok(w, nil)
 		case "Fileman/get_file_content":
+			if r.FormValue("file") == "wp-config.php" {
+				db := path.Base(r.FormValue("dir"))
+				ok(w, map[string]any{"content": "<?php\ndefine( 'DB_NAME', '" + user + "_" + db + "' );\ndefine('DB_USER', \"" + user + "_" + db + "\");\n"})
+				return
+			}
 			ok(w, map[string]any{"content": "<?php\n$wp_version = '6.8.3';\n"})
 		case "Features/list_features":
 			ok(w, map[string]any{"fileman": 1, "mysql": 1, "multiphp": 1, "ssh": 0})

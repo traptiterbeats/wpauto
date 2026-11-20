@@ -235,6 +235,7 @@ func stepWPDetect(ctx context.Context, rc *RunContext, args map[string]string) (
 		isRoot[path.Clean(r.Root)] = true
 	}
 	var found []string
+	var list []FoundWP
 	checked := 0
 	check := func(label, dir string) {
 		ok, ver, err := DetectWordPress(ctx, c, dir)
@@ -244,6 +245,7 @@ func stepWPDetect(ctx context.Context, rc *RunContext, args map[string]string) (
 		case ok:
 			rc.Logf("وردپرس %s روی %s پیدا شد (%s)", ver, label, dir)
 			found = append(found, label)
+			list = append(list, FoundWP{Label: label, Dir: dir, Version: ver})
 		case wantPath != "" || !strings.Contains(label, "/"):
 			rc.Logf("%s: وردپرسی نیست (%s)", label, dir)
 		}
@@ -284,5 +286,13 @@ func stepWPDetect(ctx context.Context, rc *RunContext, args map[string]string) (
 	if want != "" && checked == 0 {
 		return nil, fmt.Errorf("domain %s is not on this account", want)
 	}
-	return map[string]string{"count": fmt.Sprint(len(found)), "domains": strings.Join(found, ",")}, nil
+	js, _ := json.Marshal(list)
+	return map[string]string{"count": fmt.Sprint(len(found)), "domains": strings.Join(found, ","), "list": string(js)}, nil
+}
+
+// FoundWP is one WordPress install wp.detect found (its "list" output is a JSON array of these).
+type FoundWP struct {
+	Label   string `json:"label"`
+	Dir     string `json:"dir"`
+	Version string `json:"version"`
 }

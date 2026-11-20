@@ -53,8 +53,10 @@ type Workflow struct {
 	Inputs      []Input   `yaml:"inputs"`
 	Steps       []StepDef `yaml:"steps"`
 	// Rollback undoes what the run created (database, subdomain, files) when a step fails.
-	Rollback bool   `yaml:"rollback"`
-	Source   string `yaml:"-"`
+	Rollback bool `yaml:"rollback"`
+	// Hidden workflows are started from their own panel page, not from the task list.
+	Hidden bool   `yaml:"hidden"`
+	Source string `yaml:"-"`
 }
 
 // Validate checks the workflow against the step registry.
