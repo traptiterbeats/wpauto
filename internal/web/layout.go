@@ -105,7 +105,7 @@ type navItem struct {
 var stageOf = map[string]string{"host-check": "host", "wp-install": "wpinstall", "wp-check-domain": "wpcheck", "theme-install": "theme"}
 
 // pipelineKeys are the stages in the order they are done.
-var pipelineKeys = []string{"host", "wpinstall", "wpcheck", "customize", "theme"}
+var pipelineKeys = []string{"host", "wpcheck", "wpinstall", "customize", "theme"}
 
 // pipeline lights the stages of the active project: dark until a run of that stage succeeds for
 // this project or the user ticks it by hand, so a new project starts all dark.
@@ -113,8 +113,8 @@ func (s *Server) pipeline(p *projects.Project) []pipeStep {
 	bp := s.cfg.BasePath
 	steps := []pipeStep{
 		{Key: "host", Title: "بررسی هاست", Link: bp + "run/host-check"},
-		{Key: "wpinstall", Title: "نصب وردپرس", Link: bp + "run/wp-install", Note: "اگر وردپرس از قبل هست، تیک بزنید"},
-		{Key: "wpcheck", Title: "بررسی وردپرس", Link: bp + "run/wp-check-domain"},
+		{Key: "wpcheck", Title: "بررسی وردپرس", Link: bp + "run/wp-check-domain", Note: "کجا وردپرس نصب است"},
+		{Key: "wpinstall", Title: "نصب وردپرس", Link: bp + "run/wp-install", Note: "اگر بررسی، وردپرس پیدا کند لازم نیست"},
 		{Key: "customize", Title: "شخصی‌سازی برای مشتری", Link: bp + "customize"},
 		{Key: "theme", Title: "نصب قالب و دمو", Link: bp + "run/theme-install"},
 	}
@@ -156,6 +156,13 @@ func (s *Server) pipeline(p *projects.Project) []pipeStep {
 		case !seen[k] && st.State == "todo":
 			st.State = "failed"
 		}
+		// the check found WordPress: no install needed
+		if run.WorkflowID == "wp-check-domain" && run.Status == engine.StatusSuccess && foundWP(run) {
+			ins := &steps[idx["wpinstall"]]
+			if ins.State != "done" {
+				ins.State, ins.ByRun, ins.Note = "done", true, "از قبل نصب بود"
+			}
+		}
 		seen[k] = true
 	}
 	if p.DraftID != "" {
@@ -178,7 +185,7 @@ func (s *Server) pipeline(p *projects.Project) []pipeStep {
 				steps[i].State = "done"
 			}
 		}
-		if steps[i].State == "done" {
+		if steps[i].State == "done" && steps[i].Note != "از قبل نصب بود" {
 			steps[i].Note = ""
 		}
 	}
@@ -219,4 +226,15 @@ func (s *Server) safeBack(back string) string {
 		return back
 	}
 	return ""
+}
+
+// foundWP reports whether a WordPress check run found at least one install.
+func foundWP(run engine.Run) bool {
+	for _, st := range run.Steps {
+		if st.ID == "detect" {
+			n := st.Outputs["count"]
+			return n != "" && n != "0"
+		}
+	}
+	return false
 }
