@@ -361,25 +361,7 @@ func (s *Server) handleDraftOp(w http.ResponseWriter, r *http.Request) {
 		_ = st.Delete(id)
 		http.Redirect(w, r, s.cfg.BasePath+"customize", http.StatusSeeOther)
 	case "brief":
-		_, err := st.Update(id, func(d *customize.Draft) error {
-			f := func(k string) string { return strings.TrimSpace(r.FormValue(k)) }
-			d.Brief = customize.Brief{SiteName: f("site_name"), BrandLatin: f("brand_latin"), Business: f("business"), About: f("about"),
-				Services: f("services"), Audience: f("audience"), Tone: f("tone"), Email: f("email"), Phone: f("phone"),
-				Address: f("address"), Hours: f("hours"), Notes: f("notes"), Language: f("language"),
-				Socials: map[string]string{}}
-			for _, sn := range customize.Socials {
-				if v := f("social_" + sn.ID); v != "" {
-					d.Brief.Socials[sn.ID] = v
-				}
-			}
-			if f("use_colors") != "" {
-				d.Brief.ColorPrimary, d.Brief.ColorSecondary = f("color_primary"), f("color_secondary")
-			}
-			if d.Brief.SiteName != "" {
-				d.Title = d.Brief.SiteName
-			}
-			return nil
-		})
+		_, err := st.Update(id, func(d *customize.Draft) error { s.briefFromForm(r, d); return nil })
 		if err != nil {
 			s.draftBack(w, r, id, "err", err.Error(), "#brief")
 			return
@@ -427,6 +409,8 @@ func (s *Server) handleDraftOp(w http.ResponseWriter, r *http.Request) {
 	case "reset":
 		_, _ = st.Update(id, func(d *customize.Draft) error { d.Values = map[string]string{}; d.Generated = 0; return nil })
 		s.draftBack(w, r, id, "msg", "همه‌ی متن‌ها به دموی اصلی برگشت", "#texts")
+	case "autofill":
+		s.autofillBrief(w, r, id)
 	case "generate":
 		s.startGenerate(w, r, id)
 	case "build":
@@ -442,6 +426,92 @@ func (s *Server) handleDraftOp(w http.ResponseWriter, r *http.Request) {
 	default:
 		http.NotFound(w, r)
 	}
+}
+
+// briefFromForm reads the brief form into the draft.
+func (s *Server) briefFromForm(r *http.Request, d *customize.Draft) {
+	f := func(k string) string { return strings.TrimSpace(r.FormValue(k)) }
+	d.Brief = customize.Brief{Story: f("story"), SiteName: f("site_name"), BrandLatin: f("brand_latin"), Business: f("business"), About: f("about"),
+		Services: f("services"), Audience: f("audience"), Tone: f("tone"), Email: f("email"), Phone: f("phone"),
+		Address: f("address"), Hours: f("hours"), Notes: f("notes"), Language: f("language"),
+		Socials: map[string]string{}}
+	for _, sn := range customize.Socials {
+		if v := f("social_" + sn.ID); v != "" {
+			d.Brief.Socials[sn.ID] = v
+		}
+	}
+	if f("use_colors") != "" {
+		d.Brief.ColorPrimary, d.Brief.ColorSecondary = f("color_primary"), f("color_secondary")
+	}
+	if d.Brief.SiteName != "" {
+		d.Title = d.Brief.SiteName
+	}
+}
+
+// readyAI returns the chosen (or default) provider's client, testing it first when needed.
+func (s *Server) readyAI(r *http.Request) (ai.Provider, *ai.Client, error) {
+	p, ok := s.ai.Get(r.FormValue("provider"))
+	if !ok {
+		return p, nil, fmt.Errorf("هوش مصنوعی وصل نیست. اول در منوی «هوش مصنوعی» یک سرویس اضافه و تست کنید.")
+	}
+	if p.Model == "" {
+		return p, nil, fmt.Errorf("برای «%s» هنوز مدلی انتخاب نشده. اول در منوی «هوش مصنوعی» مدل را انتخاب کنید.", p.Name)
+	}
+	if !p.Tested() || !p.TestOK {
+		if err := s.testAI(r.Context(), p); err != nil {
+			return p, nil, fmt.Errorf("هوش مصنوعی «%s» جواب نمی‌دهد: %v — اول در منوی «هوش مصنوعی» درستش کنید.", p.Name, err)
+		}
+	}
+	c, err := s.ai.Client(p)
+	return p, c, err
+}
+
+// autofillBrief saves the form, lets the AI fill the brief from the free description, and
+// optionally goes straight on to writing the site texts.
+func (s *Server) autofillBrief(w http.ResponseWriter, r *http.Request, id string) {
+	st := engine.Drafts()
+	d, err := st.Update(id, func(d *customize.Draft) error { s.briefFromForm(r, d); return nil })
+	if err != nil {
+		s.draftBack(w, r, id, "err", err.Error(), "#brief")
+		return
+	}
+	if d.Status == "generating" {
+		s.draftBack(w, r, id, "err", "تولید متن‌ها در جریان است", "#brief")
+		return
+	}
+	if strings.TrimSpace(d.Brief.Story) == "" {
+		s.draftBack(w, r, id, "err", "اول در کادر «درباره‌ی مشتری و خواسته‌هایش» توضیح بدهید", "#brief")
+		return
+	}
+	p, client, err := s.readyAI(r)
+	if err != nil {
+		s.draftBack(w, r, id, "err", err.Error(), "#brief")
+		return
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), 3*time.Minute)
+	b, _, err := customize.FillBrief(ctx, client, d.Brief, r.FormValue("overwrite") != "")
+	cancel()
+	if err != nil {
+		s.ai.SetTest(p.ID, err)
+		s.draftBack(w, r, id, "err", "پر کردن بریف نشد: "+err.Error(), "#brief")
+		return
+	}
+	_, err = st.Update(id, func(d *customize.Draft) error {
+		d.Brief = b
+		if b.SiteName != "" {
+			d.Title = b.SiteName
+		}
+		return nil
+	})
+	if err != nil {
+		s.draftBack(w, r, id, "err", err.Error(), "#brief")
+		return
+	}
+	if r.FormValue("then_texts") != "" {
+		s.startGenerate(w, r, id)
+		return
+	}
+	s.draftBack(w, r, id, "msg", "✔ خانه‌های بریف با «"+p.Name+"» پر شد. بررسی کنید، اگر لازم بود اصلاح کنید و ذخیره بزنید.", "#brief")
 }
 
 func (s *Server) startGenerate(w http.ResponseWriter, r *http.Request, id string) {
@@ -462,23 +532,7 @@ func (s *Server) startGenerate(w http.ResponseWriter, r *http.Request, id string
 		s.draftBack(w, r, id, "err", "اول بریف را پر کنید (حداقل حوزه‌ی کار یا معرفی کسب‌وکار)", "#brief")
 		return
 	}
-	p, ok := s.ai.Get(r.FormValue("provider"))
-	if !ok {
-		s.draftBack(w, r, id, "err", "هوش مصنوعی وصل نیست. اول در منوی «هوش مصنوعی» یک سرویس اضافه و تست کنید.", "#texts")
-		return
-	}
-	if p.Model == "" {
-		s.draftBack(w, r, id, "err", "برای «"+p.Name+"» هنوز مدلی انتخاب نشده. اول در منوی «هوش مصنوعی» مدل را انتخاب کنید.", "#texts")
-		return
-	}
-	if !p.Tested() || !p.TestOK {
-		// test right now so a bad key never starts a long job
-		if err := s.testAI(r.Context(), p); err != nil {
-			s.draftBack(w, r, id, "err", "هوش مصنوعی «"+p.Name+"» جواب نمی‌دهد: "+err.Error()+" — اول در منوی «هوش مصنوعی» درستش کنید.", "#texts")
-			return
-		}
-	}
-	client, err := s.ai.Client(p)
+	p, client, err := s.readyAI(r)
 	if err != nil {
 		s.draftBack(w, r, id, "err", err.Error(), "#texts")
 		return

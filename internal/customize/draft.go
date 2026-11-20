@@ -18,6 +18,7 @@ import (
 
 // Brief is what the client tells about their business.
 type Brief struct {
+	Story          string            `json:"story,omitempty"` // free description of the client and their wishes
 	SiteName       string            `json:"site_name"`
 	BrandLatin     string            `json:"brand_latin,omitempty"`
 	Business       string            `json:"business"` // field of work

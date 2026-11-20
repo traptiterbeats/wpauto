@@ -229,3 +229,28 @@ func TestContract(t *testing.T) {
 		t.Fatal("brief colour")
 	}
 }
+
+type fakeChat struct{ out string }
+
+func (f fakeChat) Chat(ctx context.Context, system, user string, jsonMode bool) (string, ai.Usage, error) {
+	return f.out, ai.Usage{}, nil
+}
+
+func TestFillBrief(t *testing.T) {
+	c := fakeChat{`{"site_name":"نارنج","business":"کافه","services":["قهوه","کیک"],"email":"x@y.z","phone":"0912 111 2233","socials":{"telegram":"@fake","instagram":"@naranj"},"color_primary":"#aa3300","color_secondary":"#ffffff"}`}
+	b, _, err := FillBrief(context.Background(), c, Brief{Story: "کافه در شیراز، تلفن 09121112233، اینستا @naranj", Business: "کافه‌ی خودم"}, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if b.SiteName != "نارنج" || b.Business != "کافه‌ی خودم" || b.Services != "قهوه\nکیک" || b.Email != "" || b.Phone != "0912 111 2233" ||
+		b.Socials["instagram"] != "@naranj" || b.Socials["telegram"] != "" || b.ColorPrimary != "#aa3300" {
+		t.Fatalf("%+v", b)
+	}
+	b, _, _ = FillBrief(context.Background(), c, Brief{Story: "x", Business: "old"}, true)
+	if b.Business != "کافه" {
+		t.Fatal("overwrite")
+	}
+	if _, _, err := FillBrief(context.Background(), c, Brief{}, false); err == nil {
+		t.Fatal("empty story must fail")
+	}
+}

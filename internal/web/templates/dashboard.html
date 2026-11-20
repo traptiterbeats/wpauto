@@ -27,7 +27,7 @@
         <h3>{{.Title}}</h3>
         <p class="muted">{{.Description}}</p>
       </div>
-      <span class="badge">به‌زودی</span>
+      {{if .Link}}<a class="btn" href="{{$.BasePath}}{{.Link}}">شروع</a>{{else}}<span class="badge">به‌زودی</span>{{end}}
     </li>
     {{end}}
   </ol>

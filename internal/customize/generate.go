@@ -45,6 +45,7 @@ func briefText(b Brief) string {
 	line("Phone", b.Phone)
 	line("Address", b.Address)
 	line("Other notes", b.Notes)
+	line("Client description and wishes (from the designer)", b.Story)
 	return sb.String()
 }
 

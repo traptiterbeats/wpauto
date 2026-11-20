@@ -114,3 +114,6 @@ button.small{padding:4px 10px;font-size:12px}
 .model-opt:hover{background:rgba(0,0,0,.04)}
 .model-opt[hidden]{display:none}
 .model-opt input{width:auto;margin:0}
+
+.story{border:1px dashed var(--accent);border-radius:10px;padding:12px;margin-bottom:12px}
+.story .row-actions{display:flex;gap:16px;flex-wrap:wrap;margin:6px 0}

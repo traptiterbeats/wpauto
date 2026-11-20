@@ -16,6 +16,24 @@
   <form id="brief" class="card form" method="post" action="{{.BasePath}}customize/{{.D.ID}}/brief">
     <h3>۱. بریف مشتری</h3>
     <input type="hidden" name="csrf" value="{{.CSRF}}">
+    <div class="story">
+      <label>درباره‌ی مشتری و خواسته‌هایش
+        <textarea name="story" rows="7" placeholder="هر چه درباره‌ی مشتری می‌دانید آزاد بنویسید: کارش، سابقه، خدمات، مخاطب، حس و لحنی که می‌خواهد، رنگ‌ها، چیزهایی که باید برجسته یا حذف شوند، تلفن و آیدی‌ها…">{{.D.Brief.Story}}</textarea>
+      </label>
+      {{if eq .Ready.AIState "ok" "untested"}}
+      <div class="row-actions">
+        <label class="check small"><input type="checkbox" name="overwrite"> خانه‌های پرشده را هم بازنویسی کن</label>
+        <label class="check small"><input type="checkbox" name="then_texts" checked> بعدش متن‌های سایت را هم بنویس</label>
+      </div>
+      <button type="submit" formaction="{{.BasePath}}customize/{{.D.ID}}/autofill" onclick="this.textContent='هوش مصنوعی در حال پر کردن…'">✨ پر کردن همه‌ی خانه‌ها با {{.Ready.AI.Name}}</button>
+      <p class="muted small">ایمیل، تلفن، نشانی و شبکه‌ها فقط وقتی پر می‌شوند که در همین توضیح آمده باشند. بقیه‌ی خانه‌ها را هوش از روی توضیح می‌نویسد.</p>
+      {{else if eq .Ready.AIState "nomodel"}}
+      <p class="small bad">برای پر کردن خودکار، اول <a href="{{.BasePath}}ai/{{.Ready.AI.ID}}/models">مدل هوش مصنوعی را انتخاب کنید</a>.</p>
+      {{else}}
+      <p class="small bad">برای پر کردن خودکار، اول <a href="{{.BasePath}}ai">هوش مصنوعی را وصل کنید</a>{{if eq .Ready.AIState "failed"}} (تست آخر ناموفق بود){{end}}.</p>
+      {{end}}
+    </div>
+    <p class="muted small">یا خانه‌ها را خودتان پر کنید:</p>
     {{with .D.Brief}}
     <div class="grid2">
       <label>نام سایت / برند<input name="site_name" value="{{.SiteName}}" required></label>

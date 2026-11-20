@@ -44,6 +44,10 @@ func TestCustomizeFlow(t *testing.T) {
 		}
 		_ = json.NewDecoder(r.Body).Decode(&body)
 		user := body.Messages[len(body.Messages)-1].Content
+		if strings.HasPrefix(user, "Client description:") {
+			_ = json.NewEncoder(w).Encode(map[string]any{"choices": []any{map[string]any{"message": map[string]string{"content": `{"site_name":"کافه نارنج","business":"کافه","about":"کافه‌ای دنج","services":["قهوه","کیک"],"phone":"0711-000","email":"made@up.test","socials":{"instagram":"@naranj"}}`}, "finish_reason": "stop"}}})
+			return
+		}
 		if !strings.Contains(user, "[\n") { // connection test
 			_ = json.NewEncoder(w).Encode(map[string]any{"choices": []any{map[string]any{"message": map[string]string{"content": `{"ok":true}`}, "finish_reason": "stop"}}})
 			return
@@ -116,6 +120,10 @@ func TestCustomizeFlow(t *testing.T) {
 	id := strings.TrimPrefix(r.Request.URL.Path, cfg.BasePath+"customize/")
 	if len(id) != 12 {
 		t.Fatalf("draft id from %s", r.Request.URL.Path)
+	}
+	post("customize/"+id+"/autofill", url.Values{"story": {"یک کافه در شیراز، اینستاگرام @naranj"}, "site_name": {"کافه نارنج"}})
+	if body := get("customize/" + id); !strings.Contains(body, "کافه‌ای دنج") || !strings.Contains(body, `value="@naranj"`) || strings.Contains(body, "made@up.test") || strings.Contains(body, "0711-000") {
+		t.Fatal("autofill did not fill the brief, or invented contact details")
 	}
 	post("customize/"+id+"/brief", url.Values{"site_name": {"کافه نارنج"}, "business": {"کافه"}, "email": {"hi@naranj.test"}})
 
