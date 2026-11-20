@@ -3,7 +3,10 @@
 <head>{{template "head" .}}<title>{{.Host.Name}} | wpauto</title></head>
 <body>
 {{template "nav" .}}
+<div class="layout">
+{{template "aside" .}}
 <main>
+  {{template "flash" .}}
   <a class="back" href="{{.BasePath}}hosts">→ بازگشت به هاست‌ها</a>
   <h2>{{.Host.Name}}</h2>
   <p class="muted" dir="ltr">{{.Host.Username}} @ {{.Host.URL}}</p>
@@ -47,5 +50,6 @@
     <button type="submit" class="ghost danger">حذف از پنل</button>
   </form>
 </main>
+</div>
 </body>
 </html>

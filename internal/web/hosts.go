@@ -31,6 +31,7 @@ func (s *Server) page(r *http.Request, extra map[string]any) map[string]any {
 	for k, v := range extra {
 		d[k] = v
 	}
+	s.layout(r, d)
 	return d
 }
 
@@ -90,7 +91,7 @@ func (s *Server) handleHostView(w http.ResponseWriter, r *http.Request) {
 	}
 	prof, _ := profile.Find(s.profiles(), h.ProfileID)
 	locked := prof != nil && h.Locked(prof.MaxLoginAttempts)
-	s.render(w, "host.html", s.page(r, map[string]any{"Host": h, "Profile": prof, "Locked": locked, "Profiles": s.profiles()}))
+	s.render(w, "host.html", s.page(r, map[string]any{"Crumb": h.Name, "Host": h, "Profile": prof, "Locked": locked, "Profiles": s.profiles()}))
 }
 
 // handleHostTest signs in and runs the read-only preflight.

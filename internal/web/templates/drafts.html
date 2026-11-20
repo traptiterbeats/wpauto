@@ -3,7 +3,10 @@
 <head>{{template "head" .}}<title>شخصی‌سازی | wpauto</title></head>
 <body>
 {{template "nav" .}}
+<div class="layout">
+{{template "aside" .}}
 <main>
+  {{template "flash" .}}
   <a class="back" href="{{.BasePath}}">→ بازگشت به کارها</a>
   <h2>شخصی‌سازی دمو برای مشتری</h2>
   <p class="muted">بریف مشتری، لوگو و تصاویرش را بدهید تا متن‌های دمو با هوش مصنوعی برای او نوشته شود. بعد در «نصب قالب و دمو» همین پیش‌نویس را انتخاب کنید.</p>
@@ -35,5 +38,6 @@
   <div class="card hint">قالبی با بسته‌ی دمو در کاتالوگ نیست. <a href="{{.BasePath}}themes">افزودن قالب</a></div>
   {{end}}
 </main>
+</div>
 </body>
 </html>

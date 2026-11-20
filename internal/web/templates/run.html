@@ -3,7 +3,10 @@
 <head>{{template "head" .}}<title>{{.Run.Title}} | wpauto</title></head>
 <body>
 {{template "nav" .}}
+<div class="layout">
+{{template "aside" .}}
 <main>
+  {{template "flash" .}}
   <a class="back" href="{{.BasePath}}runs">→ بازگشت به اجراها</a>
   <h2>{{.Run.Title}}</h2>
   <p class="muted">هاست: {{.Run.HostName}} · شروع: <span dir="ltr">{{.Run.StartedAt.Format "2006-01-02 15:04:05"}}</span> · وضعیت: <span id="status">{{template "status" .Run.Status}}</span></p>
@@ -16,14 +19,12 @@
   </form>
   {{end}}
 
-  <ol class="steps" id="steps">
-    {{range .Run.Steps}}<li data-id="{{.ID}}" class="st-{{.Status}}"><span class="dot"></span>{{.Title}}{{if .Error}} <span class="bad small">{{.Error}}</span>{{end}}</li>{{end}}
-  </ol>
 
   <h3>لاگ</h3>
   <pre class="log" id="log">{{range .Run.Log}}<span class="lv-{{.Level}}">{{.T.Format "15:04:05"}}  {{.Msg}}</span>
 {{end}}</pre>
 </main>
+</div>
 <script>
 (function(){
   var done = {{.Run.Done}}, after = {{len .Run.Log}};

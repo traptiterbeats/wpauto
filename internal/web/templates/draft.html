@@ -3,7 +3,10 @@
 <head>{{template "head" .}}<title>{{.D.Title}} | شخصی‌سازی | wpauto</title></head>
 <body>
 {{template "nav" .}}
+<div class="layout">
+{{template "aside" .}}
 <main>
+  {{template "flash" .}}
   <a class="back" href="{{.BasePath}}customize">→ بازگشت به پیش‌نویس‌ها</a>
   <h2>{{.D.Title}} <span class="muted small" dir="ltr">{{.D.Theme}}</span></h2>
   {{if .Error}}<div class="error">{{.Error}}</div>{{end}}
@@ -85,15 +88,16 @@
     </script>
     {{else}}
     {{if eq .D.Status "error"}}<div class="error">{{.D.Error}}</div>{{end}}
+    {{if eq .Ready.AIState "failed"}}<div class="error">آخرین تست هوش مصنوعی «{{.Ready.AI.Name}}» ناموفق بود. اول در <a href="{{.BasePath}}ai">هوش مصنوعی</a> درستش کنید یا از ستون کناری دوباره تست کنید.</div>{{end}}
     {{if .Providers}}
-    <form class="inline" method="post" action="{{.BasePath}}customize/{{.D.ID}}/generate">
+    <form class="inline" method="post" action="{{.BasePath}}customize/{{.D.ID}}/generate" onsubmit="this.querySelector('button').disabled=true">
       <input type="hidden" name="csrf" value="{{.CSRF}}">
-      <select name="provider">{{range .Providers}}<option value="{{.ID}}" {{if .Default}}selected{{end}}>{{.Name}} · {{.Model}}</option>{{end}}</select>
+      <select name="provider">{{range .Providers}}<option value="{{.ID}}" {{if .Default}}selected{{end}}>{{.Name}} · {{.Model}}{{if .Tested}}{{if .TestOK}} ✔{{else}} ✘ تست ناموفق{{end}}{{end}}</option>{{end}}</select>
       <button type="submit">{{if .D.Generated}}نوشتن دوباره با هوش مصنوعی{{else}}نوشتن متن‌ها با هوش مصنوعی{{end}}</button>
     </form>
     {{if .D.Tokens}}<p class="muted small">مصرف تا این‌جا: {{.D.Tokens}} توکن · {{.D.Provider}}</p>{{end}}
     {{else}}
-    <p class="hint">برای نوشتن خودکار، اول در <a href="{{.BasePath}}ai">هوش مصنوعی</a> یک سرویس اضافه کنید. متن‌ها را دستی هم می‌شود نوشت.</p>
+    <div class="error">هوش مصنوعی وصل نیست. اول در <a href="{{.BasePath}}ai">هوش مصنوعی</a> یک سرویس اضافه کنید؛ تا آن موقع این مرحله انجام نمی‌شود. متن‌ها را دستی هم می‌شود نوشت.</div>
     {{end}}
     {{end}}
     {{if not .HasSpec}}<p class="muted small">این دمو customize.json ندارد؛ متن‌ها خودکار از demo.json پیدا شده‌اند.</p>{{end}}
@@ -136,5 +140,6 @@
     <input type="hidden" name="csrf" value="{{.CSRF}}"><button class="ghost danger" type="submit">حذف پیش‌نویس</button>
   </form>
 </main>
+</div>
 </body>
 </html>

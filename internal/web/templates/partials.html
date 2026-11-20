@@ -1,7 +1,7 @@
 {{define "nav"}}
 <header class="top">
   <a href="{{.BasePath}}" class="brand">wpauto</a>
-  <nav><a href="{{.BasePath}}">کارها</a><a href="{{.BasePath}}hosts">هاست‌ها</a><a href="{{.BasePath}}themes">قالب‌ها</a><a href="{{.BasePath}}customize">شخصی‌سازی</a><a href="{{.BasePath}}ai">هوش مصنوعی</a><a href="{{.BasePath}}runs">اجراها</a></nav>
+  <nav>{{range .Sections}}<a href="{{$.BasePath}}{{.Path}}" {{if eq .Key $.Section.Key}}class="on" aria-current="page"{{end}}>{{.Title}}</a>{{end}}</nav>
   <span class="muted small">نسخه {{.Version}}</span>
   <form method="post" action="{{.BasePath}}logout" class="logout">
     <input type="hidden" name="csrf" value="{{.CSRF}}">
@@ -9,7 +9,61 @@
     <button type="submit" class="ghost">خروج</button>
   </form>
 </header>
+<div class="crumbs">
+  <span class="muted small">شما این‌جا هستید:</span>
+  <a href="{{.BasePath}}{{.Section.Path}}">{{.Section.Title}}</a>{{if .Crumb}}<span class="sep">‹</span><strong>{{.Crumb}}</strong>{{end}}
+</div>
 {{end}}
+{{define "aside"}}
+<aside class="side">
+  {{if .Run}}
+  <section class="side-card">
+    <h4>مراحل این اجرا</h4>
+    <ol class="plan" id="steps">
+      {{range .Run.Steps}}<li data-id="{{.ID}}" class="st-{{.Status}}"><span class="dot"></span><span class="t">{{.Title}}</span>{{if .Error}} <span class="bad small">{{.Error}}</span>{{end}}</li>{{end}}
+    </ol>
+  </section>
+  {{else if .Steps}}
+  <section class="side-card">
+    <h4>{{if .D}}مراحل این پروژه{{else}}مراحل این کار{{end}}</h4>
+    <ol class="plan" id="plan">
+      {{range .Steps}}<li data-id="{{.ID}}" class="pl-{{.State}}"><span class="dot"></span><span class="t">{{if .Link}}<a href="{{.Link}}">{{.Title}}</a>{{else}}{{.Title}}{{end}}</span><span class="pl-note small">{{.Note}}</span></li>{{end}}
+    </ol>
+    {{if not .D}}<p class="muted small">مرحله‌های کم‌رنگ با تنظیمات فعلی فرم لازم نیستند و اجرا نمی‌شوند.</p>{{end}}
+  </section>
+  {{end}}
+  <section class="side-card">
+    <h4>آمادگی پنل</h4>
+    <ul class="ready">
+      {{with .Ready}}
+      <li class="{{if .CheckedHosts}}r-ok{{else if .Hosts}}r-warn{{else}}r-bad{{end}}">
+        <span class="dot"></span><a href="{{$.BasePath}}hosts">هاست</a>
+        <span class="small muted">{{if .CheckedHosts}}{{.CheckedHosts}} هاست بررسی‌شده{{else if .Hosts}}هنوز بررسی نشده{{else}}هاستی اضافه نشده{{end}}</span>
+      </li>
+      <li class="r-{{.AIState}}">
+        <span class="dot"></span><a href="{{$.BasePath}}ai">هوش مصنوعی</a>
+        {{with .AI}}
+        <span class="small" dir="auto">{{.Name}} · <span dir="ltr">{{.Model}}</span></span>
+        <span class="small {{if eq $.Ready.AIState "ok"}}ok{{else if eq $.Ready.AIState "failed"}}bad{{else}}warn{{end}}">{{if eq $.Ready.AIState "ok"}}✔ تست موفق <span dir="ltr">{{.TestedAt.Format "01-02 15:04"}}</span>{{else if eq $.Ready.AIState "failed"}}✘ تست ناموفق{{else}}هنوز تست نشده{{end}}</span>
+        {{if eq $.Ready.AIState "failed"}}<span class="small bad" dir="auto">{{.TestErr}}</span>{{end}}
+        <form method="post" action="{{$.BasePath}}ai/{{.ID}}/test" class="side-test">
+          <input type="hidden" name="csrf" value="{{$.CSRF}}"><input type="hidden" name="back" value="{{$.Here}}">
+          <button type="submit" class="ghost small" onclick="this.textContent='در حال تست…'">تست اتصال</button>
+        </form>
+        {{else}}
+        <span class="small bad">وصل نیست — <a href="{{$.BasePath}}ai">افزودن سرویس</a></span>
+        {{end}}
+      </li>
+      <li class="{{if .Themes}}r-ok{{else}}r-bad{{end}}">
+        <span class="dot"></span><a href="{{$.BasePath}}themes">قالب‌ها</a>
+        <span class="small muted">{{if .Themes}}{{.Themes}} قالب در کاتالوگ{{else}}کاتالوگ خالی است{{end}}</span>
+      </li>
+      {{end}}
+    </ul>
+  </section>
+</aside>
+{{end}}
+{{define "flash"}}{{if .Flash}}<div class="{{if eq .FlashKind "err"}}error{{else}}card hint ok{{end}}">{{.Flash}}</div>{{end}}{{end}}
 {{define "head"}}
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">

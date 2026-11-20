@@ -46,7 +46,7 @@ func (s *Server) handleRunForm(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	s.render(w, "run_form.html", s.page(r, map[string]any{
-		"WF": wf, "Hosts": hosts, "HostID": hostID, "Domains": domains, "Error": r.URL.Query().Get("err"),
+		"Crumb": wf.Title, "Steps": planSteps(wf, nil), "WF": wf, "Hosts": hosts, "HostID": hostID, "Domains": domains, "Error": r.URL.Query().Get("err"),
 		"Themes": engine.Catalog().List(), "Drafts": engine.Drafts().List(),
 		"Q": map[string]string{"theme": r.URL.Query().Get("theme"), "draft": r.URL.Query().Get("draft")},
 	}))
@@ -124,7 +124,7 @@ func (s *Server) handleRunView(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	s.render(w, "run.html", s.page(r, map[string]any{"Run": run}))
+	s.render(w, "run.html", s.page(r, map[string]any{"Run": run, "Crumb": run.Title}))
 }
 
 func (s *Server) handleRunJSON(w http.ResponseWriter, r *http.Request) {
@@ -137,6 +137,39 @@ func (s *Server) handleRunJSON(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Cache-Control", "no-store")
 	_ = json.NewEncoder(w).Encode(map[string]any{"status": run.Status, "error": run.Error, "steps": run.Steps, "log": run.Log, "done": run.Done()})
+}
+
+// planSteps lists a workflow's steps with whether each is needed for the inputs.
+func planSteps(wf *engine.Workflow, inputs map[string]string) []sideStep {
+	plan := engine.StepPlan(wf, inputs)
+	out := make([]sideStep, len(wf.Steps))
+	for i, st := range wf.Steps {
+		out[i] = sideStep{ID: st.ID, Title: st.Title, State: plan[i]}
+	}
+	return out
+}
+
+// handleRunPlan answers which steps a form's current inputs need (read-only).
+func (s *Server) handleRunPlan(w http.ResponseWriter, r *http.Request) {
+	wf, ok := engine.FindWorkflow(s.workflows(), r.PathValue("wf"))
+	if !ok {
+		http.NotFound(w, r)
+		return
+	}
+	inputs := map[string]string{}
+	for _, in := range wf.Inputs {
+		if in.Type == "password" {
+			continue
+		}
+		if v, ok := r.URL.Query()["in_"+in.Name]; ok {
+			inputs[in.Name] = v[0]
+		} else if in.Type == "checkbox" {
+			inputs[in.Name] = "false"
+		}
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", "no-store")
+	_ = json.NewEncoder(w).Encode(map[string]any{"steps": planSteps(wf, inputs)})
 }
 
 func (s *Server) handleRunCancel(w http.ResponseWriter, r *http.Request) {

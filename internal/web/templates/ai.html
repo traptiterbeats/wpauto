@@ -3,20 +3,24 @@
 <head>{{template "head" .}}<title>هوش مصنوعی | wpauto</title></head>
 <body>
 {{template "nav" .}}
+<div class="layout">
+{{template "aside" .}}
 <main>
+  {{template "flash" .}}
   <a class="back" href="{{.BasePath}}">→ بازگشت به کارها</a>
   <h2>سرویس‌های هوش مصنوعی</h2>
-  <p class="muted">برای نوشتن متن‌های سایت مشتری در صفحه‌ی «شخصی‌سازی». کلیدها رمزنگاری‌شده روی سرور خودتان می‌مانند.</p>
+  <p class="muted">سرویس پیش‌فرض همان «هوش فعال» است که در ستون کناری می‌بینید. سرویس تازه موقع ذخیره خودکار تست می‌شود. برای نوشتن متن‌های سایت مشتری در صفحه‌ی «شخصی‌سازی». کلیدها رمزنگاری‌شده روی سرور خودتان می‌مانند.</p>
   {{if .Error}}<div class="error">{{.Error}}</div>{{end}}
   {{if .Msg}}<div class="card hint ok">{{.Msg}}</div>{{end}}
   {{if .Providers}}
   <table class="list">
-    <tr><th>نام</th><th>مدل</th><th>آدرس</th><th></th></tr>
+    <tr><th>نام</th><th>مدل</th><th>آدرس</th><th>وضعیت</th><th></th></tr>
     {{range .Providers}}
     <tr>
       <td>{{.Name}}{{if .Default}} <span class="badge">پیش‌فرض</span>{{end}}</td>
       <td dir="ltr">{{.Model}}</td>
       <td dir="ltr" class="small">{{.BaseURL}}</td>
+      <td class="small">{{if not .Tested}}<span class="warn">تست نشده</span>{{else if .TestOK}}<span class="ok">✔ وصل</span> <span class="muted" dir="ltr">{{.TestedAt.Format "01-02 15:04"}}</span>{{else}}<span class="bad" title="{{.TestErr}}">✘ تست ناموفق</span>{{end}}</td>
       <td class="row-actions">
         <form method="post" action="{{$.BasePath}}ai/{{.ID}}/test"><input type="hidden" name="csrf" value="{{$.CSRF}}"><button class="ghost" type="submit">تست</button></form>
         {{if not .Default}}<form method="post" action="{{$.BasePath}}ai/{{.ID}}/default"><input type="hidden" name="csrf" value="{{$.CSRF}}"><button class="ghost" type="submit">پیش‌فرض</button></form>{{end}}
@@ -52,5 +56,6 @@
   })();
   </script>
 </main>
+</div>
 </body>
 </html>

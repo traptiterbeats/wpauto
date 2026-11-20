@@ -3,7 +3,10 @@
 <head>{{template "head" .}}<title>داشبورد | wpauto</title></head>
 <body>
 {{template "nav" .}}
+<div class="layout">
+{{template "aside" .}}
 <main>
+  {{template "flash" .}}
   {{if eq .HostCount 0}}
   <div class="card hint">اول یک هاست اضافه کنید: <a href="{{.BasePath}}hosts">هاست‌ها</a></div>
   {{end}}
@@ -35,5 +38,6 @@
   <p><a href="{{.BasePath}}runs">همه‌ی اجراها</a></p>
   {{end}}
 </main>
+</div>
 </body>
 </html>

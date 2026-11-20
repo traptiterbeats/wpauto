@@ -126,3 +126,28 @@ func TestUAPIStepIsReadOnly(t *testing.T) {
 		t.Fatal("read-only allow-list wrong")
 	}
 }
+
+func TestStepPlan(t *testing.T) {
+	wfs, err := LoadWorkflows("")
+	if err != nil {
+		t.Fatal(err)
+	}
+	wf, ok := FindWorkflow(wfs, "wp-install")
+	if !ok {
+		t.Fatal("wp-install missing")
+	}
+	plan := func(mode string) map[string]string {
+		m := map[string]string{}
+		for i, p := range StepPlan(wf, map[string]string{"mode": mode}) {
+			m[wf.Steps[i].ID] = p
+		}
+		return m
+	}
+	sub, fol := plan("subdomain"), plan("subfolder")
+	if sub["subdomain"] != PlanYes || sub["folder"] != PlanNo || sub["ssl"] != PlanYes || sub["db"] != PlanYes {
+		t.Fatalf("subdomain plan: %v", sub)
+	}
+	if fol["subdomain"] != PlanNo || fol["folder"] != PlanYes || fol["php"] != PlanNo {
+		t.Fatalf("subfolder plan: %v", fol)
+	}
+}

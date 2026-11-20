@@ -170,3 +170,40 @@ func render(s string, data map[string]any) (string, error) {
 	}
 	return strings.ReplaceAll(b.String(), "<no value>", ""), nil
 }
+
+// Step plan values for StepPlan.
+const (
+	PlanYes   = "yes"   // the step runs with these inputs
+	PlanNo    = "no"    // the step is not needed with these inputs
+	PlanMaybe = "maybe" // decided by an earlier step's result
+)
+
+// StepPlan says for each step whether it will run with the given inputs,
+// before anything has run. Inputs missing from the map take their defaults.
+func StepPlan(wf *Workflow, inputs map[string]string) []string {
+	in := map[string]string{}
+	for _, i := range wf.Inputs {
+		in[i.Name] = i.Default
+	}
+	for k, v := range inputs {
+		in[k] = v
+	}
+	data := map[string]any{"Inputs": in, "Steps": map[string]map[string]string{}, "Host": map[string]string{}}
+	out := make([]string, len(wf.Steps))
+	for i, def := range wf.Steps {
+		out[i] = PlanYes
+		if def.If == "" {
+			continue
+		}
+		if strings.Contains(def.If, ".Steps") || strings.Contains(def.If, ".Host") {
+			out[i] = PlanMaybe
+			continue
+		}
+		v, err := render(def.If, data)
+		v = strings.TrimSpace(v)
+		if err == nil && (v == "" || v == "false" || v == "0") {
+			out[i] = PlanNo
+		}
+	}
+	return out
+}

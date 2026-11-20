@@ -27,7 +27,27 @@ func (s *Server) handleAI(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) aiBack(w http.ResponseWriter, r *http.Request, key, msg string) {
-	http.Redirect(w, r, s.cfg.BasePath+"ai?"+key+"="+url.QueryEscape(msg), http.StatusSeeOther)
+	target := s.cfg.BasePath + "ai"
+	if b := s.safeBack(r.FormValue("back")); b != "" {
+		target = b
+	}
+	sep := "?"
+	if strings.Contains(target, "?") {
+		sep = "&"
+	}
+	http.Redirect(w, r, target+sep+key+"="+url.QueryEscape(msg), http.StatusSeeOther)
+}
+
+// testAI checks a provider with a tiny request and records the result.
+func (s *Server) testAI(ctx context.Context, p ai.Provider) error {
+	c, err := s.ai.Client(p)
+	if err == nil {
+		tctx, cancel := context.WithTimeout(ctx, 90*time.Second)
+		err = c.Test(tctx)
+		cancel()
+	}
+	s.ai.SetTest(p.ID, err)
+	return err
 }
 
 func (s *Server) handleAIAdd(w http.ResponseWriter, r *http.Request) {
@@ -36,7 +56,11 @@ func (s *Server) handleAIAdd(w http.ResponseWriter, r *http.Request) {
 		s.aiBack(w, r, "err", err.Error())
 		return
 	}
-	s.aiBack(w, r, "msg", "«"+p.Name+"» اضافه شد. با دکمه‌ی تست از درست بودن کلید مطمئن شوید.")
+	if err := s.testAI(r.Context(), p); err != nil {
+		s.aiBack(w, r, "err", "«"+p.Name+"» اضافه شد ولی تستش ناموفق بود: "+err.Error())
+		return
+	}
+	s.aiBack(w, r, "msg", "✔ «"+p.Name+"» اضافه شد و تستش موفق بود")
 }
 
 func (s *Server) handleAIOp(w http.ResponseWriter, r *http.Request) {
@@ -54,13 +78,7 @@ func (s *Server) handleAIOp(w http.ResponseWriter, r *http.Request) {
 		_ = s.ai.SetDefault(id)
 		s.aiBack(w, r, "msg", "«"+p.Name+"» پیش‌فرض شد")
 	case "test":
-		c, err := s.ai.Client(p)
-		if err == nil {
-			ctx, cancel := context.WithTimeout(r.Context(), 90*time.Second)
-			err = c.Test(ctx)
-			cancel()
-		}
-		if err != nil {
+		if err := s.testAI(r.Context(), p); err != nil {
 			s.aiBack(w, r, "err", "«"+p.Name+"»: "+err.Error())
 			return
 		}
@@ -154,7 +172,7 @@ func (s *Server) handleDraft(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	data := map[string]any{"D": d, "Theme": t, "Providers": s.ai.List(), "Socials": customize.Socials,
+	data := map[string]any{"D": d, "Theme": t, "Providers": s.ai.List(), "Socials": customize.Socials, "Crumb": d.Title,
 		"Error": r.URL.Query().Get("err"), "Msg": r.URL.Query().Get("msg")}
 	if err != nil {
 		data["Error"] = err.Error()
@@ -196,6 +214,7 @@ func (s *Server) handleDraft(w http.ResponseWriter, r *http.Request) {
 			data["Supports"] = demo.Spec.Supports
 		}
 	}
+	data["Steps"] = s.draftSteps(d)
 	s.render(w, "draft.html", s.page(r, data))
 }
 
@@ -393,8 +412,15 @@ func (s *Server) startGenerate(w http.ResponseWriter, r *http.Request, id string
 	}
 	p, ok := s.ai.Get(r.FormValue("provider"))
 	if !ok {
-		s.draftBack(w, r, id, "err", "اول در صفحه‌ی «هوش مصنوعی» یک سرویس اضافه کنید", "#texts")
+		s.draftBack(w, r, id, "err", "هوش مصنوعی وصل نیست. اول در منوی «هوش مصنوعی» یک سرویس اضافه و تست کنید.", "#texts")
 		return
+	}
+	if !p.Tested() || !p.TestOK {
+		// test right now so a bad key never starts a long job
+		if err := s.testAI(r.Context(), p); err != nil {
+			s.draftBack(w, r, id, "err", "هوش مصنوعی «"+p.Name+"» جواب نمی‌دهد: "+err.Error()+" — اول در منوی «هوش مصنوعی» درستش کنید.", "#texts")
+			return
+		}
 	}
 	client, err := s.ai.Client(p)
 	if err != nil {
@@ -428,6 +454,9 @@ func (s *Server) startGenerate(w http.ResponseWriter, r *http.Request, id string
 				}
 				d.Generated = len(values)
 			}
+			if err == nil || len(values) > 0 {
+				s.ai.SetTest(p.ID, nil)
+			}
 			if err != nil {
 				d.Status, d.Error = "error", err.Error()
 				if len(values) > 0 {
@@ -440,4 +469,42 @@ func (s *Server) startGenerate(w http.ResponseWriter, r *http.Request, id string
 		})
 	}()
 	s.draftBack(w, r, id, "msg", "تولید متن‌ها شروع شد", "#texts")
+}
+
+// draftSteps is the side panel checklist of one customisation draft.
+func (s *Server) draftSteps(d *customize.Draft) []sideStep {
+	state := func(done bool) string {
+		if done {
+			return "done"
+		}
+		return "todo"
+	}
+	b := d.Brief
+	steps := []sideStep{
+		{ID: "brief", Title: "۱. بریف مشتری", State: state(b.SiteName != "" && strings.TrimSpace(b.Business+b.About+b.Services) != ""), Link: "#brief"},
+		{ID: "images", Title: "۲. لوگو و تصاویر", State: "optional", Note: "اختیاری", Link: "#images"},
+		{ID: "texts", Title: "۳. متن‌ها با هوش مصنوعی", State: state(d.Generated > 0), Link: "#texts"},
+		{ID: "install", Title: "۴. نصب روی سایت", State: "todo", Link: "#install"},
+	}
+	if d.Logo != "" || len(d.Images) > 0 {
+		steps[1].State, steps[1].Note = "done", ""
+	}
+	if d.Status == "generating" {
+		steps[2].State, steps[2].Note = "maybe", "در حال نوشتن…"
+	} else if d.Generated == 0 {
+		p, ok := s.ai.Get("")
+		switch {
+		case !ok:
+			steps[2].State, steps[2].Note, steps[2].Link = "blocked", "اول هوش مصنوعی را وصل کنید", s.cfg.BasePath+"ai"
+		case p.Tested() && !p.TestOK:
+			steps[2].State, steps[2].Note, steps[2].Link = "blocked", "تست هوش مصنوعی ناموفق است", s.cfg.BasePath+"ai"
+		}
+	}
+	for _, run := range s.runner.List(200) {
+		if run.WorkflowID == "theme-install" && run.Inputs["draft"] == d.ID && run.Status == engine.StatusSuccess {
+			steps[3].State, steps[3].Note = "done", run.Inputs["domain"]
+			break
+		}
+	}
+	return steps
 }

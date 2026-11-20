@@ -3,7 +3,10 @@
 <head>{{template "head" .}}<title>قالب‌ها | wpauto</title></head>
 <body>
 {{template "nav" .}}
+<div class="layout">
+{{template "aside" .}}
 <main>
+  {{template "flash" .}}
   <a class="back" href="{{.BasePath}}">→ بازگشت به کارها</a>
   <h2>کاتالوگ قالب‌ها</h2>
   <p class="muted">قالب‌هایی که اینجا هستند در کار «نصب قالب و دمو» قابل انتخاب‌اند.</p>
@@ -69,5 +72,6 @@
     <button type="submit">بارگذاری در کتابخانه</button>
   </form>
 </main>
+</div>
 </body>
 </html>

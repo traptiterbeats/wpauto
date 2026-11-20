@@ -52,7 +52,18 @@ type Provider struct {
 	Model     string `json:"model"`
 	SealedKey string `json:"key"`
 	Default   bool   `json:"default,omitempty"`
+
+	// Result of the last connection test (or real call).
+	TestedAt time.Time `json:"tested_at,omitempty"`
+	TestOK   bool      `json:"test_ok,omitempty"`
+	TestErr  string    `json:"test_err,omitempty"`
 }
+
+// Tested reports whether the provider was ever tested.
+func (p Provider) Tested() bool { return !p.TestedAt.IsZero() }
+
+// Usable reports whether the provider may be used: never tested, or last test passed.
+func (p Provider) Usable() bool { return !p.Tested() || p.TestOK }
 
 // Sealer encrypts API keys (secretbox.Box).
 type Sealer interface {
@@ -171,6 +182,21 @@ func (s *Store) Delete(id string) error {
 		s.list[0].Default = true
 	}
 	return s.save()
+}
+
+// SetTest records the result of a connection test or a real call.
+func (s *Store) SetTest(id string, err error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for i := range s.list {
+		if s.list[i].ID == id {
+			s.list[i].TestedAt, s.list[i].TestOK, s.list[i].TestErr = time.Now(), err == nil, ""
+			if err != nil {
+				s.list[i].TestErr = err.Error()
+			}
+		}
+	}
+	_ = s.save()
 }
 
 // SetDefault marks one provider as the default.

@@ -3,7 +3,10 @@
 <head>{{template "head" .}}<title>{{.WF.Title}} | wpauto</title></head>
 <body>
 {{template "nav" .}}
+<div class="layout">
+{{template "aside" .}}
 <main>
+  {{template "flash" .}}
   <a class="back" href="{{.BasePath}}">→ بازگشت به کارها</a>
   <h2>{{.WF.Title}}</h2>
   <p class="muted">{{.WF.Description}}</p>
@@ -11,7 +14,7 @@
   {{if not .Hosts}}
   <div class="card hint">هنوز هاستی ندارید. <a href="{{.BasePath}}hosts">افزودن هاست</a></div>
   {{else}}
-  <form class="card form" method="post" action="{{.BasePath}}run/{{.WF.ID}}" autocomplete="off">
+  <form class="card form" id="runform" method="post" action="{{.BasePath}}run/{{.WF.ID}}" autocomplete="off">
     <input type="hidden" name="csrf" value="{{.CSRF}}">
     <label>هاست
       <select name="host" onchange="location.href='{{.BasePath}}run/{{.WF.ID}}?theme={{.Q.theme}}&draft={{.Q.draft}}&host='+this.value">
@@ -49,10 +52,27 @@
       {{end}}
       {{if .Help}}<p class="muted small">{{.Help}}</p>{{end}}
     {{end}}
-    <ol class="muted small steps-preview">{{range .WF.Steps}}<li>{{.Title}}</li>{{end}}</ol>
     <button type="submit">شروع</button>
   </form>
   {{end}}
 </main>
+<script>
+(function(){
+  var f=document.getElementById('runform'); if(!f) return;
+  function update(){
+    var q=new URLSearchParams();
+    f.querySelectorAll('select[name^="in_"],input[type=checkbox][name^="in_"]').forEach(function(el){
+      if(el.type==='checkbox'){ q.set(el.name, el.checked?'true':'false'); } else { q.set(el.name, el.value); }
+    });
+    fetch('{{.BasePath}}run/{{.WF.ID}}/plan?'+q.toString(),{credentials:'same-origin'}).then(function(r){return r.json()}).then(function(d){
+      d.steps.forEach(function(st){
+        var li=document.querySelector('#plan li[data-id="'+st.id+'"]'); if(li) li.className='pl-'+st.state;
+      });
+    }).catch(function(){});
+  }
+  f.addEventListener('change', function(e){ if(e.target.matches('select[name^="in_"],input[type=checkbox]')) update(); });
+})();
+</script>
+</div>
 </body>
 </html>

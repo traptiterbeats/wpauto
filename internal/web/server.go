@@ -95,6 +95,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST "+bp+"hosts/{id}/edit", s.requireAuth(s.handleHostEdit))
 	mux.HandleFunc("POST "+bp+"hosts/{id}/delete", s.requireAuth(s.handleHostDelete))
 	mux.HandleFunc("GET "+bp+"run/{wf}", s.requireAuth(s.handleRunForm))
+	mux.HandleFunc("GET "+bp+"run/{wf}/plan", s.requireAuth(s.handleRunPlan))
 	mux.HandleFunc("POST "+bp+"run/{wf}", s.requireAuth(s.handleRunStart))
 	mux.HandleFunc("GET "+bp+"runs", s.requireAuth(s.handleRuns))
 	mux.HandleFunc("GET "+bp+"runs/{id}", s.requireAuth(s.handleRunView))

@@ -3,10 +3,14 @@
 <head>{{template "head" .}}<title>اجراها | wpauto</title></head>
 <body>
 {{template "nav" .}}
+<div class="layout">
+{{template "aside" .}}
 <main>
+  {{template "flash" .}}
   <a class="back" href="{{.BasePath}}">→ بازگشت به کارها</a>
   <h2>اجراها</h2>
   {{if .Runs}}{{template "runtable" .}}{{else}}<p class="muted">هنوز کاری اجرا نشده.</p>{{end}}
 </main>
+</div>
 </body>
 </html>

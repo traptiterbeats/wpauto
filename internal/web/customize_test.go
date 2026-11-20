@@ -39,7 +39,11 @@ func TestCustomizeFlow(t *testing.T) {
 			Messages []struct{ Content string } `json:"messages"`
 		}
 		_ = json.NewDecoder(r.Body).Decode(&body)
-		user := body.Messages[1].Content
+		user := body.Messages[len(body.Messages)-1].Content
+		if !strings.Contains(user, "[\n") { // connection test
+			_ = json.NewEncoder(w).Encode(map[string]any{"choices": []any{map[string]any{"message": map[string]string{"content": `{"ok":true}`}, "finish_reason": "stop"}}})
+			return
+		}
 		var items []map[string]string
 		_ = json.Unmarshal([]byte(user[strings.Index(user, "[\n"):]), &items)
 		out := map[string]string{}
