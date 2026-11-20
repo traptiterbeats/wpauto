@@ -15,6 +15,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -25,11 +26,12 @@ type Kind struct {
 	ID, Name, BaseURL, Model string
 }
 
-// Kinds are the presets offered in the panel. "compatible" is any OpenAI-compatible service.
+// Kinds are the presets offered in the panel. No model is preset: models come and go, so the panel
+// loads the provider's own model list after the key is saved and the user picks one. "compatible" is any OpenAI-compatible service.
 var Kinds = []Kind{
-	{"openai", "OpenAI", "https://api.openai.com/v1", "gpt-4o-mini"},
-	{"gemini", "Google Gemini", "https://generativelanguage.googleapis.com/v1beta/openai", "gemini-2.5-flash"},
-	{"openrouter", "OpenRouter", "https://openrouter.ai/api/v1", "openai/gpt-4o-mini"},
+	{"openai", "OpenAI", "https://api.openai.com/v1", ""},
+	{"gemini", "Google Gemini", "https://generativelanguage.googleapis.com/v1beta/openai", ""},
+	{"openrouter", "OpenRouter", "https://openrouter.ai/api/v1", ""},
 	{"compatible", "سرویس سازگار با OpenAI", "", ""},
 }
 
@@ -62,8 +64,9 @@ type Provider struct {
 // Tested reports whether the provider was ever tested.
 func (p Provider) Tested() bool { return !p.TestedAt.IsZero() }
 
-// Usable reports whether the provider may be used: never tested, or last test passed.
-func (p Provider) Usable() bool { return !p.Tested() || p.TestOK }
+// Usable reports whether the provider may be used: a model is chosen, and it was never tested or
+// the last test passed.
+func (p Provider) Usable() bool { return p.Model != "" && (!p.Tested() || p.TestOK) }
 
 // Sealer encrypts API keys (secretbox.Box).
 type Sealer interface {
@@ -142,9 +145,6 @@ func (s *Store) Add(p Provider, key string) (Provider, error) {
 	if !strings.HasPrefix(p.BaseURL, "https://") && !strings.HasPrefix(p.BaseURL, "http://") {
 		return p, errors.New("آدرس API باید با https:// شروع شود")
 	}
-	if p.Model == "" {
-		return p, errors.New("نام مدل را وارد کنید")
-	}
 	if strings.TrimSpace(key) == "" {
 		return p, errors.New("کلید API را وارد کنید")
 	}
@@ -197,6 +197,23 @@ func (s *Store) SetTest(id string, err error) {
 		}
 	}
 	_ = s.save()
+}
+
+// SetModel chooses the provider's model and clears the old test result.
+func (s *Store) SetModel(id, model string) (Provider, error) {
+	model = strings.TrimSpace(model)
+	if model == "" {
+		return Provider{}, errors.New("یک مدل انتخاب کنید")
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for i := range s.list {
+		if s.list[i].ID == id {
+			s.list[i].Model, s.list[i].TestedAt, s.list[i].TestOK, s.list[i].TestErr = model, time.Time{}, false, ""
+			return s.list[i], s.save()
+		}
+	}
+	return Provider{}, errors.New("سرویس پیدا نشد")
 }
 
 // SetDefault marks one provider as the default.
@@ -334,8 +351,95 @@ func JSONObject(s string) (map[string]any, error) {
 	return m, nil
 }
 
+// Model is one entry of the provider's model list.
+type Model struct {
+	ID, Name string
+	Chat     bool // false for embedding, image, audio and similar models
+}
+
+var nonChat = []string{"embed", "tts", "whisper", "dall-e", "imagen", "veo", "moderation", "transcribe", "audio", "-image", "image-", "aqa", "rerank", "realtime", "search-preview", "computer-use", "lyria", "native-audio"}
+
+// Models reads GET <base>/models. Chat models come first; Gemini's "models/" prefix is removed.
+func (c *Client) Models(ctx context.Context) ([]Model, error) {
+	req, err := http.NewRequestWithContext(ctx, "GET", strings.TrimRight(c.BaseURL, "/")+"/models", nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Authorization", "Bearer "+c.Key)
+	hc := c.HTTP
+	if hc == nil {
+		hc = &http.Client{Timeout: time.Minute}
+	}
+	resp, err := hc.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("اتصال به API نشد: %w", err)
+	}
+	defer resp.Body.Close()
+	raw, _ := io.ReadAll(io.LimitReader(resp.Body, 16<<20))
+	var r struct {
+		Data []struct {
+			ID   string `json:"id"`
+			Name string `json:"name"`
+		} `json:"data"`
+		Models []struct { // Gemini native shape, just in case
+			Name        string `json:"name"`
+			DisplayName string `json:"displayName"`
+		} `json:"models"`
+		Error *struct {
+			Message string `json:"message"`
+		} `json:"error"`
+	}
+	_ = json.Unmarshal(raw, &r)
+	if resp.StatusCode/100 != 2 {
+		msg := strings.TrimSpace(string(raw))
+		if r.Error != nil && r.Error.Message != "" {
+			msg = r.Error.Message
+		}
+		if len(msg) > 300 {
+			msg = msg[:300]
+		}
+		return nil, &APIError{Status: resp.StatusCode, Msg: msg}
+	}
+	var out []Model
+	seen := map[string]bool{}
+	add := func(id, name string) {
+		id = strings.TrimPrefix(strings.TrimSpace(id), "models/")
+		if id == "" || seen[id] {
+			return
+		}
+		seen[id] = true
+		m := Model{ID: id, Name: name, Chat: true}
+		low := strings.ToLower(id)
+		for _, w := range nonChat {
+			if strings.Contains(low, w) {
+				m.Chat = false
+			}
+		}
+		out = append(out, m)
+	}
+	for _, d := range r.Data {
+		add(d.ID, d.Name)
+	}
+	for _, d := range r.Models {
+		add(d.Name, d.DisplayName)
+	}
+	if len(out) == 0 {
+		return nil, errors.New("سرویس هیچ مدلی برنگرداند؛ نام مدل را دستی بنویسید")
+	}
+	sort.SliceStable(out, func(i, j int) bool {
+		if out[i].Chat != out[j].Chat {
+			return out[i].Chat
+		}
+		return out[i].ID < out[j].ID
+	})
+	return out, nil
+}
+
 // Test checks a provider with a tiny request.
 func (c *Client) Test(ctx context.Context) error {
+	if c.Model == "" {
+		return errors.New("هنوز مدلی انتخاب نشده")
+	}
 	out, _, err := c.Chat(ctx, "Reply with a JSON object only.", `Return {"ok": true}`, true)
 	if err != nil {
 		return err

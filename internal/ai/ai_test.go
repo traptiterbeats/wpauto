@@ -56,8 +56,11 @@ func TestChatFallsBackWithoutResponseFormat(t *testing.T) {
 func TestPresetsAndErrors(t *testing.T) {
 	st, _ := OpenStore(t.TempDir(), plainBox{})
 	p, err := st.Add(Provider{Kind: "gemini"}, "g")
-	if err != nil || !strings.Contains(p.BaseURL, "generativelanguage.googleapis.com") || p.Model == "" {
+	if err != nil || !strings.Contains(p.BaseURL, "generativelanguage.googleapis.com") || p.Model != "" || p.Usable() {
 		t.Fatalf("gemini preset: %+v %v", p, err)
+	}
+	if p, err = st.SetModel(p.ID, " gemini-x "); err != nil || p.Model != "gemini-x" || !p.Usable() {
+		t.Fatalf("set model: %+v %v", p, err)
 	}
 	if _, err := st.Add(Provider{Kind: "compatible"}, "k"); err == nil {
 		t.Fatal("compatible without url must fail")
@@ -73,5 +76,23 @@ func TestPresetsAndErrors(t *testing.T) {
 	c := &Client{BaseURL: srv.URL, Model: "m", Key: "k"}
 	if _, _, err := c.Chat(context.Background(), "s", "u", true); err == nil || !strings.Contains(err.Error(), "quota exceeded") {
 		t.Fatalf("error not surfaced: %v", err)
+	}
+}
+
+func TestModelsList(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1/models" || r.Header.Get("Authorization") != "Bearer k" {
+			w.WriteHeader(401)
+			return
+		}
+		_, _ = w.Write([]byte(`{"data":[{"id":"models/gemini-embedding-1"},{"id":"models/gemini-3.8-flash","name":"Gemini Flash"},{"id":"models/aaa-pro"}]}`))
+	}))
+	defer srv.Close()
+	ms, err := (&Client{BaseURL: srv.URL + "/v1", Key: "k"}).Models(context.Background())
+	if err != nil || len(ms) != 3 || ms[0].ID != "aaa-pro" || ms[1].ID != "gemini-3.8-flash" || ms[2].Chat {
+		t.Fatalf("models: %+v %v", ms, err)
+	}
+	if _, err := (&Client{BaseURL: srv.URL + "/v1", Key: "bad"}).Models(context.Background()); err == nil {
+		t.Fatal("401 must fail")
 	}
 }

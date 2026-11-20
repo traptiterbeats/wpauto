@@ -109,6 +109,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST "+bp+"plugins/{slug}/delete", s.requireAuth(s.handlePluginDelete))
 	mux.HandleFunc("GET "+bp+"ai", s.requireAuth(s.handleAI))
 	mux.HandleFunc("POST "+bp+"ai/add", s.requireAuth(s.handleAIAdd))
+	mux.HandleFunc("GET "+bp+"ai/{id}/models", s.requireAuth(s.handleAIModels))
+	mux.HandleFunc("POST "+bp+"ai/{id}/model", s.requireAuth(s.handleAIModelSet))
 	mux.HandleFunc("POST "+bp+"ai/{id}/{op}", s.requireAuth(s.handleAIOp))
 	mux.HandleFunc("GET "+bp+"customize", s.requireAuth(s.handleDrafts))
 	mux.HandleFunc("POST "+bp+"customize/new", s.requireAuth(s.handleDraftNew))

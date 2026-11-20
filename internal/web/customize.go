@@ -56,11 +56,63 @@ func (s *Server) handleAIAdd(w http.ResponseWriter, r *http.Request) {
 		s.aiBack(w, r, "err", err.Error())
 		return
 	}
+	if p.Model == "" {
+		// no model typed: load the provider's list and let the user pick
+		http.Redirect(w, r, s.cfg.BasePath+"ai/"+p.ID+"/models", http.StatusSeeOther)
+		return
+	}
 	if err := s.testAI(r.Context(), p); err != nil {
-		s.aiBack(w, r, "err", "«"+p.Name+"» اضافه شد ولی تستش ناموفق بود: "+err.Error())
+		s.aiBack(w, r, "err", "«"+p.Name+"» اضافه شد ولی تستش ناموفق بود: "+err.Error()+" — با دکمه‌ی «انتخاب مدل» مدل دیگری بردارید.")
 		return
 	}
 	s.aiBack(w, r, "msg", "✔ «"+p.Name+"» اضافه شد و تستش موفق بود")
+}
+
+// handleAIModels loads the provider's model list so the user picks the main model.
+func (s *Server) handleAIModels(w http.ResponseWriter, r *http.Request) {
+	p, ok := s.ai.Get(r.PathValue("id"))
+	if !ok || r.PathValue("id") == "" {
+		s.aiBack(w, r, "err", "سرویس پیدا نشد")
+		return
+	}
+	data := map[string]any{"P": p, "Crumb": "انتخاب مدل · " + p.Name, "Error": r.URL.Query().Get("err")}
+	c, err := s.ai.Client(p)
+	if err == nil {
+		ctx, cancel := context.WithTimeout(r.Context(), time.Minute)
+		var models []ai.Model
+		models, err = c.Models(ctx)
+		cancel()
+		data["Models"] = models
+		chat := 0
+		for _, m := range models {
+			if m.Chat {
+				chat++
+			}
+		}
+		data["ChatCount"] = chat
+	}
+	if err != nil {
+		data["LoadErr"] = err.Error()
+	}
+	s.render(w, "ai_models.html", s.page(r, data))
+}
+
+func (s *Server) handleAIModelSet(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	model := r.FormValue("model")
+	if m := strings.TrimSpace(r.FormValue("custom")); m != "" {
+		model = m
+	}
+	p, err := s.ai.SetModel(id, model)
+	if err != nil {
+		http.Redirect(w, r, s.cfg.BasePath+"ai/"+id+"/models?err="+url.QueryEscape(err.Error()), http.StatusSeeOther)
+		return
+	}
+	if err := s.testAI(r.Context(), p); err != nil {
+		http.Redirect(w, r, s.cfg.BasePath+"ai/"+id+"/models?err="+url.QueryEscape("مدل «"+p.Model+"» ذخیره شد ولی تستش ناموفق بود: "+err.Error()+" — مدل دیگری انتخاب کنید."), http.StatusSeeOther)
+		return
+	}
+	s.aiBack(w, r, "msg", "✔ مدل اصلی «"+p.Name+"» شد "+p.Model+" و تستش موفق بود")
 }
 
 func (s *Server) handleAIOp(w http.ResponseWriter, r *http.Request) {
@@ -415,6 +467,10 @@ func (s *Server) startGenerate(w http.ResponseWriter, r *http.Request, id string
 		s.draftBack(w, r, id, "err", "هوش مصنوعی وصل نیست. اول در منوی «هوش مصنوعی» یک سرویس اضافه و تست کنید.", "#texts")
 		return
 	}
+	if p.Model == "" {
+		s.draftBack(w, r, id, "err", "برای «"+p.Name+"» هنوز مدلی انتخاب نشده. اول در منوی «هوش مصنوعی» مدل را انتخاب کنید.", "#texts")
+		return
+	}
 	if !p.Tested() || !p.TestOK {
 		// test right now so a bad key never starts a long job
 		if err := s.testAI(r.Context(), p); err != nil {
@@ -496,6 +552,8 @@ func (s *Server) draftSteps(d *customize.Draft) []sideStep {
 		switch {
 		case !ok:
 			steps[2].State, steps[2].Note, steps[2].Link = "blocked", "اول هوش مصنوعی را وصل کنید", s.cfg.BasePath+"ai"
+		case p.Model == "":
+			steps[2].State, steps[2].Note, steps[2].Link = "blocked", "اول مدل هوش مصنوعی را انتخاب کنید", s.cfg.BasePath+"ai/"+p.ID+"/models"
 		case p.Tested() && !p.TestOK:
 			steps[2].State, steps[2].Note, steps[2].Link = "blocked", "تست هوش مصنوعی ناموفق است", s.cfg.BasePath+"ai"
 		}

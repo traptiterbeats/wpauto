@@ -43,13 +43,17 @@
       <li class="r-{{.AIState}}">
         <span class="dot"></span><a href="{{$.BasePath}}ai">هوش مصنوعی</a>
         {{with .AI}}
-        <span class="small" dir="auto">{{.Name}} · <span dir="ltr">{{.Model}}</span></span>
+        <span class="small" dir="auto">{{.Name}} · <span dir="ltr">{{if .Model}}{{.Model}}{{else}}—{{end}}</span></span>
+        {{if eq $.Ready.AIState "nomodel"}}
+        <span class="small bad">مدل انتخاب نشده — <a href="{{$.BasePath}}ai/{{.ID}}/models">انتخاب مدل</a></span>
+        {{else}}
         <span class="small {{if eq $.Ready.AIState "ok"}}ok{{else if eq $.Ready.AIState "failed"}}bad{{else}}warn{{end}}">{{if eq $.Ready.AIState "ok"}}✔ تست موفق <span dir="ltr">{{.TestedAt.Format "01-02 15:04"}}</span>{{else if eq $.Ready.AIState "failed"}}✘ تست ناموفق{{else}}هنوز تست نشده{{end}}</span>
         {{if eq $.Ready.AIState "failed"}}<span class="small bad" dir="auto">{{.TestErr}}</span>{{end}}
         <form method="post" action="{{$.BasePath}}ai/{{.ID}}/test" class="side-test">
           <input type="hidden" name="csrf" value="{{$.CSRF}}"><input type="hidden" name="back" value="{{$.Here}}">
           <button type="submit" class="ghost small" onclick="this.textContent='در حال تست…'">تست اتصال</button>
         </form>
+        {{end}}
         {{else}}
         <span class="small bad">وصل نیست — <a href="{{$.BasePath}}ai">افزودن سرویس</a></span>
         {{end}}

@@ -46,11 +46,13 @@ type readiness struct {
 	AICount                     int
 }
 
-// AIState is "none", "ok", "failed" or "untested".
+// AIState is "none", "nomodel", "ok", "failed" or "untested".
 func (r readiness) AIState() string {
 	switch {
 	case r.AI == nil:
 		return "none"
+	case r.AI.Model == "":
+		return "nomodel"
 	case !r.AI.Tested():
 		return "untested"
 	case r.AI.TestOK:

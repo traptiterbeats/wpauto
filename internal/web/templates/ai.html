@@ -18,11 +18,12 @@
     {{range .Providers}}
     <tr>
       <td>{{.Name}}{{if .Default}} <span class="badge">پیش‌فرض</span>{{end}}</td>
-      <td dir="ltr">{{.Model}}</td>
+      <td dir="ltr">{{if .Model}}{{.Model}}{{else}}<span class="warn" dir="rtl">انتخاب نشده</span>{{end}}</td>
       <td dir="ltr" class="small">{{.BaseURL}}</td>
-      <td class="small">{{if not .Tested}}<span class="warn">تست نشده</span>{{else if .TestOK}}<span class="ok">✔ وصل</span> <span class="muted" dir="ltr">{{.TestedAt.Format "01-02 15:04"}}</span>{{else}}<span class="bad" title="{{.TestErr}}">✘ تست ناموفق</span>{{end}}</td>
+      <td class="small">{{if not .Model}}<span class="warn">مدل انتخاب نشده</span>{{else if not .Tested}}<span class="warn">تست نشده</span>{{else if .TestOK}}<span class="ok">✔ وصل</span> <span class="muted" dir="ltr">{{.TestedAt.Format "01-02 15:04"}}</span>{{else}}<span class="bad" title="{{.TestErr}}">✘ تست ناموفق</span>{{end}}</td>
       <td class="row-actions">
-        <form method="post" action="{{$.BasePath}}ai/{{.ID}}/test"><input type="hidden" name="csrf" value="{{$.CSRF}}"><button class="ghost" type="submit">تست</button></form>
+        <a class="btn ghost small" style="color:inherit" href="{{$.BasePath}}ai/{{.ID}}/models">انتخاب مدل</a>
+        {{if .Model}}<form method="post" action="{{$.BasePath}}ai/{{.ID}}/test"><input type="hidden" name="csrf" value="{{$.CSRF}}"><button class="ghost" type="submit">تست</button></form>{{end}}
         {{if not .Default}}<form method="post" action="{{$.BasePath}}ai/{{.ID}}/default"><input type="hidden" name="csrf" value="{{$.CSRF}}"><button class="ghost" type="submit">پیش‌فرض</button></form>{{end}}
         <form method="post" action="{{$.BasePath}}ai/{{.ID}}/delete" onsubmit="return confirm('حذف شود؟')"><input type="hidden" name="csrf" value="{{$.CSRF}}"><button class="ghost danger" type="submit">حذف</button></form>
       </td>
@@ -44,14 +45,17 @@
     <label>نام (اختیاری)<input name="name" placeholder="مثلاً OpenAI کاری"></label>
     <label>آدرس API<input name="base_url" id="base_url" dir="ltr" placeholder="https://api.example.com/v1"></label>
     <p class="muted small">برای سرویس‌های سازگار (مثل AvalAI، GapGPT، DeepSeek، Groq یا سرور خودتان) آدرسی را بنویسید که به /chat/completions ختم می‌شود، بدون همین بخش آخر.</p>
-    <label>مدل<input name="model" id="model" dir="ltr"></label>
     <label>کلید API<input name="key" type="password" required dir="ltr" autocomplete="off"></label>
-    <button type="submit">ذخیره</button>
+    <details class="small"><summary>نام مدل را خودم می‌دانم (اختیاری)</summary>
+      <label>مدل<input name="model" id="model" dir="ltr" placeholder="خالی بگذارید تا لیست مدل‌ها بیاید"></label>
+    </details>
+    <p class="muted small">بعد از ذخیره، لیست همه‌ی مدل‌های این حساب از خود سرویس خوانده می‌شود و یکی را به‌عنوان مدل اصلی انتخاب می‌کنید.</p>
+    <button type="submit" onclick="this.textContent='در حال خواندن مدل‌ها…'">ذخیره و دیدن مدل‌ها</button>
   </form>
   <script>
   (function(){
-    var k=document.getElementById('kind'),u=document.getElementById('base_url'),m=document.getElementById('model');
-    function fill(){var o=k.options[k.selectedIndex];u.value=o.dataset.url;m.value=o.dataset.model;}
+    var k=document.getElementById('kind'),u=document.getElementById('base_url');
+    function fill(){var o=k.options[k.selectedIndex];u.value=o.dataset.url;}
     k.addEventListener('change',fill);fill();
   })();
   </script>

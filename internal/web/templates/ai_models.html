@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="fa" dir="rtl">
+<head>{{template "head" .}}<title>انتخاب مدل | wpauto</title></head>
+<body>
+{{template "nav" .}}
+<div class="layout">
+{{template "aside" .}}
+<main>
+  {{template "flash" .}}
+  <a class="back" href="{{.BasePath}}ai">→ بازگشت به هوش مصنوعی</a>
+  <h2>انتخاب مدل اصلی · {{.P.Name}}</h2>
+  <p class="muted">مدل فعلی: <span dir="ltr">{{if .P.Model}}{{.P.Model}}{{else}}—{{end}}</span>. مدلی که انتخاب کنید همان لحظه تست می‌شود.</p>
+  {{if .Error}}<div class="error">{{.Error}}</div>{{end}}
+  {{if .LoadErr}}
+  <div class="error">لیست مدل‌ها خوانده نشد: {{.LoadErr}}</div>
+  <p class="muted">کلید یا آدرس API را بررسی کنید، یا نام مدل را دستی بنویسید.</p>
+  {{end}}
+  <form class="card form" method="post" action="{{.BasePath}}ai/{{.P.ID}}/model">
+    <input type="hidden" name="csrf" value="{{.CSRF}}">
+    {{if .Models}}
+    <p class="small muted">{{len .Models}} مدل در این حساب، {{.ChatCount}} مدل متنی.</p>
+    <label>جست‌وجو<input id="mq" dir="ltr" placeholder="flash, gpt, claude…" autocomplete="off"></label>
+    <label class="small"><input type="checkbox" id="mall"> نمایش مدل‌های غیرمتنی هم (تصویر، صدا، embedding)</label>
+    <div class="model-list" id="ml">
+      {{range .Models}}
+      <label class="model-opt{{if not .Chat}} nonchat{{end}}" data-id="{{.ID}}" {{if not .Chat}}hidden{{end}}>
+        <input type="radio" name="model" value="{{.ID}}" {{if eq .ID $.P.Model}}checked{{end}}>
+        <span dir="ltr">{{.ID}}</span>{{if and .Name (ne .Name .ID)}} <span class="small muted" dir="auto">{{.Name}}</span>{{end}}
+      </label>
+      {{end}}
+    </div>
+    {{end}}
+    <details class="small" {{if .LoadErr}}open{{end}}><summary>نوشتن دستی نام مدل</summary>
+      <label>مدل<input name="custom" dir="ltr" placeholder="مثلاً model-name"></label>
+    </details>
+    <button type="submit" onclick="this.textContent='در حال تست…'">ذخیره به‌عنوان مدل اصلی و تست</button>
+  </form>
+  <script>
+  (function(){
+    var q=document.getElementById('mq'),a=document.getElementById('mall');if(!q)return;
+    function f(){var t=q.value.toLowerCase().trim();document.querySelectorAll('.model-opt').forEach(function(e){
+      var ok=(!t||e.dataset.id.toLowerCase().indexOf(t)>=0)&&(a.checked||!e.classList.contains('nonchat'));e.hidden=!ok;});}
+    q.addEventListener('input',f);a.addEventListener('change',f);f();
+  })();
+  </script>
+</main>
+</div>
+</body>
+</html>

@@ -35,6 +35,10 @@ func TestCustomizeFlow(t *testing.T) {
 	}
 	// Fake OpenAI-compatible API: rewrites every field.
 	api := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == "GET" && strings.HasSuffix(r.URL.Path, "/models") {
+			_, _ = w.Write([]byte(`{"data":[{"id":"models/text-embedding-9"},{"id":"models/m"},{"id":"models/old-flash"}]}`))
+			return
+		}
 		var body struct {
 			Messages []struct{ Content string } `json:"messages"`
 		}
@@ -89,7 +93,22 @@ func TestCustomizeFlow(t *testing.T) {
 		r.Body.Close()
 		return r
 	}
-	post("ai/add", url.Values{"kind": {"compatible"}, "base_url": {api.URL}, "model": {"m"}, "key": {"secret-key"}})
+	// No model typed: the panel loads the provider's model list and the user picks one.
+	r0 := post("ai/add", url.Values{"kind": {"compatible"}, "base_url": {api.URL}, "key": {"secret-key"}})
+	if !strings.HasSuffix(r0.Request.URL.Path, "/models") {
+		t.Fatalf("add without model went to %s", r0.Request.URL.Path)
+	}
+	pick := get(strings.TrimPrefix(r0.Request.URL.Path, cfg.BasePath))
+	if !strings.Contains(pick, `value="m"`) || !strings.Contains(pick, "old-flash") || !strings.Contains(pick, `nonchat" data-id="text-embedding-9"`) {
+		t.Fatalf("model list missing:\n%s", pick)
+	}
+	if body := get("customize"); !strings.Contains(body, "مدل انتخاب نشده") {
+		t.Fatal("side panel should say no model chosen")
+	}
+	pid := strings.Split(strings.TrimPrefix(r0.Request.URL.Path, cfg.BasePath+"ai/"), "/")[0]
+	if r := post("ai/"+pid+"/model", url.Values{"model": {"m"}}); r.Request.URL.Path != cfg.BasePath+"ai" {
+		t.Fatalf("model set went to %s", r.Request.URL.String())
+	}
 	if body := get("ai"); !strings.Contains(body, api.URL) || strings.Contains(body, "secret-key") {
 		t.Fatal("provider not listed or key leaked")
 	}
