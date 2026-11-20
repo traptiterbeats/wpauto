@@ -151,3 +151,24 @@ func TestStepPlan(t *testing.T) {
 		t.Fatalf("subfolder plan: %v", fol)
 	}
 }
+
+func TestDetectDomainIncludesSubdomains(t *testing.T) {
+	srv := cpaneltest.New(t, "kfncspot", "secret")
+	defer srv.Close()
+	r, _ := NewRunner(t.TempDir())
+	list, _ := LoadWorkflows("")
+	wf, _ := FindWorkflow(list, "wp-check-domain")
+	rej := 0
+	id, err := r.Start(wf, target(t, srv.URL, "secret", &rej), map[string]string{"domain": "example.com"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	run := wait(t, r, id)
+	all := ""
+	for _, l := range run.Log {
+		all += l.Msg + "\n"
+	}
+	if run.Status != StatusSuccess || !strings.Contains(all, "blog.example.com") {
+		t.Fatalf("subdomain not checked (%s):\n%s", run.Status, all)
+	}
+}

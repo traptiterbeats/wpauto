@@ -250,7 +250,8 @@ func stepWPDetect(ctx context.Context, rc *RunContext, args map[string]string) (
 		time.Sleep(200 * time.Millisecond) // be gentle with shared hosts
 	}
 	for _, r := range roots {
-		if want != "" && r.Domain != wantDomain {
+		// A domain also covers its subdomains (sub.domain.com), unless a folder was asked for.
+		if want != "" && r.Domain != wantDomain && (wantPath != "" || !strings.HasSuffix(r.Domain, "."+wantDomain)) {
 			continue
 		}
 		checked++
