@@ -7,9 +7,9 @@
 {{template "aside" .}}
 <main>
   {{template "flash" .}}
-  <a class="back" href="{{.BasePath}}runs">→ بازگشت به اجراها</a>
+  <a class="back" href="{{.BasePath}}">→ بازگشت به کارها</a>
   <h2>{{.Run.Title}}</h2>
-  <p class="muted">هاست: {{.Run.HostName}} · شروع: <span dir="ltr">{{.Run.StartedAt.Format "2006-01-02 15:04:05"}}</span> · وضعیت: <span id="status">{{template "status" .Run.Status}}</span></p>
+  <p class="muted">{{with .RunProject}}پروژه: <strong>{{.Name}}</strong> · {{end}}هاست: {{.Run.HostName}} · شروع: <span dir="ltr">{{.Run.StartedAt.Format "2006-01-02 15:04:05"}}</span> · وضعیت: <span id="status">{{template "status" .Run.Status}}</span></p>
   <div id="err" class="error" {{if not .Run.Error}}hidden{{end}}>{{.Run.Error}}</div>
 
   {{if not .Run.Done}}
@@ -20,6 +20,12 @@
   {{end}}
 
 
+  <section class="card">
+    <h4>مراحل</h4>
+    <ol class="plan steps-run" id="steps">
+      {{range .Run.Steps}}<li data-id="{{.ID}}" class="st-{{.Status}}"><span class="dot"></span><span class="t">{{.Title}}</span>{{if .Error}} <span class="bad small">{{.Error}}</span>{{end}}</li>{{end}}
+    </ol>
+  </section>
   <h3>لاگ</h3>
   <pre class="log" id="log">{{range .Run.Log}}<span class="lv-{{.Level}}">{{.T.Format "15:04:05"}}  {{.Msg}}</span>
 {{end}}</pre>

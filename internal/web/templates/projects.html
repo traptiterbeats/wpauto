@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="fa" dir="rtl">
+<head>{{template "head" .}}<title>پروژه‌ها | wpauto</title></head>
+<body>
+{{template "nav" .}}
+<div class="layout">
+{{template "aside" .}}
+<main>
+  {{template "flash" .}}
+  <a class="back" href="{{.BasePath}}">→ بازگشت به کارها</a>
+  <h2>پروژه‌ها</h2>
+  <p class="muted">هر پروژه یک سایت مشتری است. مرحله‌های ساختش (بررسی هاست، وردپرس، شخصی‌سازی، نصب قالب) در ستون کناری با موفق شدن هر کار روشن می‌شوند. کارهایی که اجرا می‌کنید به پروژه‌ی فعال نسبت داده می‌شوند.</p>
+  {{if .Error}}<div class="error">{{.Error}}</div>{{end}}
+  <form class="card form" method="post" action="{{.BasePath}}projects/new">
+    <h3>پروژه‌ی تازه</h3>
+    <input type="hidden" name="csrf" value="{{.CSRF}}">
+    <label>نام مشتری یا سایت<input name="name" required placeholder="مثلاً کارگاه نجاری سیس"></label>
+    {{if .Hosts}}<label>هاست<select name="host">{{range .Hosts}}<option value="{{.ID}}">{{.Name}}</option>{{end}}</select></label>{{end}}
+    <label>آدرس سایت (اختیاری)<input name="domain" dir="ltr" placeholder="test.example.com یا example.com/test"></label>
+    <p class="muted small">اگر هنوز وردپرس نصب نشده، خالی بگذارید؛ بعد از نصب یا تأیید وردپرس خودش پر می‌شود.</p>
+    <button type="submit">ساختن و فعال کردن</button>
+  </form>
+  {{if .List}}
+  <table class="list">
+    <tr><th>پروژه</th><th>سایت</th><th>ساخته‌شده</th><th></th></tr>
+    {{range .List}}
+    <tr>
+      <td>{{.Name}}{{if and $.Project (eq .ID $.Project.ID)}} <span class="badge ok">فعال</span>{{end}}</td>
+      <td dir="ltr">{{.Site}}</td>
+      <td dir="ltr">{{.Created.Format "2006-01-02"}}</td>
+      <td class="inline">
+        {{if not (and $.Project (eq .ID $.Project.ID))}}<form method="post" action="{{$.BasePath}}projects/{{.ID}}/activate"><input type="hidden" name="csrf" value="{{$.CSRF}}"><input type="hidden" name="back" value="{{$.BasePath}}"><button class="small" type="submit">فعال کن</button></form>{{end}}
+        <form method="post" action="{{$.BasePath}}projects/{{.ID}}/delete" onsubmit="return confirm('پروژه حذف شود؟ اجراها و پیش‌نویس‌ها می‌مانند.')"><input type="hidden" name="csrf" value="{{$.CSRF}}"><button class="ghost danger small" type="submit">حذف</button></form>
+      </td>
+    </tr>
+    {{end}}
+  </table>
+  {{end}}
+</main>
+</div>
+</body>
+</html>

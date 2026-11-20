@@ -9,33 +9,51 @@
     <button type="submit" class="ghost">خروج</button>
   </form>
 </header>
+{{template "drawer" .}}
 <div class="crumbs">
   <span class="muted small">شما این‌جا هستید:</span>
   <a href="{{.BasePath}}{{.Section.Path}}">{{.Section.Title}}</a>{{if .Crumb}}<span class="sep">‹</span>{{if .CrumbLink}}<a href="{{.CrumbLink}}">{{.Crumb}}</a>{{else}}<strong>{{.Crumb}}</strong>{{end}}{{end}}
   {{range .SubNav}}<span class="sep">‹</span><a href="{{.Link}}" class="subnav{{if .Active}} on{{end}}{{if .Done}} done{{end}}" {{if .Active}}aria-current="step"{{end}}>{{.Title}}</a>{{end}}
 </div>
 {{end}}
+{{define "projectnote"}}
+{{if .Project}}<p class="small muted">این کار برای پروژه‌ی <strong>{{.Project.Name}}</strong> ثبت می‌شود و با موفقیتش، مرحله‌ی آن در ستون کناری روشن می‌شود.</p>
+{{else}}<p class="small warn">پروژه‌ای فعال نیست؛ این اجرا در مسیر هیچ پروژه‌ای ثبت نمی‌شود. <a href="{{.BasePath}}projects">ساخت پروژه</a></p>{{end}}
+{{end}}
+{{define "drawer"}}
+<button type="button" class="drawer-tab" id="drawertab" aria-controls="drawer" aria-expanded="false" onclick="var d=document.getElementById('drawer'),o=d.classList.toggle('open');this.setAttribute('aria-expanded',o)">اجراها{{range .Recent}}{{if not .Done}} ●{{end}}{{end}}</button>
+<aside class="drawer" id="drawer" aria-label="اجراها">
+  <div class="drawer-head"><h4>آخرین اجراها</h4><button type="button" class="ghost small" onclick="document.getElementById('drawer').classList.remove('open');document.getElementById('drawertab').setAttribute('aria-expanded','false')">بستن</button></div>
+  <ul class="drawer-list">
+    {{range .Recent}}<li class="st-{{.Status}}"><a href="{{$.BasePath}}runs/{{.ID}}"><span class="dot"></span><span><strong>{{.Title}}</strong><span class="small muted"> {{.HostName}}{{with index .Inputs "domain"}} · <span dir="ltr">{{.}}</span>{{end}}</span><br><span class="small muted" dir="ltr">{{.StartedAt.Format "01-02 15:04"}}</span> <span class="small">{{template "status" .Status}}</span></span></a></li>{{else}}<li class="muted small">هنوز اجرایی نیست.</li>{{end}}
+  </ul>
+  <a class="small" href="{{.BasePath}}runs">همه‌ی اجراها</a>
+</aside>
+{{end}}
 {{define "aside"}}
 <aside class="side">
   <section class="side-card">
+    <h4>پروژه</h4>
+    {{if .Projects}}
+    <form method="post" class="proj-switch" id="projswitch" action="">
+      <input type="hidden" name="csrf" value="{{.CSRF}}"><input type="hidden" name="back" value="{{.Here}}">
+      <select onchange="var f=this.form;f.action='{{.BasePath}}projects/'+this.value+'/activate';f.submit()">
+        <option value="none" {{if not .Project}}selected{{end}}>— بدون پروژه —</option>
+        {{range .Projects}}<option value="{{.ID}}" {{if and $.Project (eq .ID $.Project.ID)}}selected{{end}}>{{.Name}}</option>{{end}}
+      </select>
+    </form>
+    {{end}}
+    {{with .Project}}<p class="small muted" dir="auto">{{if .Domain}}<span dir="ltr">{{.Site}}</span>{{else}}سایت هنوز مشخص نشده{{end}}</p>{{end}}
+    <a class="small" href="{{.BasePath}}projects">+ پروژه‌ی تازه</a>
+  </section>
+  <section class="side-card">
     <h4>مسیر ساخت سایت</h4>
+    {{if not .Project}}<p class="muted small">یک پروژه بسازید یا انتخاب کنید تا مرحله‌هایش این‌جا روشن شوند.</p>{{end}}
     <ol class="pipe">
-      {{range .Pipeline}}
-      <li class="pp-{{.State}}{{if .Current}} current{{end}}">
+      {{range $i, $p := .Pipeline}}
+      <li class="pp-{{.State}}">
         <a href="{{.Link}}"><span class="dot"></span><span class="t">{{.Title}}</span></a>
-        {{if and .Note (not .Current)}}<span class="pl-note small">{{.Note}}</span>{{end}}
-        {{if .Current}}
-          {{if $.Run}}
-          <ol class="plan sub" id="steps">
-            {{range $.Run.Steps}}<li data-id="{{.ID}}" class="st-{{.Status}}"><span class="dot"></span><span class="t">{{.Title}}</span>{{if .Error}} <span class="bad small">{{.Error}}</span>{{end}}</li>{{end}}
-          </ol>
-          {{else if $.Steps}}
-          <ol class="plan sub" id="plan">
-            {{range $.Steps}}<li data-id="{{.ID}}" class="pl-{{.State}}"><span class="dot"></span><span class="t">{{if .Link}}<a href="{{.Link}}">{{.Title}}</a>{{else}}{{.Title}}{{end}}</span><span class="pl-note small">{{.Note}}</span></li>{{end}}
-          </ol>
-          {{if not $.D}}<p class="muted small">مرحله‌های کم‌رنگ با تنظیمات فعلی فرم لازم نیستند.</p>{{end}}
-          {{end}}
-        {{end}}
+        <span class="pl-note small">{{if eq .State "running"}}در حال انجام…{{else if eq .State "failed"}}آخرین اجرا ناموفق بود{{else}}{{.Note}}{{end}}{{if and .Alt (ne .State "done")}} · <a href="{{.AltLink}}">{{.Alt}}</a>{{end}}</span>
       </li>
       {{end}}
     </ol>

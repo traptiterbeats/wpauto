@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/traptiterbeats/wpauto/internal/config"
+	"github.com/traptiterbeats/wpauto/internal/store"
 )
 
 func TestLayoutAndPlan(t *testing.T) {
@@ -38,7 +39,7 @@ func TestLayoutAndPlan(t *testing.T) {
 		r.Body.Close()
 		return string(b)
 	}
-	for p, want := range map[string]string{"": "کارها", "hosts": "هاست‌ها", "themes": "قالب‌ها", "customize": "شخصی‌سازی", "ai": "هوش مصنوعی", "runs": "اجراها"} {
+	for p, want := range map[string]string{"": "کارها", "hosts": "هاست‌ها", "themes": "قالب‌ها", "customize": "شخصی‌سازی", "ai": "هوش مصنوعی", "runs": "کارها", "projects": "پروژه‌ها"} {
 		page := get(p)
 		if !strings.Contains(page, `class="on" aria-current="page">`+want+`<`) {
 			t.Errorf("%q: active menu %q missing", p, want)
@@ -67,8 +68,32 @@ func TestLayoutAndPlan(t *testing.T) {
 	if st["subdomain"] != "no" || st["folder"] != "yes" || st["ssl"] != "no" {
 		t.Fatalf("subfolder plan: %v", st)
 	}
+	// a new project starts with every stage dark; the runs drawer is on every page
+	if _, err := cl.PostForm(base+"projects/new", url.Values{"name": {"سیس"}, "domain": {"Example.com/Shop"}, "csrf": {csrfOf(t, get(""))}}); err != nil {
+		t.Fatal(err)
+	}
+	home := get("")
+	if !strings.Contains(home, "پروژه‌ی فعال: <strong>سیس</strong>") || strings.Count(home, `class="pp-todo"`) != 4 || !strings.Contains(home, `id="drawer"`) {
+		t.Fatalf("project not active or stages not dark")
+	}
+	if _, err := s.store.Add(store.Host{Name: "h", ProfileID: "generic", URL: "https://example.com:2083", Username: "u"}); err != nil {
+		t.Fatal(err)
+	}
+	if f := get("run/theme-install"); !strings.Contains(f, `value="shop"`) || !strings.Contains(f, `value="example.com"`) {
+		t.Fatal("run form does not take the project's folder")
+	}
 	// bad back targets never leave the panel
 	if s.safeBack("//evil.com") != "" || s.safeBack("https://evil.com") != "" || s.safeBack(cfg.BasePath+"runs") == "" {
 		t.Fatal("safeBack")
 	}
+}
+
+func csrfOf(t *testing.T, page string) string {
+	t.Helper()
+	i := strings.Index(page, `name="csrf" value="`)
+	if i < 0 {
+		t.Fatal("no csrf on page")
+	}
+	rest := page[i+len(`name="csrf" value="`):]
+	return rest[:strings.Index(rest, `"`)]
 }

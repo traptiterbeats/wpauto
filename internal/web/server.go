@@ -23,6 +23,7 @@ import (
 	"github.com/traptiterbeats/wpauto/internal/ai"
 	"github.com/traptiterbeats/wpauto/internal/config"
 	"github.com/traptiterbeats/wpauto/internal/engine"
+	"github.com/traptiterbeats/wpauto/internal/projects"
 	"github.com/traptiterbeats/wpauto/internal/secretbox"
 	"github.com/traptiterbeats/wpauto/internal/store"
 )
@@ -49,6 +50,7 @@ type Server struct {
 	runner      *engine.Runner
 	workflowDir string
 	ai          *ai.Store
+	projects    *projects.Store
 }
 
 // New builds a server from the configuration.
@@ -74,10 +76,14 @@ func New(cfg *config.Config, version string) (*Server, error) {
 	if err != nil {
 		return nil, err
 	}
+	projStore, err := projects.Open(dir)
+	if err != nil {
+		return nil, err
+	}
 	resetStuckDrafts()
 	return &Server{cfg: cfg, version: version, tpl: t, limiter: newLimiter(),
 		store: st, box: box, profileDir: filepath.Join(dir, "profiles"),
-		runner: runner, workflowDir: filepath.Join(dir, "workflows"), ai: aiStore}, nil
+		runner: runner, workflowDir: filepath.Join(dir, "workflows"), ai: aiStore, projects: projStore}, nil
 }
 
 // Handler returns the routed handler mounted under the configured base path.
@@ -101,6 +107,9 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET "+bp+"runs/{id}", s.requireAuth(s.handleRunView))
 	mux.HandleFunc("GET "+bp+"runs/{id}/json", s.requireAuth(s.handleRunJSON))
 	mux.HandleFunc("POST "+bp+"runs/{id}/cancel", s.requireAuth(s.handleRunCancel))
+	mux.HandleFunc("GET "+bp+"projects", s.requireAuth(s.handleProjects))
+	mux.HandleFunc("POST "+bp+"projects/new", s.requireAuth(s.handleProjectNew))
+	mux.HandleFunc("POST "+bp+"projects/{id}/{op}", s.requireAuth(s.handleProjectOp))
 	mux.HandleFunc("GET "+bp+"themes", s.requireAuth(s.handleThemes))
 	mux.HandleFunc("POST "+bp+"themes/add", s.uploads(s.handleThemeAdd))
 	mux.HandleFunc("POST "+bp+"themes/{slug}/delete", s.requireAuth(s.handleThemeDelete))

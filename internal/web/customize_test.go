@@ -154,7 +154,7 @@ func TestCustomizeFlow(t *testing.T) {
 	if !strings.Contains(page, "تازه ACME STUDIO") || !strings.Contains(get("customize/"+id+"?step=images"), "file/logo.png") {
 		t.Fatal("draft page does not show generated text and logo")
 	}
-	if !strings.Contains(page, `class="subnav on`) || !strings.Contains(page, "مسیر ساخت سایت") || !strings.Contains(page, `pp-done current`) {
+	if !strings.Contains(page, `class="subnav on`) || !strings.Contains(page, "مسیر ساخت سایت") || !strings.Contains(page, `id="drawer"`) {
 		t.Fatal("breadcrumb steps or site-building path missing")
 	}
 	if strings.Contains(page, `<form id="brief"`) {

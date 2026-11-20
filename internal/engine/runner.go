@@ -54,6 +54,7 @@ type Run struct {
 	Title      string            `json:"title"`
 	HostID     string            `json:"host_id"`
 	HostName   string            `json:"host_name"`
+	ProjectID  string            `json:"project_id,omitempty"`
 	Inputs     map[string]string `json:"inputs"` // passwords masked
 	Status     string            `json:"status"`
 	Error      string            `json:"error,omitempty"`
@@ -80,6 +81,9 @@ type Target struct {
 	OnReport func(*cpanel.Report)
 	// OnDomain is called after a successful run that created a (sub)domain, so forms list it.
 	OnDomain func(string)
+	// ProjectID ties the run to a client project; OnDone is called with the final status.
+	ProjectID string
+	OnDone    func(status string)
 }
 
 // RunContext is handed to each step.
@@ -216,7 +220,7 @@ func (r *Runner) Start(wf *Workflow, t *Target, inputs map[string]string) (strin
 		}
 	}
 	run := &Run{ID: time.Now().Format("20060102-150405") + "-" + config.RandString(4), WorkflowID: wf.ID, Title: wf.Title,
-		HostID: t.HostID, HostName: t.HostName, Inputs: masked, Status: StatusRunning, StartedAt: time.Now()}
+		HostID: t.HostID, HostName: t.HostName, ProjectID: t.ProjectID, Inputs: masked, Status: StatusRunning, StartedAt: time.Now()}
 	for _, s := range wf.Steps {
 		run.Steps = append(run.Steps, StepState{ID: s.ID, Title: s.Title, Status: StatusPending})
 	}
@@ -287,6 +291,9 @@ func (r *Runner) execute(ctx context.Context, wf *Workflow, t *Target, inputs ma
 		r.mu.Unlock()
 		r.log(run, "info", "", "پایان: "+final)
 		r.persist(run)
+		if t.OnDone != nil {
+			t.OnDone(final)
+		}
 	}()
 	for i, def := range wf.Steps {
 		if ctx.Err() != nil {

@@ -134,3 +134,30 @@ button.small{padding:4px 10px;font-size:12px}
 .crumbs .subnav.done::after{content:" ✔";color:#4ade80}
 .crumbs .subnav.on{background:var(--accent);color:#0b0e1a;border-color:var(--accent);font-weight:700}
 .stepnav{display:flex;justify-content:space-between;gap:12px;margin-top:12px}
+/* fixed project path: dark until done */
+.side{position:sticky;top:12px;align-self:start;max-height:calc(100vh - 24px);overflow:auto}
+.pipe>li{display:flex;flex-direction:column;gap:2px;outline:none;background:none}
+.pipe>li .dot{width:14px;height:14px;background:#2a3047;border:2px solid #3a4160;box-sizing:border-box}
+.pipe .pp-done>a .dot{background:#4ade80;border-color:#4ade80;box-shadow:0 0 8px #4ade8099}
+.pipe .pp-done>a .t::after{content:""}
+.pipe .pp-running>a .dot{background:var(--accent);border-color:var(--accent);animation:pulse 1.2s infinite}
+.pipe .pp-failed>a .dot{background:var(--err);border-color:var(--err)}
+.pipe .pp-todo>a .t{color:var(--muted)}
+.pipe .pl-note:empty{display:none}
+@keyframes pulse{50%{opacity:.35}}
+.proj-switch select{width:100%}
+.plan.steps-run .dot{width:12px;height:12px}
+.plan .st-running .dot{background:var(--accent);animation:pulse 1.2s infinite}
+.plan .st-success .dot{background:#4ade80}
+.plan .st-failed .dot{background:var(--err)}
+/* runs drawer (left, closed by default) */
+.drawer-tab{position:fixed;left:0;top:45%;z-index:30;writing-mode:vertical-rl;border-radius:0 10px 10px 0;padding:12px 6px}
+.drawer{position:fixed;left:0;top:0;bottom:0;width:320px;max-width:85vw;z-index:40;background:var(--card);border-right:1px solid var(--line);padding:16px;overflow:auto;transform:translateX(-105%);transition:transform .25s ease;box-shadow:4px 0 24px #0008}
+.drawer.open{transform:none}
+.drawer-head{display:flex;justify-content:space-between;align-items:center}
+.drawer-list{list-style:none;padding:0;margin:8px 0;display:flex;flex-direction:column;gap:8px}
+.drawer-list a{display:flex;gap:8px;color:var(--text);text-decoration:none}
+.drawer-list .dot{width:10px;height:10px;border-radius:50%;background:var(--line);flex:none;margin-top:6px}
+.drawer-list .st-success .dot{background:#4ade80}
+.drawer-list .st-failed .dot,.drawer-list .st-interrupted .dot{background:var(--err)}
+.drawer-list .st-running .dot{background:var(--accent);animation:pulse 1.2s infinite}

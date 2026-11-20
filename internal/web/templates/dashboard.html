@@ -10,6 +10,11 @@
   {{if eq .HostCount 0}}
   <div class="card hint">اول یک هاست اضافه کنید: <a href="{{.BasePath}}hosts">هاست‌ها</a></div>
   {{end}}
+  {{if .Project}}
+  <div class="card hint">پروژه‌ی فعال: <strong>{{.Project.Name}}</strong>{{if .Project.Domain}} · <span dir="ltr">{{.Project.Site}}</span>{{end}} — مرحله‌ها را به ترتیب از ستون کناری یا همین فهرست جلو ببرید.</div>
+  {{else}}
+  <div class="card hint">برای هر سایت مشتری یک پروژه بسازید تا مرحله‌هایش در ستون کناری روشن شوند. <a class="btn" href="{{.BasePath}}projects">پروژه‌ی تازه</a></div>
+  {{end}}
   <h2>کارها</h2>
   <ol class="tasks">
     {{range .Items}}

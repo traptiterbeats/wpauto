@@ -2,11 +2,13 @@ package web
 
 import (
 	"encoding/json"
+	"github.com/traptiterbeats/wpauto/internal/projects"
 	"net/http"
 	"net/url"
 	"slices"
 	"sort"
 	"strconv"
+	"strings"
 
 	"github.com/traptiterbeats/wpauto/internal/cpanel"
 	"github.com/traptiterbeats/wpauto/internal/engine"
@@ -55,7 +57,12 @@ func (s *Server) handleRunForm(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	hosts := s.store.List()
-	hostID := r.URL.Query().Get("host")
+	q := r.URL.Query()
+	proj, hasProj := s.projects.Active()
+	hostID := q.Get("host")
+	if hostID == "" && hasProj {
+		hostID = proj.HostID
+	}
 	if hostID == "" && len(hosts) > 0 {
 		hostID = hosts[0].ID
 	}
@@ -65,10 +72,27 @@ func (s *Server) handleRunForm(w http.ResponseWriter, r *http.Request) {
 			domains = h.LastReport.Domains
 		}
 	}
+	pre := map[string]string{"theme": q.Get("theme"), "draft": q.Get("draft"), "domain": "", "folder": ""}
+	if len(domains) > 0 {
+		pre["domain"] = domains[0]
+	}
+	if hasProj {
+		if proj.Domain != "" && wf.ID != "wp-install" {
+			pre["domain"], pre["folder"] = proj.Domain, proj.Folder
+			if wf.ID == "wp-check-domain" && proj.Folder != "" {
+				pre["domain"] = proj.Site()
+			}
+		}
+		if pre["draft"] == "" && proj.DraftID != "" {
+			pre["draft"] = proj.DraftID
+			if d, err := engine.Drafts().Get(proj.DraftID); err == nil && pre["theme"] == "" {
+				pre["theme"] = d.Theme
+			}
+		}
+	}
 	s.render(w, "run_form.html", s.page(r, map[string]any{
-		"Crumb": wf.Title, "Steps": planSteps(wf, nil), "WF": wf, "Hosts": hosts, "HostID": hostID, "Domains": domains, "Error": r.URL.Query().Get("err"),
-		"Themes": engine.Catalog().List(), "Drafts": engine.Drafts().List(),
-		"Q": map[string]string{"theme": r.URL.Query().Get("theme"), "draft": r.URL.Query().Get("draft")},
+		"Crumb": wf.Title, "Steps": planSteps(wf, nil), "WF": wf, "Hosts": hosts, "HostID": hostID, "Domains": domains, "Error": q.Get("err"),
+		"Themes": engine.Catalog().List(), "Drafts": engine.Drafts().List(), "Q": pre,
 	}))
 }
 
@@ -130,6 +154,28 @@ func (s *Server) handleRunStart(w http.ResponseWriter, r *http.Request) {
 			})
 		},
 	}
+	if p, ok := s.projects.Active(); ok {
+		t.ProjectID = p.ID
+		dom, folder := projectSite(wf.ID, inputs)
+		draft := inputs["draft"]
+		t.OnDone = func(status string) {
+			if status != engine.StatusSuccess {
+				return
+			}
+			_ = s.projects.Update(p.ID, func(x *projects.Project) {
+				x.HostID = h.ID
+				if dom != "" {
+					x.Domain, x.Folder = strings.ToLower(dom), folder
+				}
+				if draft != "" {
+					x.DraftID = draft
+				}
+			})
+		}
+		if p.HostID == "" {
+			_ = s.projects.Update(p.ID, func(x *projects.Project) { x.HostID = h.ID })
+		}
+	}
 	id, err := s.runner.Start(wf, t, inputs)
 	if err != nil {
 		fail(err.Error())
@@ -144,7 +190,11 @@ func (s *Server) handleRunView(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	s.render(w, "run.html", s.page(r, map[string]any{"Run": run, "Crumb": run.Title}))
+	data := map[string]any{"Run": run, "Crumb": run.Title}
+	if p, ok := s.projects.Get(run.ProjectID); ok {
+		data["RunProject"] = p
+	}
+	s.render(w, "run.html", s.page(r, data))
 }
 
 func (s *Server) handleRunJSON(w http.ResponseWriter, r *http.Request) {

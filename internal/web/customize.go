@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/traptiterbeats/wpauto/internal/projects"
 	"io"
 	"net/http"
 	"net/url"
@@ -210,6 +211,9 @@ func (s *Server) handleDraftNew(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		http.Redirect(w, r, s.cfg.BasePath+"customize?err="+url.QueryEscape(err.Error()), http.StatusSeeOther)
 		return
+	}
+	if p, ok := s.projects.Active(); ok {
+		_ = s.projects.Update(p.ID, func(x *projects.Project) { x.DraftID = d.ID })
 	}
 	http.Redirect(w, r, s.cfg.BasePath+"customize/"+d.ID, http.StatusSeeOther)
 }
