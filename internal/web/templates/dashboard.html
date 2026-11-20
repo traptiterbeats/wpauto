@@ -10,11 +10,42 @@
   {{if eq .HostCount 0}}
   <div class="card hint">اول یک هاست اضافه کنید: <a href="{{.BasePath}}hosts">هاست‌ها</a></div>
   {{end}}
-  {{if .Project}}
-  <div class="card hint">پروژه‌ی فعال: <strong>{{.Project.Name}}</strong>{{if .Project.Domain}} · <span dir="ltr">{{.Project.Site}}</span>{{end}} — مرحله‌ها را به ترتیب از ستون کناری یا همین فهرست جلو ببرید.</div>
-  {{else}}
-  <div class="card hint">برای هر سایت مشتری یک پروژه بسازید تا مرحله‌هایش در ستون کناری روشن شوند. <a class="btn" href="{{.BasePath}}projects">پروژه‌ی تازه</a></div>
-  {{end}}
+  <div class="ribbons">
+    <section class="ribbon ribbon-new">
+      <h2>شروع پروژه‌ی جدید</h2>
+      <p class="muted small">یک سایت تازه برای مشتری: اسمش را بنویسید و از مرحله‌ی ۱ (بررسی هاست) شروع کنید.</p>
+      <form method="post" action="{{.BasePath}}projects/new" class="ribbon-form">
+        <input type="hidden" name="csrf" value="{{.CSRF}}"><input type="hidden" name="back" value="{{.BasePath}}">
+        <input name="name" required placeholder="نام مشتری یا سایت، مثلاً کارگاه نجاری سیس">
+        {{if gt (len .Hosts) 1}}<select name="host">{{range .Hosts}}<option value="{{.ID}}">{{.Name}}</option>{{end}}</select>{{else}}{{range .Hosts}}<input type="hidden" name="host" value="{{.ID}}">{{end}}{{end}}
+        <button type="submit">شروع ←</button>
+      </form>
+      {{if eq .HostCount 0}}<p class="small warn">هنوز هاستی ندارید؛ <a href="{{.BasePath}}hosts">اول یک هاست اضافه کنید</a>.</p>{{end}}
+    </section>
+    <section class="ribbon ribbon-old">
+      <h2>ادامه‌ی پروژه‌های قبلی</h2>
+      {{if .Cards}}
+      <ul class="proj-cards">
+        {{range .Cards}}
+        <li class="proj-card{{if .Active}} active{{end}}">
+          <div class="pc-head">
+            <strong>{{.Name}}</strong>{{if .Active}} <span class="badge ok">فعال</span>{{end}}
+            <span class="small muted" dir="ltr">{{.Site}}</span>
+          </div>
+          <div class="pc-dots" title="{{.Done}} از {{.Total}} مرحله">{{range .Stages}}<span class="dot pp-{{.State}}" title="{{.Title}}"></span>{{end}}<span class="small muted">{{.Done}} از {{.Total}}</span></div>
+          <form method="post" action="{{$.BasePath}}projects/{{.ID}}/activate">
+            <input type="hidden" name="csrf" value="{{$.CSRF}}">
+            <input type="hidden" name="back" value="{{if .Next}}{{.Next.Link}}{{else}}{{$.BasePath}}{{end}}">
+            <button type="submit" class="{{if not .Next}}ghost {{end}}small">{{if .Next}}ادامه: {{.Next.Title}} ←{{else}}✔ تمام شده — باز کن{{end}}</button>
+          </form>
+        </li>
+        {{end}}
+      </ul>
+      {{else}}
+      <p class="muted small">هنوز پروژه‌ای نساخته‌اید.</p>
+      {{end}}
+    </section>
+  </div>
   <h2>کارها</h2>
   <ol class="tasks">
     {{range .Items}}
@@ -28,11 +59,6 @@
     {{end}}
   </ol>
 
-  {{if .Runs}}
-  <h2>آخرین اجراها</h2>
-  {{template "runtable" .}}
-  <p><a href="{{.BasePath}}runs">همه‌ی اجراها</a></p>
-  {{end}}
 </main>
 </div>
 </body>

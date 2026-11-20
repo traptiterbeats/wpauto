@@ -73,7 +73,7 @@ func TestLayoutAndPlan(t *testing.T) {
 		t.Fatal(err)
 	}
 	home := get("")
-	if !strings.Contains(home, "پروژه‌ی فعال: <strong>سیس</strong>") || strings.Count(home, `class="pp-todo"`) != 5 || !strings.Contains(home, `id="drawer"`) {
+	if !strings.Contains(home, "شروع پروژه‌ی جدید") || !strings.Contains(home, "<strong>سیس</strong> <span class=\"badge ok\">فعال</span>") || !strings.Contains(home, "ادامه: بررسی هاست") || strings.Contains(home, "آخرین اجراها</h2>") || strings.Count(home, `class="pp-todo"`) != 5 || !strings.Contains(home, `id="drawer"`) {
 		t.Fatalf("project not active or stages not dark")
 	}
 	// ticking a stage by hand lights it

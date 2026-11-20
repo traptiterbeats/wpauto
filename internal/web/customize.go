@@ -447,7 +447,7 @@ func (s *Server) handleDraftOp(w http.ResponseWriter, r *http.Request) {
 		if p, ok := s.projects.Active(); ok {
 			_ = s.projects.Update(p.ID, func(x *projects.Project) { x.DraftID = d.ID })
 		}
-		http.Redirect(w, r, s.cfg.BasePath+"customize?msg="+url.QueryEscape("✔ شخصی‌سازی «"+d.Title+"» ذخیره شد. مرحله‌ی بعد «نصب قالب و دمو» در کارهاست و همین پیش‌نویس در آن انتخاب می‌شود."), http.StatusSeeOther)
+		s.draftBack(w, r, id, "msg", "✔ شخصی‌سازی «"+d.Title+"» ذخیره شد.", "#finish")
 	case "brief":
 		_, err := st.Update(id, func(d *customize.Draft) error { s.briefFromForm(r, d); return nil })
 		if err != nil {

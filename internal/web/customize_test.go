@@ -157,8 +157,8 @@ func TestCustomizeFlow(t *testing.T) {
 	if !strings.Contains(page, `class="tab on`) || strings.Contains(page, `class="subnav`) || !strings.Contains(page, "مسیر ساخت سایت") || !strings.Contains(page, `id="drawer"`) {
 		t.Fatal("draft tabs or site-building path missing")
 	}
-	// step 4 saves the draft and returns to the list (installing is the next task, not here)
-	if r, err := cl.PostForm(base+"customize/"+id+"/finish", url.Values{"csrf": {csrfOf(t, page)}}); err != nil || !strings.Contains(r.Request.URL.String(), "/customize?msg=") {
+	// step 4 saves the draft and stays on the page (installing is the next task, not here)
+	if r, err := cl.PostForm(base+"customize/"+id+"/finish", url.Values{"csrf": {csrfOf(t, page)}}); err != nil || !strings.Contains(r.Request.URL.String(), "/customize/"+id+"?") || !strings.Contains(r.Request.URL.String(), "step=finish") {
 		t.Fatalf("finish: %v", err)
 	}
 	if !strings.Contains(get("customize"), "✔ ذخیره‌شده") {

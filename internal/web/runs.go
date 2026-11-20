@@ -46,7 +46,8 @@ func dashItems(wfs []*engine.Workflow) []dashItem {
 
 func (s *Server) handleDashboard(w http.ResponseWriter, r *http.Request) {
 	s.render(w, "dashboard.html", s.page(r, map[string]any{
-		"Items": dashItems(s.workflows()), "Runs": s.runner.List(5), "HostCount": len(s.store.List()),
+		"Items": dashItems(s.workflows()), "HostCount": len(s.store.List()), "Hosts": s.store.List(),
+		"Cards": s.projectCards(),
 	}))
 }
 

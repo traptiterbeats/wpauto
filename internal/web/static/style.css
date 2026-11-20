@@ -170,3 +170,20 @@ button.small{padding:4px 10px;font-size:12px}
 .tabs .tab.done::after{content:" ✔";color:#4ade80}
 .tabs .tab.on{background:var(--card);border-color:var(--line);color:var(--text);font-weight:700;margin-bottom:-1px}
 .tabbody>.card:first-child,.tabbody>form.card:first-child,.tabbody>section:first-child{border-top-right-radius:0;border-top-left-radius:0;margin-top:0}
+/* home ribbons */
+.ribbons{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:18px}
+@media(max-width:900px){.ribbons{grid-template-columns:1fr}}
+.ribbon{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px}
+.ribbon h2{margin:0 0 6px}
+.ribbon-new{border-color:var(--accent)}
+.ribbon-form{display:flex;gap:8px;flex-wrap:wrap}
+.ribbon-form input[name=name]{flex:1;min-width:200px}
+.proj-cards{list-style:none;padding:0;margin:0;display:flex;flex-direction:column;gap:10px;max-height:340px;overflow:auto}
+.proj-card{border:1px solid var(--line);border-radius:10px;padding:10px;display:flex;flex-direction:column;gap:6px}
+.proj-card.active{border-color:#4ade80}
+.pc-head{display:flex;gap:8px;align-items:baseline;flex-wrap:wrap}
+.pc-dots{display:flex;gap:6px;align-items:center}
+.pc-dots .dot{width:12px;height:12px;border-radius:50%;background:#2a3047;border:2px solid #3a4160;box-sizing:border-box}
+.pc-dots .dot.pp-done{background:#4ade80;border-color:#4ade80}
+.pc-dots .dot.pp-running{background:var(--accent);border-color:var(--accent);animation:pulse 1.2s infinite}
+.pc-dots .dot.pp-failed{background:var(--err);border-color:var(--err)}

@@ -21,11 +21,22 @@ func (s *Server) handleProjectNew(w http.ResponseWriter, r *http.Request) {
 	if d, f, ok := strings.Cut(p.Domain, "/"); ok {
 		p.Domain, p.Folder = d, strings.Trim(f, "/")
 	}
-	if _, err := s.projects.Add(p); err != nil {
-		http.Redirect(w, r, s.cfg.BasePath+"projects?err="+url.QueryEscape(err.Error()), http.StatusSeeOther)
+	back := s.safeBack(r.FormValue("back"))
+	if back == "" {
+		back = s.cfg.BasePath + "projects"
+	}
+	np, err := s.projects.Add(p)
+	if err != nil {
+		sep := "?"
+		if strings.Contains(back, "?") {
+			sep = "&"
+		}
+		http.Redirect(w, r, back+sep+"err="+url.QueryEscape(err.Error()), http.StatusSeeOther)
 		return
 	}
-	http.Redirect(w, r, s.cfg.BasePath+"?msg="+url.QueryEscape("پروژه‌ی «"+strings.TrimSpace(p.Name)+"» ساخته و فعال شد. از مرحله‌ی ۱ شروع کنید."), http.StatusSeeOther)
+	// straight to the first stage of the path
+	first := s.pipeline(&np)[0].Link
+	http.Redirect(w, r, first+"&msg="+url.QueryEscape("پروژه‌ی «"+np.Name+"» ساخته شد. مرحله‌ی ۱: بررسی هاست."), http.StatusSeeOther)
 }
 
 func (s *Server) handleProjectOp(w http.ResponseWriter, r *http.Request) {
@@ -95,4 +106,31 @@ func projectSite(wfID string, in map[string]string) (domain, folder string) {
 		return in["domain"], strings.Trim(in["folder"], "/")
 	}
 	return "", ""
+}
+
+// projectCard is one earlier project on the home page, with how far it got.
+type projectCard struct {
+	projects.Project
+	Stages      []pipeStep
+	Done, Total int
+	Next        *pipeStep // first stage not done yet; nil when finished
+	Active      bool
+}
+
+func (s *Server) projectCards() []projectCard {
+	act, _ := s.projects.Active()
+	var out []projectCard
+	for _, p := range s.projects.List() {
+		c := projectCard{Project: p, Stages: s.pipeline(&p), Active: p.ID == act.ID}
+		c.Total = len(c.Stages)
+		for i := range c.Stages {
+			if c.Stages[i].State == "done" {
+				c.Done++
+			} else if c.Next == nil {
+				c.Next = &c.Stages[i]
+			}
+		}
+		out = append(out, c)
+	}
+	return out
 }
