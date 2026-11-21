@@ -1,24 +1,36 @@
 {{define "nav"}}
 <header class="top">
-  <a href="{{.BasePath}}" class="brand">wpauto</a>
-  <nav>{{range .Sections}}<a href="{{$.BasePath}}{{.Path}}" {{if eq .Key $.Section.Key}}class="on{{if eq .Key "autopilot"}} gold{{end}}" aria-current="page"{{else if eq .Key "autopilot"}}class="gold"{{end}}>{{.Title}}</a>{{end}}</nav>
-  <span class="muted small">نسخه {{.Version}}</span>
-  <form method="post" action="{{.BasePath}}logout" class="logout">
-    <input type="hidden" name="csrf" value="{{.CSRF}}">
-    <span class="muted">{{.User}}</span>
-    <button type="submit" class="ghost">خروج</button>
-  </form>
+  <a href="{{.BasePath}}" class="ver" title="پروژه‌ها" dir="ltr">wpauto {{.Version}}</a>
+  <time class="clock" id="tehran-clock" title="ساعت تهران" dir="ltr">{{.TehranNow}}</time>
+  <details class="toolmenu">
+    <summary aria-label="ابزارها و تنظیمات" title="ابزارها و تنظیمات">⚙</summary>
+    <nav class="toolnav" aria-label="ابزارها">
+      {{range .Tools}}<a href="{{$.BasePath}}{{.Path}}">{{.Title}}</a>{{end}}
+      <form method="post" action="{{.BasePath}}logout" class="logout">
+        <input type="hidden" name="csrf" value="{{.CSRF}}">
+        <button type="submit" class="ghost small">خروج <span class="muted" dir="ltr">({{.User}})</span></button>
+      </form>
+    </nav>
+  </details>
 </header>
-{{template "drawer" .}}
+{{if not .IsHome}}
 <div class="crumbs">
-  <span class="muted small">شما این‌جا هستید:</span>
-  <a href="{{.BasePath}}{{.Section.Path}}">{{.Section.Title}}</a>{{if .Crumb}}<span class="sep">‹</span>{{if .CrumbLink}}<a href="{{.CrumbLink}}">{{.Crumb}}</a>{{else}}<strong>{{.Crumb}}</strong>{{end}}{{end}}
-  {{range .SubNav}}<span class="sep">‹</span><a href="{{.Link}}" class="subnav{{if .Active}} on{{end}}{{if .Done}} done{{end}}" {{if .Active}}aria-current="step"{{end}}>{{.Title}}</a>{{end}}
+  {{if .BackLink}}<a class="back" href="{{.BackLink}}" id="backbtn">→ بازگشت</a>{{end}}
+  <nav class="trail" aria-label="مسیر">{{range $i, $c := .Crumbs}}{{if $i}}<span class="sep">›</span>{{end}}{{if $c.Link}}<a href="{{$c.Link}}">{{$c.Title}}</a>{{else}}<strong aria-current="page">{{$c.Title}}</strong>{{end}}{{end}}</nav>
 </div>
 {{end}}
+<script>
+(function(){
+  var el=document.getElementById('tehran-clock'); if(!el) return;
+  var f; try{ f=new Intl.DateTimeFormat('fa-IR',{timeZone:'Asia/Tehran',hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:false}); }catch(e){ return; }
+  function tick(){ el.textContent=f.format(new Date()); }
+  tick(); setInterval(tick,1000);
+})();
+</script>
+{{end}}
 {{define "projectnote"}}
-{{if .Project}}<p class="small muted">این کار برای پروژه‌ی <strong>{{.Project.Name}}</strong> ثبت می‌شود و با موفقیتش، مرحله‌ی آن در ستون کناری روشن می‌شود.</p>
-{{else}}<p class="small warn">پروژه‌ای فعال نیست؛ این اجرا در مسیر هیچ پروژه‌ای ثبت نمی‌شود. <a href="{{.BasePath}}projects">ساخت پروژه</a></p>{{end}}
+{{if .Project}}<p class="small muted">این کار برای پروژه‌ی <a href="{{.BasePath}}p/{{.Project.ID}}/wordpress"><strong>{{.Project.Name}}</strong></a> ثبت می‌شود و با موفقیتش، مرحله‌ی آن در صفحه‌ی پروژه تیک می‌خورد.</p>
+{{else}}<p class="small warn">پروژه‌ای فعال نیست؛ این اجرا در مسیر هیچ پروژه‌ای ثبت نمی‌شود. <a href="{{.BasePath}}">ساخت یا انتخاب پروژه</a></p>{{end}}
 {{end}}
 {{define "drawer"}}
 <button type="button" class="drawer-tab" id="drawertab" aria-controls="drawer" aria-expanded="false" onclick="var d=document.getElementById('drawer'),o=d.classList.toggle('open');this.setAttribute('aria-expanded',o)">اجراها{{range .Recent}}{{if not .Done}} ●{{end}}{{end}}</button>
@@ -30,7 +42,8 @@
   <a class="small" href="{{.BasePath}}runs">همه‌ی اجراها</a>
 </aside>
 {{end}}
-{{define "aside"}}
+{{define "aside"}}{{end}}
+{{define "readiness"}}
 <aside class="side">
   <section class="side-card">
     <h4>پروژه</h4>

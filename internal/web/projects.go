@@ -19,27 +19,44 @@ func (s *Server) handleProjects(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleProjectNew(w http.ResponseWriter, r *http.Request) {
-	p := projects.Project{Name: r.FormValue("name"), HostID: r.FormValue("host"),
-		Domain: strings.ToLower(strings.TrimSpace(r.FormValue("domain")))}
-	if d, f, ok := strings.Cut(p.Domain, "/"); ok {
-		p.Domain, p.Folder = d, strings.Trim(f, "/")
-	}
 	back := s.safeBack(r.FormValue("back"))
 	if back == "" {
 		back = s.cfg.BasePath + "projects"
 	}
-	np, err := s.projects.Add(p)
-	if err != nil {
+	fail := func(msg string) {
 		sep := "?"
 		if strings.Contains(back, "?") {
 			sep = "&"
 		}
-		http.Redirect(w, r, back+sep+"err="+url.QueryEscape(err.Error()), http.StatusSeeOther)
+		http.Redirect(w, r, back+sep+"err="+url.QueryEscape(msg), http.StatusSeeOther)
+	}
+	addr, err := parseSite(r.FormValue("domain"))
+	if err != nil {
+		fail(err.Error())
 		return
 	}
-	// straight to the first stage of the path
-	first := s.pipeline(&np)[0].Link
-	http.Redirect(w, r, first+"&msg="+url.QueryEscape("پروژه‌ی «"+np.Name+"» ساخته شد. مرحله‌ی ۱: بررسی هاست."), http.StatusSeeOther)
+	p := projects.Project{Name: r.FormValue("name"), HostID: r.FormValue("host"),
+		Domain: addr.Domain, Folder: addr.Folder, Mode: addr.Kind}
+	if p.HostID == "" {
+		// no host picked: take the one saved host whose main/addon domain fits the address,
+		// or the only host there is
+		hosts := s.store.List()
+		if m := matchHosts(hosts, addr); len(m) == 1 {
+			p.HostID = m[0].ID
+		} else if len(hosts) == 1 {
+			p.HostID = hosts[0].ID
+		}
+	} else if _, ok := s.store.Get(p.HostID); !ok {
+		fail("هاست انتخاب‌شده پیدا نشد")
+		return
+	}
+	np, err := s.projects.Add(p)
+	if err != nil {
+		fail(err.Error())
+		return
+	}
+	// step 2: choose the section (WordPress, ...)
+	http.Redirect(w, r, s.cfg.BasePath+"p/"+np.ID+"?msg="+url.QueryEscape("پروژه‌ی «"+np.Name+"» ساخته شد."), http.StatusSeeOther)
 }
 
 func (s *Server) handleProjectOp(w http.ResponseWriter, r *http.Request) {

@@ -354,7 +354,7 @@ func TestAutopilotSuccess(t *testing.T) {
 		t.Fatal("password kept in memory after success")
 	}
 	page := e.get("autopilot/" + id)
-	for _, want := range []string{"دیدن سایت", `href="https://example.com/new/wp-admin/"`, "زمان کل", "→ بازگشت به AutoPilot", "Ideas into products.", "آمادگی پنل", `id="apclock"`} {
+	for _, want := range []string{"دیدن سایت", `href="https://example.com/new/wp-admin/"`, "زمان کل", `href="` + e.s.cfg.BasePath + `autopilot" id="backbtn"`, "Ideas into products.", `class="trail"`, `id="apclock"`} {
 		if !strings.Contains(page, want) {
 			t.Fatalf("progress page lacks %q", want)
 		}

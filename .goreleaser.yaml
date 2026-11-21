@@ -29,5 +29,9 @@ checksum:
   name_template: checksums.txt
   algorithm: sha256
 
+release:
+  # tags with a pre-release part (v0.15.0-beta.1) are published as GitHub pre-releases
+  prerelease: auto
+
 changelog:
   sort: asc

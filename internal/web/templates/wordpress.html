@@ -7,7 +7,6 @@
 {{template "aside" .}}
 <main>
   {{template "flash" .}}
-  <a class="back" href="{{.BasePath}}">→ بازگشت به کارها</a>
   <h2>وردپرس‌های هاست</h2>
   {{if not .Hosts}}<p class="muted">اول یک <a href="{{.BasePath}}hosts">هاست</a> اضافه کنید.</p>{{else}}
   <form method="get" action="{{.BasePath}}wordpress" class="card row">

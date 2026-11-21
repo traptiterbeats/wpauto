@@ -15,8 +15,19 @@ bash <(curl -Ls https://raw.githubusercontent.com/traptiterbeats/wpauto/main/ins
 ```bash
 wpauto            # منوی مدیریت
 wpauto info       # آدرس پنل و وضعیت
-wpauto update     # نصب آخرین نسخه
+wpauto update          # نصب آخرین نسخه‌ی پایدار (هیچ‌وقت نسخه‌ی بتا نمی‌گیرد)
+wpauto update --beta   # نصب تازه‌ترین نسخه، بتاها (مثل v0.15.0-beta.1) هم حساب
 ```
+
+### نسخه‌ی بتا
+
+گزینه‌ی `--beta` فقط در نسخه‌های بتا هست؛ بار اول با نصب‌کننده بروید روی بتا (تنظیمات و داده‌ها می‌مانند):
+
+```bash
+bash <(curl -Ls https://raw.githubusercontent.com/traptiterbeats/wpauto/ui-minimal/install.sh) --beta
+```
+
+برگشت به نسخه‌ی پایدار: `wpauto update` (آخرین نسخه‌ی پایدار را نصب می‌کند).
 
 منو شامل: تغییر نام کاربری و رمز، تغییر پورت، SSL (Let's Encrypt یا self-signed)، استارت/استاپ/ری‌استارت، لاگ‌ها، آپدیت و حذف.
 

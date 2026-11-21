@@ -190,7 +190,7 @@ func Menu(version string) error {
 			cmd.Stdout, cmd.Stderr = os.Stdout, os.Stderr
 			err = cmd.Run()
 		case "8":
-			err = Update()
+			err = Update(false)
 		case "9":
 			if done, uerr := Uninstall(); uerr != nil {
 				err = uerr
@@ -308,12 +308,17 @@ func SSLMenu(c *config.Config) error {
 	return nil
 }
 
-// Update installs the latest release and restarts the service.
-func Update() error {
+// Update installs the latest stable release (or, with beta, the newest release including
+// pre-releases) and restarts the service.
+func Update(beta bool) error {
 	start := time.Now()
-	fmt.Println("[1/3] Checking latest release ...")
+	if beta {
+		fmt.Println("[1/3] Checking newest release (beta channel, pre-releases included) ...")
+	} else {
+		fmt.Println("[1/3] Checking latest stable release ...")
+	}
 	updater.Progress = os.Stdout
-	tag, err := updater.Update(BinPath)
+	tag, err := updater.UpdateChannel(BinPath, beta)
 	updater.Progress = nil
 	if err != nil {
 		return err

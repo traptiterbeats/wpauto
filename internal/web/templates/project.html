@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="fa" dir="rtl">
+<head>{{template "head" .}}<title>{{.P.Name}} | wpauto</title></head>
+<body>
+{{template "nav" .}}
+<main class="narrow">
+  {{template "flash" .}}
+  <header class="phead">
+    <h1>{{.P.Name}}</h1>
+    <p class="muted">{{if .P.Domain}}<span dir="ltr">{{.P.Site}}</span>{{with .Addr.KindLabel}} · <span class="tag">{{.}}</span>{{end}}{{else}}آدرس هنوز مشخص نشده{{end}}{{with .PHost.Name}} · هاست: {{.}}{{end}}</p>
+  </header>
+  <h2 class="step">بخش را انتخاب کنید</h2>
+  <div class="cards" id="sections">
+    {{range .CMS}}
+    {{if .Soon}}
+    <div class="tile soon" aria-disabled="true"><strong>{{.Title}}</strong>{{with .Note}}<span class="small muted">{{.}}</span>{{end}}<span class="badge">به‌زودی</span></div>
+    {{else}}
+    <a class="tile" href="{{$.BasePath}}p/{{$.P.ID}}/{{.Key}}"><strong>{{.Title}}</strong><span class="small muted">{{.Note}}</span><span class="go">←</span></a>
+    {{end}}
+    {{end}}
+  </div>
+  <details class="quiet">
+    <summary class="small muted">حذف پروژه</summary>
+    <form method="post" action="{{.BasePath}}projects/{{.P.ID}}/delete" onsubmit="return confirm(this.purge.checked?'پروژه همراه اجراها و پیش‌نویسش حذف شود؟':'پروژه حذف شود؟ اجراها و پیش‌نویس می‌مانند.')">
+      <input type="hidden" name="csrf" value="{{.CSRF}}"><input type="hidden" name="back" value="{{.BasePath}}">
+      <label class="check small"><input type="checkbox" name="purge" checked> با اجراها و پیش‌نویس</label>
+      <p class="small muted">فقط از wpauto حذف می‌شود؛ سایت روی هاست دست نمی‌خورد.</p>
+      <button class="ghost danger small" type="submit">حذف پروژه</button>
+    </form>
+  </details>
+</main>
+</body>
+</html>

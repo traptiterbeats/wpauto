@@ -31,7 +31,7 @@ var sections = []section{
 func sectionFor(rel string) section {
 	first, _, _ := strings.Cut(rel, "/")
 	switch first {
-	case "", "run", "runs":
+	case "", "run", "runs", "tasks":
 		first = ""
 	case "plugins":
 		first = "themes"
@@ -195,12 +195,103 @@ func (s *Server) pipeline(p *projects.Project) []pipeStep {
 	return steps
 }
 
-// layout adds the menu, breadcrumb and side panel data every page uses.
+// crumb is one part of the breadcrumb (پروژه‌ها › نام پروژه › وردپرس › کار). The last one is the
+// current page and has no link.
+type crumb struct {
+	Title, Link string
+}
+
+// tool is one entry of the small tools menu (every page that is not part of a project).
+type tool struct {
+	Title, Path, Note string
+}
+
+var tools = []tool{
+	{"هاست‌ها", "hosts", "افزودن، بررسی و ویرایش هاست‌های cPanel"},
+	{"همه‌ی کارها", "tasks", "فهرست کامل کارها و پروژه‌ها به شکل قبلی"},
+	{"اجراها", "runs", "تاریخچه‌ی همه‌ی اجراها"},
+	{"فهرست پروژه‌ها", "projects", "ساختن، فعال کردن و حذف پروژه‌ها"},
+	{"قالب‌ها و افزونه‌ها", "themes", "کاتالوگ قالب‌ها و کتابخانه‌ی افزونه‌ها"},
+	{"شخصی‌سازی", "customize", "پیش‌نویس‌های شخصی‌سازی با هوش مصنوعی"},
+	{"هوش مصنوعی", "ai", "سرویس‌ها، کلیدها و مدل‌ها"},
+	{"وردپرس‌ها", "wordpress", "وردپرس‌های روی هاست و حذف آن‌ها"},
+	{"AutoPilot", "autopilot", "ساخت خودکار سایت"},
+	{"آمادگی پنل", "tools", "وضعیت هاست، هوش مصنوعی و قالب‌ها؛ آخرین اجراها"},
+}
+
+// tehranZone is Iran Standard Time; Iran has no daylight saving since 2022. The page clock is
+// updated by JavaScript with the Asia/Tehran zone; this only renders its first value.
+var tehranZone = time.FixedZone("Asia/Tehran", 3*3600+1800)
+
+// projectScoped reports whether a page (path below the base path) is work done for a project.
+func projectScoped(rel string) bool {
+	first, rest, _ := strings.Cut(rel, "/")
+	switch first {
+	case "run", "customize", "autopilot", "wordpress":
+		return true
+	case "runs":
+		return rest != ""
+	}
+	return false
+}
+
+// crumbs builds the breadcrumb of a page that did not set its own.
+func (s *Server) crumbs(rel string, d map[string]any) []crumb {
+	bp := s.cfg.BasePath
+	out := []crumb{{"پروژه‌ها", bp}}
+	sec := sectionFor(rel)
+	first, rest, _ := strings.Cut(rel, "/")
+	var p *projects.Project
+	if rp, ok := d["RunProject"].(projects.Project); ok {
+		p = &rp
+	} else if ap, ok := d["Project"].(*projects.Project); ok {
+		p = ap
+	}
+	if projectScoped(rel) && p != nil {
+		out = append(out, crumb{p.Name, bp + "p/" + p.ID}, crumb{"وردپرس", bp + "p/" + p.ID + "/wordpress"})
+	} else {
+		out = append(out, crumb{"ابزارها", bp + "tools"})
+	}
+	switch {
+	case first == "tools":
+		out = out[:1]
+		out = append(out, crumb{"ابزارها", bp + "tools"})
+	case first == "tasks":
+		out = append(out, crumb{"همه‌ی کارها", bp + "tasks"})
+	case first == "runs" && rest == "":
+		out = append(out, crumb{"اجراها", bp + "runs"})
+	case first == "runs" || first == "run":
+		// the task title is the Crumb
+	default:
+		out = append(out, crumb{sec.Title, bp + sec.Path})
+	}
+	if c, _ := d["Crumb"].(string); c != "" {
+		link, _ := d["CrumbLink"].(string)
+		out = append(out, crumb{c, link})
+	}
+	if len(out) > 1 && out[len(out)-1].Link == bp+rel {
+		out[len(out)-1].Link = ""
+	}
+	return out
+}
+
+// backOf is where the Back button goes: the nearest crumb before the current page.
+func backOf(cs []crumb) string {
+	for i := len(cs) - 2; i >= 0; i-- {
+		if cs[i].Link != "" {
+			return cs[i].Link
+		}
+	}
+	return ""
+}
+
+// layout adds the top bar, breadcrumb and shared data every page uses.
 func (s *Server) layout(r *http.Request, d map[string]any) {
 	rel := strings.TrimPrefix(r.URL.Path, s.cfg.BasePath)
 	sec := sectionFor(rel)
 	d["Sections"] = sections
 	d["Section"] = sec
+	d["Tools"] = tools
 	d["Ready"] = s.readiness()
 	d["Projects"] = s.projects.List()
 	if p, ok := s.projects.Active(); ok {
@@ -212,8 +303,17 @@ func (s *Server) layout(r *http.Request, d map[string]any) {
 	d["Recent"] = s.runner.List(12)
 	d["Here"] = r.URL.Path
 	d["Now"] = time.Now().Unix()
+	d["TehranNow"] = time.Now().In(tehranZone).Format("15:04:05")
 	if _, ok := d["Crumb"]; !ok {
 		d["Crumb"] = ""
+	}
+	cs, ok := d["Crumbs"].([]crumb)
+	if !ok {
+		cs = s.crumbs(rel, d)
+		d["Crumbs"] = cs
+	}
+	if _, ok := d["BackLink"]; !ok {
+		d["BackLink"] = backOf(cs)
 	}
 	// pages that show their own messages set Msg/Error; the rest get a flash line
 	q := r.URL.Query()

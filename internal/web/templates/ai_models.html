@@ -7,7 +7,6 @@
 {{template "aside" .}}
 <main>
   {{template "flash" .}}
-  <a class="back" href="{{.BasePath}}ai">→ بازگشت به هوش مصنوعی</a>
   <h2>انتخاب مدل اصلی · {{.P.Name}}</h2>
   <p class="muted">مدل فعلی: <span dir="ltr">{{if .P.Model}}{{.P.Model}}{{else}}—{{end}}</span>. مدلی که انتخاب کنید همان لحظه تست می‌شود.</p>
   {{if .Error}}<div class="error">{{.Error}}</div>{{end}}

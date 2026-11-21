@@ -7,7 +7,6 @@
 {{template "aside" .}}
 <main>
   {{template "flash" .}}
-  <a class="back" href="{{.BasePath}}hosts">→ بازگشت به هاست‌ها</a>
   <h2>{{.Host.Name}}</h2>
   <p class="muted" dir="ltr">{{.Host.Username}} @ {{.Host.URL}}</p>
   <p class="muted">پروفایل: {{if .Profile}}{{.Profile.Name}}{{else}}{{.Host.ProfileID}} (پیدا نشد){{end}}</p>

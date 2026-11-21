@@ -8,7 +8,6 @@
 {{template "aside" .}}
 <main>
   {{template "flash" .}}
-  <a class="back" href="{{.BasePath}}autopilot">→ بازگشت به AutoPilot</a>
   <h2>AutoPilot: {{.P.Title}}</h2>
   <p class="muted">هاست: {{.P.In.HostName}} · قالب: <span dir="ltr">{{.P.In.Theme}}</span> · شروع: <span dir="ltr">{{.P.Created.Format "2006-01-02 15:04:05"}}</span> · وضعیت: <span id="apstatus">{{if eq .P.Status "running"}}<span class="warn">در حال اجرا</span>{{else if eq .P.Status "success"}}<span class="ok">تمام شد</span>{{else if eq .P.Status "cancelled"}}<span class="muted">متوقف شد</span>{{else}}<span class="bad">ناموفق</span>{{end}}</span></p>
 

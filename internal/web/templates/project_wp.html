@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="fa" dir="rtl">
+<head>{{template "head" .}}<title>وردپرس · {{.P.Name}} | wpauto</title></head>
+<body>
+{{template "nav" .}}
+<main class="narrow">
+  {{template "flash" .}}
+  <header class="phead">
+    <h1>{{.P.Name}} <span class="muted">· وردپرس</span></h1>
+    <p class="muted">{{if .P.Domain}}<span dir="ltr">{{.P.Site}}</span>{{with .Addr.KindLabel}} · <span class="tag">{{.}}</span>{{end}}{{else}}آدرس هنوز مشخص نشده{{end}}</p>
+    {{if and .Installed .P.URL}}<p class="sitelinks"><a class="btn small" href="{{.P.URL}}?v={{.Now}}" target="_blank" rel="noopener">دیدن سایت ↗</a> <a class="btn ghost small" href="{{.P.URL}}wp-admin/" target="_blank" rel="noopener">پیشخوان ↗</a></p>{{end}}
+  </header>
+
+  <section class="done-box" aria-labelledby="done-title">
+    <h2 id="done-title" class="step">انجام‌شده برای این پروژه</h2>
+    <ol class="pipe flat">
+      {{range .Stages}}
+      <li class="pp-{{.State}}">
+        <div class="pp-row">
+          <span class="pp-label"><span class="dot"></span><span class="t">{{if eq .State "done"}}✔ {{end}}{{.Title}}</span><span class="pl-note small">{{if eq .State "running"}}در حال انجام…{{else if eq .State "failed"}}آخرین اجرا ناموفق بود{{else if .Marked}}دستی علامت خورد{{else}}{{.Note}}{{end}}</span></span>
+          {{if .ByRun}}<span class="pp-tick small ok" title="با اجرای موفق انجام شد">با اجرا</span>{{else}}
+          <form method="post" action="{{$.BasePath}}projects/{{$.P.ID}}/mark" class="pp-tick" title="علامت انجام‌شده">
+            <input type="hidden" name="csrf" value="{{$.CSRF}}"><input type="hidden" name="back" value="{{$.Here}}"><input type="hidden" name="stage" value="{{.Key}}">
+            <label class="check small"><input type="checkbox" name="on" {{if .Marked}}checked{{end}} onchange="this.form.submit()" aria-label="انجام شد: {{.Title}}"> دستی</label>
+          </form>{{end}}
+        </div>
+      </li>
+      {{end}}
+    </ol>
+    {{with .Last}}<p class="small">آخرین اجرا: <a href="{{$.BasePath}}runs/{{.ID}}">{{.Title}}</a> · {{template "status" .Status}} · <span dir="ltr">{{.StartedAt.Format "2006-01-02 15:04"}}</span></p>{{else}}<p class="small muted">هنوز اجرایی برای این پروژه ثبت نشده.</p>{{end}}
+  </section>
+
+  <h2 class="step">کار را انتخاب کنید</h2>
+  <div class="cards" id="wptasks">
+    {{range .Tasks}}
+    {{if .Soon}}
+    <div class="tile soon" aria-disabled="true"><strong>{{.Title}}</strong><span class="badge">به‌زودی</span></div>
+    {{else}}
+    <form method="post" action="{{$.BasePath}}projects/{{$.P.ID}}/activate" class="tile-form">
+      <input type="hidden" name="csrf" value="{{$.CSRF}}"><input type="hidden" name="back" value="{{.Link}}">
+      <button type="submit" class="tile{{with .Stage}} st-{{.State}}{{end}}" data-link="{{.Link}}">
+        <strong>{{.Title}}</strong>
+        <span class="small muted">{{.Note}}</span>
+        {{with .Stage}}{{if eq .State "done"}}<span class="badge ok">✔ انجام شد</span>{{else if eq .State "running"}}<span class="badge warn">در حال انجام</span>{{else if eq .State "failed"}}<span class="badge bad">ناموفق</span>{{end}}{{end}}
+        <span class="go">←</span>
+      </button>
+    </form>
+    {{end}}
+    {{end}}
+  </div>
+</main>
+</body>
+</html>

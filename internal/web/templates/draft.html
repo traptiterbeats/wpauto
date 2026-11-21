@@ -7,7 +7,6 @@
 {{template "aside" .}}
 <main>
   {{template "flash" .}}
-  <a class="back" href="{{.BasePath}}customize">→ بازگشت به پیش‌نویس‌ها</a>
   <h2>{{.D.Title}} <span class="muted small" dir="ltr">{{.D.Theme}}</span></h2>
   {{if .Error}}<div class="error">{{.Error}}</div>{{end}}
   {{if .Msg}}<div class="card hint ok">{{.Msg}}</div>{{end}}

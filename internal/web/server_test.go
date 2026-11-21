@@ -50,8 +50,8 @@ func TestLoginFlow(t *testing.T) {
 	}
 	buf := new(bytes.Buffer)
 	_, _ = buf.ReadFrom(r.Body)
-	if !strings.Contains(buf.String(), "نصب وردپرس") {
-		t.Fatal("dashboard not rendered")
+	if !strings.Contains(buf.String(), "پروژه‌ی تازه") || !strings.Contains(buf.String(), `id="tehran-clock"`) {
+		t.Fatal("home not rendered")
 	}
 }
 

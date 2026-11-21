@@ -797,8 +797,8 @@ func (s *Server) handleAutopilot(w http.ResponseWriter, r *http.Request) {
 	f := apForm{Mode: "subdomain", Locale: "fa_IR"}
 	if pr, ok := s.projects.Active(); ok {
 		f.Host, f.Domain, f.Brief.SiteName = pr.HostID, pr.Domain, pr.Name
-		if pr.Folder != "" {
-			f.Mode, f.Name = "subfolder", pr.Folder
+		if mode, dom, name, ok := installInputs(pr); ok {
+			f.Mode, f.Domain, f.Name = mode, dom, name
 		}
 	}
 	if p, ok := s.ai.Get(""); ok {

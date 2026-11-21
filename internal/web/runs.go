@@ -88,6 +88,12 @@ func (s *Server) handleRunForm(w http.ResponseWriter, r *http.Request) {
 				pre["domain"] = proj.Site()
 			}
 		}
+		if wf.ID == "wp-install" {
+			if mode, dom, name, ok := installInputs(proj); ok {
+				pre["mode"], pre["domain"], pre["name"] = mode, dom, name
+			}
+			pre["title"] = proj.Name
+		}
 		if pre["draft"] == "" && proj.DraftID != "" {
 			pre["draft"] = proj.DraftID
 			if d, err := engine.Drafts().Get(proj.DraftID); err == nil && pre["theme"] == "" {
@@ -172,6 +178,13 @@ func (s *Server) startWorkflow(wf *engine.Workflow, hostID, projectID string, in
 	if p, ok := s.projects.Get(projectID); ok && projectID != "" {
 		t.ProjectID = p.ID
 		dom, folder := projectSite(wf.ID, inputs)
+		mode := ""
+		if wf.ID == "wp-install" {
+			mode = inputs["mode"]
+			if mode != kindSubfolder && inputs["name"] == "" {
+				mode = kindRoot
+			}
+		}
 		draft := inputs["draft"]
 		t.OnDone = func(status string) {
 			if status == engine.StatusSuccess {
@@ -179,6 +192,11 @@ func (s *Server) startWorkflow(wf *engine.Workflow, hostID, projectID string, in
 					x.HostID = h.ID
 					if dom != "" {
 						x.Domain, x.Folder = strings.ToLower(dom), folder
+						if mode != "" {
+							x.Mode = mode
+						} else if x.Mode != "" && (folder != "") != (x.Mode == kindSubfolder) {
+							x.Mode = "" // worked out again from domain/folder
+						}
 					}
 					if draft != "" {
 						x.DraftID = draft
@@ -206,6 +224,9 @@ func (s *Server) handleRunView(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	data := map[string]any{"Run": run, "Crumb": run.Title}
+	if run.WorkflowID == "wp-scan" || run.WorkflowID == "wp-remove" {
+		data["BackLink"] = s.cfg.BasePath + "wordpress?host=" + url.QueryEscape(run.HostID)
+	}
 	p, hasProject := s.projects.Get(run.ProjectID)
 	if hasProject {
 		data["RunProject"] = p

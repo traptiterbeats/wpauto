@@ -21,7 +21,8 @@ Usage:
   wpauto info            show panel URL and status
   wpauto port N          change the panel port
   wpauto start|stop|restart
-  wpauto update          install the latest release
+  wpauto update          install the latest stable release
+  wpauto update --beta   install the newest release, pre-releases (betas) included
   wpauto uninstall
   wpauto version
 `
@@ -72,7 +73,18 @@ func run(args []string) error {
 	case "start", "stop", "restart", "status":
 		return execSystemctl(args[0])
 	case "update":
-		return cli.Update()
+		beta := false
+		for _, a := range args[1:] {
+			switch a {
+			case "--beta", "-beta", "beta":
+				beta = true
+			case "--stable", "stable":
+				beta = false
+			default:
+				return fmt.Errorf("unknown option %q (use: wpauto update [--beta])", a)
+			}
+		}
+		return cli.Update(beta)
 	case "uninstall":
 		_, err := cli.Uninstall()
 		return err

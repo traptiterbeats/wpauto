@@ -106,8 +106,8 @@ func TestCustomizeFlow(t *testing.T) {
 	if !strings.Contains(pick, `value="m"`) || !strings.Contains(pick, "old-flash") || !strings.Contains(pick, `nonchat" data-id="text-embedding-9"`) {
 		t.Fatalf("model list missing:\n%s", pick)
 	}
-	if body := get("customize"); !strings.Contains(body, "مدل انتخاب نشده") {
-		t.Fatal("side panel should say no model chosen")
+	if body := get("tools"); !strings.Contains(body, "مدل انتخاب نشده") {
+		t.Fatal("panel readiness should say no model chosen")
 	}
 	pid := strings.Split(strings.TrimPrefix(r0.Request.URL.Path, cfg.BasePath+"ai/"), "/")[0]
 	if r := post("ai/"+pid+"/model", url.Values{"model": {"m"}}); r.Request.URL.Path != cfg.BasePath+"ai" {
@@ -154,7 +154,7 @@ func TestCustomizeFlow(t *testing.T) {
 	if !strings.Contains(page, "تازه ACME STUDIO") || !strings.Contains(get("customize/"+id+"?step=images"), "file/logo.png") {
 		t.Fatal("draft page does not show generated text and logo")
 	}
-	if !strings.Contains(page, `class="tab on`) || strings.Contains(page, `class="subnav`) || !strings.Contains(page, "مسیر ساخت سایت") || !strings.Contains(page, `id="drawer"`) {
+	if !strings.Contains(page, `class="tab on`) || strings.Contains(page, `class="subnav`) || !strings.Contains(page, `class="trail"`) || !strings.Contains(page, `id="backbtn"`) {
 		t.Fatal("draft tabs or site-building path missing")
 	}
 	// step 4 saves the draft and stays on the page (installing is the next task, not here)

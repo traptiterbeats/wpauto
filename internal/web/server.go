@@ -120,6 +120,10 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET "+bp+"wordpress", s.requireAuth(s.handleWordPress))
 	mux.HandleFunc("POST "+bp+"wordpress/{op}", s.requireAuth(s.handleWordPressOp))
 	mux.HandleFunc("GET "+bp+"projects", s.requireAuth(s.handleProjects))
+	mux.HandleFunc("GET "+bp+"p/{id}", s.requireAuth(s.handleProjectView))
+	mux.HandleFunc("GET "+bp+"p/{id}/wordpress", s.requireAuth(s.handleProjectWP))
+	mux.HandleFunc("GET "+bp+"tasks", s.requireAuth(s.handleTasks))
+	mux.HandleFunc("GET "+bp+"tools", s.requireAuth(s.handleTools))
 	mux.HandleFunc("POST "+bp+"projects/new", s.requireAuth(s.handleProjectNew))
 	mux.HandleFunc("POST "+bp+"projects/{id}/{op}", s.requireAuth(s.handleProjectOp))
 	mux.HandleFunc("GET "+bp+"themes", s.requireAuth(s.handleThemes))
@@ -153,7 +157,7 @@ func (s *Server) Handler() http.Handler {
 			http.Redirect(w, r, bp+"login", http.StatusSeeOther)
 			return
 		}
-		s.handleDashboard(w, r)
+		s.handleHome(w, r)
 	})
 	// Anything outside the secret base path looks like nothing is here.
 	root := http.NewServeMux()

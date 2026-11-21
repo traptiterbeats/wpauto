@@ -39,17 +39,21 @@ func TestLayoutAndPlan(t *testing.T) {
 		r.Body.Close()
 		return string(b)
 	}
-	for p, want := range map[string]string{"": "کارها", "hosts": "هاست‌ها", "themes": "قالب‌ها", "customize": "شخصی‌سازی", "ai": "هوش مصنوعی", "runs": "کارها", "projects": "پروژه‌ها", "wordpress": "وردپرس‌ها"} {
+	// every inner page: slim breadcrumb ending in its own title, a Back button, the tools menu
+	for p, want := range map[string]string{"tasks": "همه‌ی کارها", "hosts": "هاست‌ها", "themes": "قالب‌ها", "customize": "شخصی‌سازی", "ai": "هوش مصنوعی", "runs": "اجراها", "projects": "پروژه‌ها", "wordpress": "وردپرس‌های هاست", "tools": "ابزارها"} {
 		page := get(p)
-		if !strings.Contains(page, `class="on" aria-current="page">`+want+`<`) {
-			t.Errorf("%q: active menu %q missing", p, want)
+		if !strings.Contains(page, `<strong aria-current="page">`+want+`</strong>`) {
+			t.Errorf("%q: breadcrumb %q missing", p, want)
 		}
-		if !strings.Contains(page, "شما این‌جا هستید") || !strings.Contains(page, "آمادگی پنل") {
-			t.Errorf("%q: crumbs or side panel missing", p)
+		if !strings.Contains(page, `class="trail"`) || !strings.Contains(page, `id="backbtn"`) || !strings.Contains(page, `class="toolmenu"`) {
+			t.Errorf("%q: breadcrumb, back button or tools menu missing", p)
 		}
-		if !strings.Contains(page, "وصل نیست") {
-			t.Errorf("%q: AI not-connected state missing", p)
+		if strings.Contains(page, `class="side"`) && p != "tools" {
+			t.Errorf("%q: old fixed side panel still shown", p)
 		}
+	}
+	if !strings.Contains(get("tools"), "وصل نیست") || !strings.Contains(get("tools"), "آمادگی پنل") {
+		t.Error("tools: panel readiness (AI not connected) missing")
 	}
 	if wpPage := get("wordpress"); !strings.Contains(wpPage, "وردپرس‌های هاست") {
 		t.Fatal("wordpress page")
@@ -58,11 +62,11 @@ func TestLayoutAndPlan(t *testing.T) {
 	if wpPage := get("wordpress"); strings.Count(wpPage, `method="post"`) != strings.Count(wpPage, `name="csrf"`) {
 		t.Fatal("wordpress form without csrf")
 	}
-	if strings.Contains(get(""), "run/wp-remove") {
+	if strings.Contains(get("tasks"), "run/wp-remove") {
 		t.Fatal("hidden workflow listed on home")
 	}
 	form := get("run/wp-install")
-	if !strings.Contains(form, "<strong>نصب وردپرس</strong>") || !strings.Contains(form, `data-id="folder" class="pl-no"`) {
+	if !strings.Contains(form, `<strong aria-current="page">نصب وردپرس</strong>`) || !strings.Contains(form, `data-id="folder" class="pl-no"`) {
 		t.Fatalf("run form: crumb or plan missing")
 	}
 	var plan struct {
@@ -82,8 +86,8 @@ func TestLayoutAndPlan(t *testing.T) {
 	if _, err := cl.PostForm(base+"projects/new", url.Values{"name": {"سیس"}, "domain": {"Example.com/Shop"}, "csrf": {csrfOf(t, get(""))}}); err != nil {
 		t.Fatal(err)
 	}
-	home := get("")
-	if !strings.Contains(home, "شروع پروژه‌ی جدید") || !strings.Contains(home, "<strong>سیس</strong> <span class=\"badge ok\">فعال</span>") || !strings.Contains(home, "ادامه: بررسی هاست") || strings.Contains(home, "آخرین اجراها</h2>") || strings.Count(home, `class="pp-todo"`) != 5 || !strings.Contains(home, `id="drawer"`) {
+	home := get("tasks")
+	if !strings.Contains(home, "شروع پروژه‌ی جدید") || !strings.Contains(home, "<strong>سیس</strong> <span class=\"badge ok\">فعال</span>") || !strings.Contains(home, "ادامه: بررسی هاست") || strings.Contains(home, "آخرین اجراها</h2>") || strings.Count(get("p/"+s.projectsActiveID()+"/wordpress"), `class="pp-todo"`) != 5 {
 		t.Fatalf("project not active or stages not dark")
 	}
 	// ticking a stage by hand lights it
@@ -91,7 +95,7 @@ func TestLayoutAndPlan(t *testing.T) {
 	if _, err := cl.PostForm(base+"projects/"+p.ID+"/mark", url.Values{"stage": {"wpinstall"}, "on": {"on"}, "csrf": {csrfOf(t, home)}}); err != nil {
 		t.Fatal(err)
 	}
-	if h := get(""); strings.Count(h, `class="pp-todo"`) != 4 || !strings.Contains(h, "دستی علامت خورد") {
+	if h := get("p/" + p.ID + "/wordpress"); strings.Count(h, `class="pp-todo"`) != 4 || !strings.Contains(h, "دستی علامت خورد") {
 		t.Fatal("manual tick did not light the stage")
 	}
 	if _, err := s.store.Add(store.Host{Name: "h", ProfileID: "generic", URL: "https://example.com:2083", Username: "u"}); err != nil {
@@ -100,8 +104,8 @@ func TestLayoutAndPlan(t *testing.T) {
 	if f := get("run/theme-install"); !strings.Contains(f, `value="shop"`) || !strings.Contains(f, `value="example.com"`) {
 		t.Fatal("run form does not take the project's folder")
 	}
-	// the side panel links to the project's site and admin
-	if h := get(""); !strings.Contains(h, `href="https://example.com/shop/wp-admin/"`) {
+	// the project's WordPress page links to the site and admin once WordPress is there
+	if h := get("p/" + p.ID + "/wordpress"); !strings.Contains(h, `href="https://example.com/shop/wp-admin/"`) {
 		t.Fatal("no site/admin link for the project")
 	}
 	// disk usage shows on the hosts tab, red when nearly full
@@ -123,6 +127,11 @@ func TestLayoutAndPlan(t *testing.T) {
 	if s.safeBack("//evil.com") != "" || s.safeBack("https://evil.com") != "" || s.safeBack(cfg.BasePath+"runs") == "" {
 		t.Fatal("safeBack")
 	}
+}
+
+func (s *Server) projectsActiveID() string {
+	p, _ := s.projects.Active()
+	return p.ID
 }
 
 func csrfOf(t *testing.T, page string) string {

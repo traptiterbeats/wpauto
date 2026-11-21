@@ -2,7 +2,7 @@ name: ci
 
 on:
   push:
-    branches: [main]
+    branches: [main, ui-minimal]
   workflow_dispatch:
 
 jobs:

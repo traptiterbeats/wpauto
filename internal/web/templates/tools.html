@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="fa" dir="rtl">
+<head>{{template "head" .}}<title>ابزارها | wpauto</title></head>
+<body>
+{{template "nav" .}}
+<main>
+  {{template "flash" .}}
+  <h1>ابزارها و تنظیمات</h1>
+  <div class="cards" id="toollist">
+    {{range .Tools}}{{if ne .Path "tools"}}<a class="tile" href="{{$.BasePath}}{{.Path}}"><strong>{{.Title}}</strong><span class="small muted">{{.Note}}</span></a>{{end}}{{end}}
+  </div>
+  <div class="tools-side">
+    {{template "readiness" .}}
+    <section class="side-card">
+      <h4>آخرین اجراها</h4>
+      <ul class="drawer-list">
+        {{range .Recent}}<li class="st-{{.Status}}"><a href="{{$.BasePath}}runs/{{.ID}}"><span class="dot"></span><span><strong>{{.Title}}</strong><span class="small muted"> {{.HostName}}{{with index .Inputs "domain"}} · <span dir="ltr">{{.}}</span>{{end}}</span><br><span class="small muted" dir="ltr">{{.StartedAt.Format "01-02 15:04"}}</span> <span class="small">{{template "status" .Status}}</span></span></a></li>{{else}}<li class="muted small">هنوز اجرایی نیست.</li>{{end}}
+      </ul>
+      <a class="small" href="{{.BasePath}}runs">همه‌ی اجراها</a>
+    </section>
+  </div>
+</main>
+</body>
+</html>
