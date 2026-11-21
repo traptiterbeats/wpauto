@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"path"
+	"sort"
 	"strings"
 	"sync"
 	"testing"
@@ -19,8 +20,108 @@ type Fake struct {
 	mu    sync.Mutex
 	Files map[string]string
 	Calls []string
-	// Fail makes the named Module/function return an error.
+	// Fail makes the named Module/function return an error. API2 calls are named
+	// "api2:Module/function"; a single Fileman::fileop operation can be failed with
+	// "api2:Fileman/fileop:<op>" (e.g. "api2:Fileman/fileop:extract").
 	Fail map[string]bool
+	// ShallowUnlink makes Fileman::fileop unlink behave like a cPanel that cannot delete a
+	// folder that still has files in it.
+	ShallowUnlink bool
+	// Extracted lists the archive entries Fileman::fileop extract writes (relative to the
+	// destination). Nil means a tiny WordPress tree under "wordpress/".
+	Extracted []string
+}
+
+// DefaultExtracted is what extract writes when Extracted is nil.
+var DefaultExtracted = []string{"wordpress/index.php", "wordpress/wp-load.php", "wordpress/wp-includes/version.php", "wordpress/wp-admin/install.php"}
+
+// Under returns the written files at or below p (p itself or p/...), sorted.
+func (f *Fake) Under(p string) []string {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.under(p)
+}
+
+func (f *Fake) under(p string) []string {
+	p = strings.TrimSuffix(p, "/")
+	var out []string
+	for k := range f.Files {
+		if k == p || strings.HasPrefix(k, p+"/") {
+			out = append(out, k)
+		}
+	}
+	sort.Strings(out)
+	return out
+}
+
+// Path returns the full path of a written file whose path ends with suffix.
+func (f *Fake) Path(suffix string) (string, bool) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	for p := range f.Files {
+		if strings.HasSuffix(p, suffix) {
+			return p, true
+		}
+	}
+	return "", false
+}
+
+// Move renames every written file at or below from to the same place below to.
+func (f *Fake) Move(from, to string) {
+	f.fileop("move", []string{from}, []string{to})
+}
+
+// Delete removes every written file at or below p.
+func (f *Fake) Delete(p string) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	for _, k := range f.under(p) {
+		delete(f.Files, k)
+	}
+}
+
+// fileop applies one Fileman::fileop operation to the fake file tree.
+func (f *Fake) fileop(op string, src, dst []string) string {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	switch op {
+	case "unlink":
+		for _, p := range src {
+			p = strings.TrimSuffix(p, "/")
+			if f.ShallowUnlink {
+				delete(f.Files, p) // a file; a folder with files in it stays
+				continue
+			}
+			for _, k := range f.under(p) {
+				delete(f.Files, k)
+			}
+		}
+	case "rename", "move":
+		for i, p := range src {
+			if i >= len(dst) {
+				break
+			}
+			for _, k := range f.under(p) {
+				f.Files[dst[i]+strings.TrimPrefix(k, strings.TrimSuffix(p, "/"))] = f.Files[k]
+				delete(f.Files, k)
+			}
+		}
+	case "extract":
+		if len(src) == 0 || len(dst) == 0 {
+			return "missing source or destination"
+		}
+		if _, ok := f.Files[src[0]]; !ok {
+			return "archive not found"
+		}
+		list := f.Extracted
+		if list == nil {
+			list = DefaultExtracted
+		}
+		for _, e := range list {
+			f.Files[path.Join(dst[0], e)] = "extracted " + e
+		}
+	}
+	return ""
 }
 
 // Called reports whether Module/function was called.
@@ -168,6 +269,12 @@ func New(t *testing.T, user, pass string) *Fake {
 			})
 		case "Fileman/list_files":
 			switch r.FormValue("dir") {
+			case home:
+				list := f.children(home)
+				if list == nil {
+					list = []map[string]any{}
+				}
+				ok(w, list)
 			case home + "/public_html":
 				ok(w, []map[string]any{{"file": "wp-config.php", "type": "file"}, {"file": "wp-includes", "type": "dir"}, {"file": "index.php", "type": "file"}, {"file": "shop", "type": "dir"}, {"file": "cgi-bin", "type": "dir"}})
 			case home + "/public_html/shop":
@@ -202,6 +309,13 @@ func New(t *testing.T, user, pass string) *Fake {
 			"Mysql/create_database", "Mysql/create_user", "Mysql/set_privileges_on_database",
 			"Mysql/delete_database", "Mysql/delete_user":
 			ok(w, nil)
+		case "Fileman/delete_file":
+			f.mu.Lock()
+			for _, k := range f.under(r.FormValue("path")) {
+				delete(f.Files, k)
+			}
+			f.mu.Unlock()
+			ok(w, nil)
 		case "Fileman/get_file_content":
 			if r.FormValue("file") == "wp-config.php" {
 				db := path.Base(r.FormValue("dir"))
@@ -217,9 +331,26 @@ func New(t *testing.T, user, pass string) *Fake {
 	})
 	mux.HandleFunc(tok+"/json-api/cpanel", func(w http.ResponseWriter, r *http.Request) {
 		name := "api2:" + r.FormValue("cpanel_jsonapi_module") + "/" + r.FormValue("cpanel_jsonapi_func")
-		if record(name) {
+		failed := record(name)
+		op := r.FormValue("op")
+		if name == "api2:Fileman/fileop" && op != "" {
+			failed = record(name+":"+op) || failed
+		}
+		if failed {
 			_ = json.NewEncoder(w).Encode(map[string]any{"cpanelresult": map[string]any{"error": "forced failure", "event": map[string]any{"result": 0}}})
 			return
+		}
+		if name == "api2:Fileman/fileop" {
+			split := func(v string) []string {
+				if v == "" {
+					return nil
+				}
+				return strings.Split(v, ",")
+			}
+			if msg := f.fileop(op, split(r.FormValue("sourcefiles")), split(r.FormValue("destfiles"))); msg != "" {
+				_ = json.NewEncoder(w).Encode(map[string]any{"cpanelresult": map[string]any{"data": []any{map[string]any{"result": 0, "err": msg}}, "event": map[string]any{"result": 1}}})
+				return
+			}
 		}
 		_ = json.NewEncoder(w).Encode(map[string]any{"cpanelresult": map[string]any{"data": []any{map[string]any{"result": 1}}, "event": map[string]any{"result": 1}}})
 	})

@@ -2,16 +2,33 @@ package engine
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"path"
+	"strconv"
 	"strings"
+	"sync"
 	"testing"
+	"time"
 
 	"github.com/traptiterbeats/wpauto/internal/cpanel/cpaneltest"
+	"github.com/traptiterbeats/wpauto/internal/wp"
 )
 
-// fakeSite emulates the helper script and a freshly installed WordPress.
-func fakeSite(t *testing.T, fake *cpaneltest.Fake, failInstall bool) *httptest.Server {
+// siteOpts changes how the fake helper behaves.
+type siteOpts struct {
+	failInstall bool
+	entries     int         // entries in the fake zip (extract_chunk); default 700
+	chunkFails  map[int]int // extract_chunk from → how many times it fails before working
+	setup       func(*cpaneltest.Fake)
+	calls       *[]string // helper actions in order
+}
+
+// fakeSite emulates the helper script and a freshly installed WordPress. Files the helper would
+// write on the host are written into the fake cPanel's file tree.
+func fakeSite(t *testing.T, fake *cpaneltest.Fake, o siteOpts) *httptest.Server {
+	var mu sync.Mutex
 	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if strings.HasSuffix(r.URL.Path, ".php") && strings.Contains(r.URL.Path, "wpauto-") {
 			// The helper must exist (written via cPanel) and the token must match.
@@ -19,16 +36,78 @@ func fakeSite(t *testing.T, fake *cpaneltest.Fake, failInstall bool) *httptest.S
 				w.WriteHeader(404)
 				return
 			}
+			helperPath, _ := fake.Path(r.URL.Path)
+			docroot := path.Dir(helperPath)
+			xdir := docroot + "/.wpauto-x"
+			a := r.URL.Query().Get("a")
+			mu.Lock()
+			if o.calls != nil {
+				*o.calls = append(*o.calls, a)
+			}
+			mu.Unlock()
 			out := map[string]any{"ok": true}
-			switch r.URL.Query().Get("a") {
+			switch a {
 			case "ping":
 				out = map[string]any{"ok": true, "php": "8.3.20", "zip": true, "curl": true, "mysqli": true, "free_mb": 700, "memory_limit": "128M"}
 			case "download":
 				out = map[string]any{"ok": false, "error": "download failed: HTTP 0 blocked"}
-			case "extract":
-				out["moved"] = 21
+			case "extract_chunk":
+				from, _ := strconv.Atoi(r.URL.Query().Get("from"))
+				n, _ := strconv.Atoi(r.URL.Query().Get("n"))
+				mu.Lock()
+				fail := o.chunkFails[from] > 0
+				if fail {
+					o.chunkFails[from]--
+				}
+				mu.Unlock()
+				if fail {
+					w.WriteHeader(500) // the host killed the request
+					return
+				}
+				total := o.entries
+				if total == 0 {
+					total = 700
+				}
+				if from == 0 {
+					fake.Delete(xdir)
+				}
+				end := min(total, from+n)
+				for i := from; i < end; i++ {
+					name := fmt.Sprintf("wordpress/wp-content/f%d.php", i)
+					if i < len(cpaneltest.DefaultExtracted) {
+						name = cpaneltest.DefaultExtracted[i]
+					}
+					fake.Put(xdir+"/"+name, "x")
+				}
+				out = map[string]any{"ok": true, "next": end, "total": total, "done": end >= total}
+			case "place":
+				src := xdir + "/wordpress"
+				files := fake.Under(src)
+				if len(files) == 0 {
+					out = map[string]any{"ok": false, "error": "unexpected zip layout", "redo": true}
+					break
+				}
+				top := map[string]bool{}
+				for _, f := range files {
+					name, _, _ := strings.Cut(strings.TrimPrefix(f, src+"/"), "/")
+					top[name] = true
+				}
+				for name := range top {
+					if len(fake.Under(docroot+"/"+name)) > 0 {
+						out = map[string]any{"ok": false, "error": "files already exist: " + name}
+					}
+				}
+				if out["ok"] == false {
+					break
+				}
+				for name := range top {
+					fake.Move(src+"/"+name, docroot+"/"+name)
+				}
+				fake.Delete(xdir)
+				fake.Delete(docroot + "/.wpauto-wp.zip")
+				out["moved"] = len(top)
 			case "install":
-				if failInstall {
+				if o.failInstall {
 					out = map[string]any{"ok": false, "error": "Error establishing a database connection"}
 				} else {
 					out["version"] = "6.9"
@@ -50,10 +129,20 @@ func installInputs() map[string]string {
 }
 
 func runInstall(t *testing.T, failInstall bool, inputs map[string]string) (Run, *cpaneltest.Fake) {
+	return runInstallWith(t, inputs, siteOpts{failInstall: failInstall})
+}
+
+func runInstallWith(t *testing.T, inputs map[string]string, o siteOpts) (Run, *cpaneltest.Fake) {
 	t.Setenv("WPAUTO_DIR", t.TempDir())
+	oldWaits := wp.ChunkRetryWaits
+	wp.ChunkRetryWaits = []time.Duration{time.Millisecond, time.Millisecond}
+	t.Cleanup(func() { wp.ChunkRetryWaits = oldWaits })
 	fake := cpaneltest.New(t, "kfncspot", "secret")
 	t.Cleanup(fake.Close)
-	site := fakeSite(t, fake, failInstall)
+	if o.setup != nil {
+		o.setup(fake)
+	}
+	site := fakeSite(t, fake, o)
 	t.Cleanup(site.Close)
 	// The panel falls back to downloading the zip itself; serve a small fake zip.
 	zip := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -77,6 +166,14 @@ func runInstall(t *testing.T, failInstall bool, inputs map[string]string) (Run, 
 		t.Fatal(err)
 	}
 	return wait(t, r, id), fake
+}
+
+func runLogs(run Run) string {
+	logs := ""
+	for _, l := range run.Log {
+		logs += l.Level + " " + l.Msg + "\n"
+	}
+	return logs
 }
 
 func TestWPInstallSubdomain(t *testing.T) {

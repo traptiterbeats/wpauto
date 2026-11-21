@@ -100,13 +100,44 @@ func TestHelperEndToEnd(t *testing.T) {
 	s := &Site{Host: "127.0.0.1", Path: "/", Addr: addr, Scheme: "http"}
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 	defer cancel()
-	for _, a := range []string{"ping", "download", "extract", "install"} {
+	helperStep := func(a string) map[string]any {
+		t.Helper()
 		res, err := s.Helper(ctx, HelperName(token), token, a)
 		if err != nil {
 			t.Fatalf("%s: %v", a, err)
 		}
 		t.Logf("%s → %v", a, res)
+		return res
 	}
+	helperStep("ping")
+	helperStep("download")
+	// cPanel's own extract is not available here; this is the chunked fallback the engine uses.
+	chunks := 0
+	if err := s.ExtractChunks(ctx, HelperName(token), token, func(done, total int) { chunks++ }, nil); err != nil {
+		t.Fatalf("extract_chunk: %v", err)
+	}
+	if chunks < 2 {
+		t.Fatalf("expected several chunks, got %d", chunks)
+	}
+	// an extraction with a file missing is refused and reported as redo
+	victim := filepath.Join(dir, TempDir, "wordpress", "wp-load.php")
+	saved, err := os.ReadFile(victim)
+	if err != nil {
+		t.Fatal(err)
+	}
+	os.Remove(victim)
+	if res, err := s.Helper(ctx, HelperName(token), token, "place"); err == nil || res["redo"] != true {
+		t.Fatalf("place accepted an incomplete extraction: %v %v", res, err)
+	}
+	write(filepath.Join(TempDir, "wordpress", "wp-load.php"), string(saved))
+	helperStep("place")
+	if _, err := os.Stat(filepath.Join(dir, TempDir)); !os.IsNotExist(err) {
+		t.Fatalf("%s not removed after place", TempDir)
+	}
+	if _, err := os.Stat(filepath.Join(dir, ZipFile)); !os.IsNotExist(err) {
+		t.Fatalf("%s not removed after place", ZipFile)
+	}
+	helperStep("install")
 	if _, err := s.Helper(ctx, HelperName(token), "wrong-token-wrong-token-wrong-token-wrong-to", "ping"); err == nil {
 		t.Fatal("wrong token accepted")
 	}

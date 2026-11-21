@@ -10,6 +10,7 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -218,4 +219,53 @@ func (s *Site) Get(ctx context.Context, p string) (int, string, error) {
 	defer resp.Body.Close()
 	b, _ := io.ReadAll(io.LimitReader(resp.Body, 512<<10))
 	return resp.StatusCode, string(b), nil
+}
+
+// ChunkSize is how many zip entries one extract_chunk request unpacks; ChunkRetryWaits are the
+// pauses before retrying a failed chunk (its length is the number of retries).
+var (
+	ChunkSize       = 300
+	ChunkRetryWaits = []time.Duration{3 * time.Second, 10 * time.Second}
+)
+
+// ExtractChunks unpacks the WordPress zip next to the helper into its temp folder a chunk of
+// entries per request (helper action extract_chunk), so no request runs long enough for a
+// shared host to kill it. progress gets the entries done and the total after every chunk; retry
+// is told about a failed chunk before it is tried again.
+func (s *Site) ExtractChunks(ctx context.Context, file, token string, progress func(done, total int), retry func(from, attempt int, err error)) error {
+	from := 0
+	for {
+		var res map[string]any
+		var err error
+		for attempt := 0; ; attempt++ {
+			res, err = s.HelperArgs(ctx, file, token, "extract_chunk", url.Values{"from": {strconv.Itoa(from)}, "n": {strconv.Itoa(ChunkSize)}})
+			if err == nil || attempt >= len(ChunkRetryWaits) || ctx.Err() != nil {
+				break
+			}
+			if retry != nil {
+				retry(from, attempt+1, err)
+			}
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			case <-time.After(ChunkRetryWaits[attempt]):
+			}
+		}
+		if err != nil {
+			return fmt.Errorf("extract entries from %d: %w", from, err)
+		}
+		next, _ := res["next"].(float64)
+		total, _ := res["total"].(float64)
+		done, _ := res["done"].(bool)
+		if progress != nil {
+			progress(int(next), int(total))
+		}
+		if done {
+			return nil
+		}
+		if int(next) <= from {
+			return fmt.Errorf("extract_chunk made no progress at entry %d", from)
+		}
+		from = int(next)
+	}
 }

@@ -108,8 +108,9 @@ func (e *apEnv) fakeSite() *httptest.Server {
 		case "ping":
 			out = map[string]any{"ok": true, "php": "8.3.20", "zip": true, "curl": true, "mysqli": true, "free_mb": 700, "memory_limit": "128M"}
 		case "download":
+			e.fake.Put("/home/kfncspot/public_html/new/.wpauto-wp.zip", "zip") // cPanel extracts it next
 			out["bytes"] = 1 << 20
-		case "extract":
+		case "place":
 			e.fake.Put("/home/kfncspot/public_html/new/wp-includes/version.php", "<?php $wp_version = '6.9';")
 			out["moved"] = 21
 		case "install":

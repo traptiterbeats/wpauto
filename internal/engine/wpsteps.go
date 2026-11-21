@@ -13,6 +13,7 @@ import (
 	"path"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -195,11 +196,13 @@ func stepSubdomain(ctx context.Context, rc *RunContext, a map[string]string) (ma
 	rc.newDomain = host
 	docroot := a["docroot"]
 	rc.Undo("حذف ساب‌دامین "+host, func(ctx context.Context) error {
-		_, err := c.API2(ctx, "SubDomain", "delsubdomain", url.Values{"domain": {host}})
-		if err == nil && docroot != "" && a["dir_exists"] != "true" {
-			err = c.Remove(ctx, docroot)
+		if _, err := c.API2(ctx, "SubDomain", "delsubdomain", url.Values{"domain": {host}}); err != nil {
+			return err
 		}
-		return err
+		if docroot != "" && a["dir_exists"] != "true" {
+			removeVerified(ctx, rc, c, "پوشه‌ی ساب‌دامین", docroot)
+		}
+		return nil
 	})
 	return map[string]string{"host": host}, nil
 }
@@ -218,7 +221,10 @@ func stepMkdir(ctx context.Context, rc *RunContext, a map[string]string) (map[st
 		return nil, err
 	}
 	rc.Logf("پوشه‌ی %s ساخته شد", dir)
-	rc.Undo("حذف پوشه‌ی "+dir, func(ctx context.Context) error { return c.Remove(ctx, dir) })
+	rc.Undo("حذف پوشه‌ی "+dir, func(ctx context.Context) error {
+		removeVerified(ctx, rc, c, "پوشه", dir)
+		return nil
+	})
 	return nil, nil
 }
 
@@ -318,10 +324,10 @@ func stepHelper(ctx context.Context, rc *RunContext, a map[string]string) (map[s
 	}
 	s := rc.site(a)
 	rc.Finally("حذف فایل‌های موقت نصب", func(ctx context.Context) error {
-		if _, err := s.Helper(ctx, helper, token, "cleanup"); err == nil {
-			return nil
-		}
-		return c.Remove(ctx, path.Join(docroot, helper), path.Join(docroot, job), path.Join(docroot, ".wpauto-wp.zip"), path.Join(docroot, ".wpauto-x"))
+		_, _ = s.Helper(ctx, helper, token, "cleanup")
+		// The helper may be gone (rollback removed the folder) or may have been stopped halfway
+		// by the host; whatever is still there is removed through cPanel.
+		return removeLeftovers(ctx, rc, c, docroot, helper, job, wp.ZipFile, wp.TempDir)
 	})
 	ping, err := s.Ping(ctx, helper, token, 3*time.Minute, func(err error) {
 		rc.Logf("سایت هنوز اسکریپت نصب را سرو نمی‌کند (%v)؛ برای ساب‌دامین تازه چند دقیقه صبر می‌کنیم…", err)
@@ -376,19 +382,113 @@ func stepFiles(ctx context.Context, rc *RunContext, a map[string]string) (map[st
 			return nil, err
 		}
 		defer f.Close()
-		if err := c.Upload(ctx, a["docroot"], ".wpauto-wp.zip", f); err != nil {
+		if err := c.Upload(ctx, a["docroot"], wp.ZipFile, f); err != nil {
 			return nil, fmt.Errorf("upload failed: %w", err)
 		}
 		rc.Logf("فایل وردپرس آپلود شد")
 	} else {
 		rc.Logf("دانلود شد (%.1f MB)", toF(res["bytes"])/1048576)
 	}
-	res, err = s.Helper(ctx, helper, token, "extract")
-	if err != nil {
+	if err := unpackWordPress(ctx, rc, c, s, helper, token, a["docroot"]); err != nil {
 		return nil, err
 	}
-	rc.Logf("فایل‌ها باز شدند (%v مورد)", res["moved"])
 	return nil, nil
+}
+
+// unpackWordPress extracts the downloaded WordPress zip and moves its files into docroot.
+// The first choice is cPanel's own File Manager: it runs outside the web server, so the PHP
+// time and process limits that kill a one-request extraction on shared hosts do not apply.
+// When cPanel cannot extract (or leaves the files incomplete), the helper extracts the zip a
+// chunk of entries per request. Either way the helper's place action does the quick final move
+// and refuses to overwrite existing files.
+func unpackWordPress(ctx context.Context, rc *RunContext, c *cpanel.Client, s *wp.Site, helper, token, docroot string) error {
+	zipPath, xdir := path.Join(docroot, wp.ZipFile), path.Join(docroot, wp.TempDir)
+	_ = c.Remove(ctx, xdir) // leftovers of an earlier attempt must not be moved into the site
+	chunked := false
+	if err := c.Extract(ctx, zipPath, xdir); err != nil {
+		rc.Warnf("باز کردن فایل‌ها با File Manager خود cPanel نشد (%v)", err)
+		chunked = true
+	} else {
+		rc.Logf("روش باز کردن فایل‌ها: File Manager خود cPanel (بدون محدودیت زمانی PHP)")
+	}
+	for {
+		if chunked {
+			rc.Logf("روش باز کردن فایل‌ها: تکه‌تکه با PHP روی هاست (%s فایل در هر درخواست)", faNum(wp.ChunkSize))
+			err := s.ExtractChunks(ctx, helper, token, func(done, total int) {
+				rc.Logf("باز کردن فایل‌ها: %s از %s", faNum(done), faNum(total))
+			}, func(from, attempt int, err error) {
+				rc.Warnf("باز کردن فایل‌ها از شماره‌ی %s نشد (%v)؛ تلاش دوباره (%s از %s)", faNum(from), err, faNum(attempt), faNum(len(wp.ChunkRetryWaits)))
+			})
+			if err != nil {
+				return fmt.Errorf("باز کردن فایل‌های وردپرس روی هاست نشد: %w", err)
+			}
+		}
+		res, err := s.Helper(ctx, helper, token, "place")
+		if err != nil {
+			if redo, _ := res["redo"].(bool); redo && !chunked {
+				rc.Warnf("خروجی File Manager کامل نبود (%v)", err)
+				chunked = true
+				continue
+			}
+			return err
+		}
+		rc.Logf("فایل‌ها سر جایشان قرار گرفتند (%v مورد)", res["moved"])
+		return nil
+	}
+}
+
+// faNum writes n with Persian digits.
+func faNum(n int) string {
+	return strings.Map(func(r rune) rune {
+		if r >= '0' && r <= '9' {
+			return '۰' + r - '0'
+		}
+		return r
+	}, strconv.Itoa(n))
+}
+
+// removeVerified deletes a folder created by this run and checks through cPanel that it is
+// really gone; whatever remains is reported with its path so it can be removed by hand.
+func removeVerified(ctx context.Context, rc *RunContext, c *cpanel.Client, what, dir string) {
+	err := c.RemoveAll(ctx, dir)
+	var rem *cpanel.RemainError
+	if errors.As(err, &rem) {
+		rc.Warnf("%s %s کامل پاک نشد و هنوز روی هاست هست؛ از File Manager در cPanel دستی پاکش کنید", what, dir)
+	} else if err != nil {
+		rc.Warnf("حذف %s %s بررسی نشد (%v)؛ در File Manager نگاه کنید", what, dir, err)
+	}
+}
+
+// removeLeftovers removes the named temporary files and folders from dir if they are still
+// there and reports any that cannot be removed.
+func removeLeftovers(ctx context.Context, rc *RunContext, c *cpanel.Client, dir string, names ...string) error {
+	list, err := c.List(ctx, dir)
+	if err != nil {
+		if ok, xerr := c.Exists(ctx, dir); xerr == nil && !ok {
+			return nil // the whole folder is gone (rollback)
+		}
+		return fmt.Errorf("پوشه‌ی %s خوانده نشد: %w", dir, err)
+	}
+	want := map[string]bool{}
+	for _, n := range names {
+		want[n] = true
+	}
+	var left []string
+	for _, e := range list {
+		if want[e.Name] {
+			left = append(left, path.Join(dir, e.Name))
+		}
+	}
+	if len(left) == 0 {
+		return nil
+	}
+	err = c.RemoveAll(ctx, left...)
+	var rem *cpanel.RemainError
+	if errors.As(err, &rem) {
+		rc.Warnf("این فایل‌های موقت روی هاست ماندند؛ از File Manager در cPanel دستی پاکشان کنید: %s", strings.Join(rem.Paths, "، "))
+		return fmt.Errorf("%d مورد پاک نشد", len(rem.Paths))
+	}
+	return err
 }
 
 func toF(v any) float64 {
@@ -582,11 +682,17 @@ func prepareRoot(ctx context.Context, rc *RunContext, c *cpanel.Client, dir stri
 		_ = json.Unmarshal(data, &files)
 		var del []string
 		for _, f := range files {
-			if !had[f.File] && (wpOwnFile(f.File) || f.File == ".wpauto-x") {
+			if !had[f.File] && (wpOwnFile(f.File) || f.File == wp.TempDir) {
 				del = append(del, path.Join(dir, f.File))
 			}
 		}
-		return c.Remove(ctx, del...)
+		err = c.RemoveAll(ctx, del...)
+		var rem *cpanel.RemainError
+		if errors.As(err, &rem) {
+			rc.Warnf("این فایل‌ها از ریشه‌ی دامنه کامل پاک نشدند؛ از File Manager در cPanel دستی پاکشان کنید: %s", strings.Join(rem.Paths, "، "))
+			return nil
+		}
+		return err
 	})
 	for _, n := range strings.Split(rc.Vars["root_shadow"], "\n") {
 		if n == "" {

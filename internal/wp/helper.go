@@ -54,6 +54,13 @@ func (j Job) JSON() string {
 	return string(b)
 }
 
+// ZipFile and TempDir are the WordPress download and the folder it is extracted into, both
+// next to the helper (removed on cleanup).
+const (
+	ZipFile = ".wpauto-wp.zip"
+	TempDir = ".wpauto-x"
+)
+
 // PkgDir is the folder next to the helper that receives uploaded zips (removed on cleanup).
 func PkgDir(token string) string { return ".wpauto-pkg-" + token[:16] }
 
@@ -220,16 +227,56 @@ case 'download':
     if ($err !== '') { wpauto_out(false, array('error' => $err)); }
     wpauto_out(true, array('bytes' => filesize($zip)));
 
-case 'extract':
+case 'extract_chunk':
+    // Extracts entries [from, from+n) of the WordPress zip into .wpauto-x, so no single request
+    // runs long enough for the host to kill it. from=0 starts over with an empty folder.
     if (!class_exists('ZipArchive')) { wpauto_out(false, array('error' => 'ZipArchive is not available in PHP')); }
     if (!is_file($zip)) { wpauto_out(false, array('error' => 'zip file missing')); }
+    $from = (isset($_GET['from']) && ctype_digit((string)$_GET['from'])) ? (int)$_GET['from'] : -1;
+    if ($from < 0) { wpauto_out(false, array('error' => 'bad argument: from')); }
+    $n = (isset($_GET['n']) && ctype_digit((string)$_GET['n'])) ? (int)$_GET['n'] : 300;
+    if ($n < 1 || $n > 5000) { $n = 300; }
     $z = new ZipArchive();
     if ($z->open($zip) !== true) { wpauto_out(false, array('error' => 'cannot open zip (corrupt download?)')); }
-    wpauto_rrmdir($tmp);
-    if (!$z->extractTo($tmp)) { $z->close(); wpauto_out(false, array('error' => 'extract failed (disk full?)')); }
+    $total = $z->numFiles;
+    if ($from === 0) { wpauto_rrmdir($tmp); }
+    if (!is_dir($tmp) && !@mkdir($tmp, 0755)) { $z->close(); wpauto_out(false, array('error' => 'cannot create ' . basename($tmp))); }
+    $end = min($total, $from + $n);
+    $names = array();
+    for ($i = $from; $i < $end; $i++) {
+        $nm = (string)$z->getNameIndex($i);
+        $c = str_replace('\\', '/', $nm);
+        if (substr($c, 0, 1) === '/' || preg_match('#(^|/)\.\.(/|$)#', $c)) { $z->close(); wpauto_out(false, array('error' => 'unexpected path in zip: ' . $c)); }
+        $names[] = $nm;
+    }
+    if ($names && !$z->extractTo($tmp, $names)) { $z->close(); wpauto_out(false, array('error' => 'extract failed (disk full?)')); }
     $z->close();
+    wpauto_out(true, array('next' => $end, 'total' => $total, 'done' => $end >= $total));
+
+case 'place':
+    // Moves the extracted .wpauto-x/wordpress/* into this folder (renames only, so it is quick)
+    // after checking that the extraction is complete and that nothing would be overwritten.
     $src = $tmp . '/wordpress';
-    if (!is_dir($src)) { wpauto_rrmdir($tmp); wpauto_out(false, array('error' => 'unexpected zip layout')); }
+    if (!is_dir($src)) { wpauto_out(false, array('error' => 'unexpected zip layout', 'redo' => true)); }
+    if (is_file($zip) && class_exists('ZipArchive')) {
+        $z = new ZipArchive();
+        if ($z->open($zip) === true) {
+            $missing = 0;
+            $firstMissing = '';
+            for ($i = 0; $i < $z->numFiles; $i++) {
+                $st = $z->statIndex($i);
+                $nm = str_replace('\\', '/', (string)$st['name']);
+                if (substr($nm, -1) === '/') { continue; }
+                $p = $tmp . '/' . $nm;
+                if (!is_file($p) || filesize($p) !== (int)$st['size']) {
+                    $missing++;
+                    if ($firstMissing === '') { $firstMissing = $nm; }
+                }
+            }
+            $z->close();
+            if ($missing > 0) { wpauto_out(false, array('error' => 'incomplete extraction: ' . $missing . ' files missing or short (' . $firstMissing . ')', 'redo' => true)); }
+        }
+    }
     $conflicts = array();
     foreach (scandir($src) as $f) {
         if ($f === '.' || $f === '..') { continue; }
