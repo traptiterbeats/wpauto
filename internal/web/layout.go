@@ -17,22 +17,22 @@ type section struct {
 }
 
 var sections = []section{
-	{"tasks", "کارها", ""},
-	{"autopilot", "AutoPilot", "autopilot"},
-	{"projects", "پروژه‌ها", "projects"},
 	{"hosts", "هاست‌ها", "hosts"},
+	{"tasks", "کارها", ""},
+	{"projects", "پروژه‌ها", "projects"},
 	{"themes", "قالب‌ها", "themes"},
 	{"customize", "شخصی‌سازی", "customize"},
 	{"ai", "هوش مصنوعی", "ai"},
 	{"wordpress", "وردپرس‌ها", "wordpress"},
+	{"autopilot", "🚀 AutoPilot", "autopilot"},
 }
 
 // sectionFor maps a request path (below the base path) to its menu.
 func sectionFor(rel string) section {
 	first, _, _ := strings.Cut(rel, "/")
 	switch first {
-	case "", "run":
-		return sections[0]
+	case "", "run", "runs":
+		first = ""
 	case "plugins":
 		first = "themes"
 	}
@@ -41,7 +41,7 @@ func sectionFor(rel string) section {
 			return s
 		}
 	}
-	return sections[0]
+	return sections[1] // کارها
 }
 
 // readiness is the always-visible checklist in the side panel.

@@ -261,7 +261,7 @@ func apLogText(p autoPilot) string {
 func TestAutopilotSuccess(t *testing.T) {
 	e := newAPEnv(t)
 	form := e.get("autopilot")
-	for _, want := range []string{`class="on" aria-current="page">AutoPilot<`, "→ بازگشت", `name="story"`, `<option value="acme"`, "آمادگی پنل", `enctype="multipart/form-data"`} {
+	for _, want := range []string{`aria-current="page">🚀 AutoPilot<`, "→ بازگشت", `name="story"`, `name="theme" value="acme"`, "آمادگی پنل", `enctype="multipart/form-data"`} {
 		if !strings.Contains(form, want) {
 			t.Fatalf("form lacks %q", want)
 		}

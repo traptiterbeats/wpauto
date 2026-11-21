@@ -485,6 +485,10 @@ func (s *Server) apGenerateOnce(ctx context.Context, id string, demo *customize.
 		if err != nil {
 			return fmt.Errorf("پر کردن بریف از توضیح مشتری: %w", err)
 		}
+		if brief.ColorPrimary == "" {
+			// colours left off in the form keep the theme's own; the AI does not pick them
+			b.ColorPrimary, b.ColorSecondary = "", ""
+		}
 		brief = b
 		if _, err := st.Update(d.ID, func(d *customize.Draft) error {
 			d.Brief = b

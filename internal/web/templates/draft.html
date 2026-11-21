@@ -64,8 +64,8 @@
     {{with .D.Brief}}
     <label class="check"><input type="checkbox" name="use_colors" {{if .ColorPrimary}}checked{{end}}> رنگ‌های برند را اعمال کن</label>
     <div class="grid2">
-      <label>رنگ اصلی<input type="color" name="color_primary" value="{{if .ColorPrimary}}{{.ColorPrimary}}{{else}}#83b5ff{{end}}"></label>
-      <label>رنگ دوم<input type="color" name="color_secondary" value="{{if .ColorSecondary}}{{.ColorSecondary}}{{else}}#ffffff{{end}}"></label>
+      <label>رنگ اصلی<input type="color" name="color_primary" oninput="this.form.use_colors.checked=true" value="{{if .ColorPrimary}}{{.ColorPrimary}}{{else}}#83b5ff{{end}}"></label>
+      <label>رنگ دوم<input type="color" name="color_secondary" oninput="this.form.use_colors.checked=true" value="{{if .ColorSecondary}}{{.ColorSecondary}}{{else}}#ffffff{{end}}"></label>
     </div>
     <label>نکته‌های دیگر برای نویسنده<textarea name="notes" rows="3">{{.Notes}}</textarea></label>
     <label>زبان<input name="language" value="{{.Language}}" placeholder="فارسی"></label>

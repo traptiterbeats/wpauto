@@ -55,10 +55,14 @@
     <p class="muted small">حداقل ۱۲ کاراکتر. از admin برای نام کاربری استفاده نکنید. رمز فقط در حافظه‌ی پنل می‌ماند، ذخیره نمی‌شود و در لاگ نمی‌آید.</p>
 
     <h3>قالب و هوش مصنوعی</h3>
+    <fieldset><legend>قالب (از کاتالوگ)</legend>
+      <div class="theme-pick">
+      {{range $i, $t := .Themes}}<label class="theme-card"><input type="radio" name="theme" value="{{$t.Slug}}" {{if eq $t.Slug $.F.Theme}}checked{{else if and (eq $i 0) (not $.F.Theme)}}checked{{end}} required>
+        {{if $t.Screenshot}}<img src="{{$.BasePath}}themes/{{$t.Slug}}/screenshot" alt="{{$t.Name}}" loading="lazy">{{else}}<div class="noshot"></div>{{end}}
+        <span>{{$t.Name}} <span class="muted small" dir="ltr">{{$t.Version}}</span></span></label>{{end}}
+      </div>
+    </fieldset>
     <div class="grid2">
-      <label>قالب (از کاتالوگ)
-        <select name="theme">{{range .Themes}}<option value="{{.Slug}}" {{if eq .Slug $.F.Theme}}selected{{end}}>{{.Name}} {{.Version}}</option>{{end}}</select>
-      </label>
       <label>سرویس هوش مصنوعی
         <select name="provider">{{range .Providers}}<option value="{{.ID}}" {{if eq .ID $.F.Provider}}selected{{end}}>{{.Name}} · {{if .Model}}{{.Model}}{{else}}بدون مدل{{end}}</option>{{end}}</select>
       </label>
@@ -97,8 +101,8 @@
     {{with .F.Brief}}
     <label class="check"><input type="checkbox" name="use_colors" {{if .ColorPrimary}}checked{{end}}> رنگ‌های برند را اعمال کن</label>
     <div class="grid2">
-      <label>رنگ اصلی<input type="color" name="color_primary" value="{{if .ColorPrimary}}{{.ColorPrimary}}{{else}}#83b5ff{{end}}"></label>
-      <label>رنگ دوم<input type="color" name="color_secondary" value="{{if .ColorSecondary}}{{.ColorSecondary}}{{else}}#ffffff{{end}}"></label>
+      <label>رنگ اصلی<input type="color" name="color_primary" oninput="this.form.use_colors.checked=true" value="{{if .ColorPrimary}}{{.ColorPrimary}}{{else}}#83b5ff{{end}}"></label>
+      <label>رنگ دوم<input type="color" name="color_secondary" oninput="this.form.use_colors.checked=true" value="{{if .ColorSecondary}}{{.ColorSecondary}}{{else}}#ffffff{{end}}"></label>
     </div>
     <label>نکته‌های دیگر برای نویسنده<textarea name="notes" rows="2">{{.Notes}}</textarea></label>
     {{end}}

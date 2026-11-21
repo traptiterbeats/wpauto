@@ -199,3 +199,11 @@ button.small,a.btn.small{padding:4px 10px;font-size:12px}
 .ap-site{align-items:center}
 .ap-site.big .btn{font-size:17px;padding:12px 20px}
 #apstages [data-role="dur"]{font-variant-numeric:tabular-nums}
+.theme-pick{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:12px;margin:8px 0}
+.theme-card{display:flex;flex-direction:column;gap:6px;border:2px solid var(--line);border-radius:10px;overflow:hidden;cursor:pointer;padding:0 0 8px}
+.theme-card input{position:absolute;opacity:0;pointer-events:none}
+.theme-card img,.theme-card .noshot{width:100%;aspect-ratio:4/3;object-fit:cover;background:#0c0f1b;display:block}
+.theme-card>span{padding:0 10px}
+.theme-card:has(input:checked){border-color:#e0b84a;box-shadow:0 0 0 2px #e0b84a55}
+nav a.gold{color:#e0b84a;font-weight:700;border:1px solid #e0b84a66;border-radius:8px}
+nav a.gold.on{background:#e0b84a;color:#1a1405}

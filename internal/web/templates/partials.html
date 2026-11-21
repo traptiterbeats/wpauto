@@ -1,7 +1,7 @@
 {{define "nav"}}
 <header class="top">
   <a href="{{.BasePath}}" class="brand">wpauto</a>
-  <nav>{{range .Sections}}<a href="{{$.BasePath}}{{.Path}}" {{if eq .Key $.Section.Key}}class="on" aria-current="page"{{end}}>{{.Title}}</a>{{end}}</nav>
+  <nav>{{range .Sections}}<a href="{{$.BasePath}}{{.Path}}" {{if eq .Key $.Section.Key}}class="on{{if eq .Key "autopilot"}} gold{{end}}" aria-current="page"{{else if eq .Key "autopilot"}}class="gold"{{end}}>{{.Title}}</a>{{end}}</nav>
   <span class="muted small">نسخه {{.Version}}</span>
   <form method="post" action="{{.BasePath}}logout" class="logout">
     <input type="hidden" name="csrf" value="{{.CSRF}}">
