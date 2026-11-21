@@ -24,6 +24,7 @@
         <div class="chips">
           {{if .HasDemo}}<span class="badge">دمو {{.DemoVersion}}</span>{{else}}<span class="badge">بدون دمو</span>{{end}}
           {{with index $.Std .Slug}}{{if .OK}}<span class="badge ok">✔ استاندارد شخصی‌سازی</span>{{else if not .NoDemo}}<span class="badge bad" title="جاافتاده: {{range $i, $m := .Missing}}{{if $i}}، {{end}}{{$m}}{{end}}">✘ استاندارد نیست</span>{{end}}{{end}}
+          {{with index $.Std .Slug}}{{if not .NoDemo}}<span class="badge" title="{{if .V2}}قرارداد نسخه‌ی ۲: عکس‌ها برش و تغییر اندازه می‌خورند{{else}}قرارداد نسخه‌ی ۱{{end}}">🖼 {{.Slots}} جای تصویر{{if .V2}} · v2{{end}}</span>{{if .Products}}<span class="badge" title="پیش‌فرض: {{if eq .ProductDefault "ai"}}هوش مصنوعی محصولات نمونه بسازد{{else}}محصولات دمو بمانند{{end}}">🛒 محصولات</span>{{else}}<span class="badge muted">بدون محصول</span>{{end}}{{end}}{{end}}
           {{range .Plugins}}<span class="badge" dir="ltr">{{.Slug}}{{if eq .Source "wporg"}} · wp.org{{end}}</span>{{end}}
         </div>
         {{with index $.Std .Slug}}{{if and (not .OK) (not .NoDemo)}}<p class="small bad">با شخصی‌سازی کامل هماهنگ نیست؛ این متن‌ها متن دمو می‌مانند: {{range $i, $m := .Missing}}{{if $i}}، {{end}}{{$m}}{{end}}. نسخه‌ای از قالب را بگذارید که قرارداد wpauto-customize را کامل دارد.</p>{{end}}{{end}}

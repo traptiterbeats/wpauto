@@ -30,11 +30,17 @@ type Field struct {
 	Keep     bool     `json:"keep,omitempty"`  // keep the demo value when the brief has none
 }
 
-// ImageSlot is a demo image the client can replace.
+// ImageSlot is a demo image the client can replace. Contract v2 slots also have a standard
+// ratio, an output size, a priority and a group (see images.go).
 type ImageSlot struct {
-	ID    string `json:"id"`
-	Label string `json:"label"`
-	File  string `json:"file"`
+	ID       string `json:"id"`
+	Label    string `json:"label"`
+	File     string `json:"file"`
+	Ratio    string `json:"ratio,omitempty"`
+	Width    int    `json:"width,omitempty"`
+	Height   int    `json:"height,omitempty"`
+	Priority int    `json:"priority,omitempty"`
+	Group    string `json:"group,omitempty"`
 }
 
 // Spec is the optional customize.json a theme author puts next to demo.json.
@@ -54,10 +60,9 @@ type Spec struct {
 		ThemeMod string `json:"theme_mod"`
 		Label    string `json:"label"`
 	} `json:"logo,omitempty"`
-	Images []struct {
-		ID    string `json:"id"`
-		Label string `json:"label"`
-	} `json:"images,omitempty"`
+	Images []SpecImage `json:"images,omitempty"`
+	// Products (v2) declares that the theme's demo has products.
+	Products *SpecProducts `json:"products,omitempty"`
 }
 
 // SpecField describes one field in customize.json.
@@ -109,6 +114,12 @@ type Demo struct {
 	Images   []ImageSlot
 	LogoMod  string // theme mod the logo goes to ("" = no logo slot)
 	LogoText string
+	// V2 is set for a customize.json of contract version 2 (sized image slots, products).
+	V2 bool
+	// Products is the v2 products declaration (nil = the theme declares none).
+	Products *SpecProducts
+	// Warnings are problems found in customize.json (shown on the draft page).
+	Warnings []string
 	prefix   string
 	zipPath  string
 }
@@ -276,6 +287,20 @@ func (d *Demo) auto() []Field {
 }
 
 func (d *Demo) scan() {
+	d.V2 = d.Spec != nil && d.Spec.Version >= 2
+	if d.V2 && d.Spec.Products != nil {
+		p := *d.Spec.Products
+		if p.PostType == "" {
+			p.PostType = "product"
+		}
+		if p.DefaultMode != ProductsAI {
+			if p.DefaultMode != "" && p.DefaultMode != ProductsKeep {
+				d.Warnings = append(d.Warnings, "products.default_mode باید keep یا ai باشد؛ keep فرض شد")
+			}
+			p.DefaultMode = ProductsKeep
+		}
+		d.Products = &p
+	}
 	labels := map[string]string{"title": "عنوان", "excerpt": "خلاصه", "content": "متن", "name": "نام", "description": "توضیحات", "short_description": "توضیح کوتاه"}
 	auto := d.auto()
 	for i := range auto {
@@ -309,8 +334,13 @@ func (d *Demo) scan() {
 			if group == "" {
 				group = "متن‌ها"
 			}
+			ai := sf.AI
+			if d.V2 && productRole(role) && !productTextRole(role) && ai == nil {
+				no := false
+				ai = &no // prices, SKUs and other product data stay as in the demo unless marked ai
+			}
 			f := newField(Field{Path: sf.Path, Label: sf.Label, Group: group, Kind: sf.Kind, Hint: sf.Hint, Original: v,
-				Role: role, Allow: sf.Allow, Keep: sf.Keep}, sf.AI)
+				Role: role, Allow: sf.Allow, Keep: sf.Keep}, ai)
 			seen[f.Path] = true
 			d.Fields = append(d.Fields, f)
 		}
@@ -324,10 +354,12 @@ func (d *Demo) scan() {
 	}
 	// Images: every demo image is a slot unless customize.json names them.
 	labelOf := map[string]string{}
+	specOf := map[string]SpecImage{}
 	named := false
 	if d.Spec != nil {
 		for _, im := range d.Spec.Images {
 			labelOf[im.ID], named = im.Label, true
+			specOf[im.ID] = im
 		}
 	}
 	imgs, _ := d.JSON["images"].([]any)
@@ -347,7 +379,26 @@ func (d *Demo) scan() {
 		if l == "" {
 			l = id
 		}
-		d.Images = append(d.Images, ImageSlot{ID: id, Label: l, File: str(m, "file")})
+		sl := ImageSlot{ID: id, Label: l, File: str(m, "file")}
+		if d.V2 {
+			im, ok := specOf[id]
+			if !ok {
+				im = SpecImage{ID: id}
+			}
+			d.Warnings = append(d.Warnings, sizeSlot(&sl, im)...)
+		}
+		d.Images = append(d.Images, sl)
+	}
+	if d.V2 {
+		have := map[string]bool{}
+		for _, sl := range d.Images {
+			have[sl.ID] = true
+		}
+		for _, im := range d.Spec.Images {
+			if !have[im.ID] {
+				d.Warnings = append(d.Warnings, fmt.Sprintf("تصویر %s در demo.json نیست (images[].id)", im.ID))
+			}
+		}
 	}
 	d.LogoMod, d.LogoText = "custom_logo", "لوگو"
 	if d.Spec != nil && d.Spec.Logo != nil {

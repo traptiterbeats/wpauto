@@ -53,8 +53,19 @@ var roleGuide = map[string]string{
 	"testimonial.item.text":    "a testimonial; write it as an obvious placeholder the owner must replace",
 	"faq.item.question":        "a frequently asked question for this business",
 	"faq.item.answer":          "answer to that question using only brief facts",
-	"product.item.title":       "sample product name for this business",
-	"product.item.description": "sample product description",
+	"product.item.title":       "name of a sample product this business could really sell; each item different",
+	"product.item.description": "description of that sample product (features, use); no prices or invented facts",
+	"product.item.short":       "one-sentence short description of that sample product",
+}
+
+// productTextRole reports whether a product role is a text the AI writes in the ai products
+// mode (other product.* roles such as prices or SKUs stay as in the demo unless marked ai).
+func productTextRole(role string) bool {
+	switch role {
+	case "product.item.title", "product.item.description", "product.item.short":
+		return true
+	}
+	return false
 }
 
 // dataRole reports whether a role is filled from the brief instead of the AI.

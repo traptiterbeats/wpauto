@@ -49,6 +49,12 @@ type Draft struct {
 	Values   map[string]string `json:"values"` // field path → new text
 	Images   map[string]string `json:"images"` // image slot id → file in the draft folder
 	Logo     string            `json:"logo,omitempty"`
+	// Uploads are the client's photos for the image slots (v2); Slots says which photo each slot
+	// shows and Images holds the processed file Build packs.
+	Uploads []Upload            `json:"uploads,omitempty"`
+	Slots   map[string]SlotPick `json:"slots,omitempty"`
+	// Products is the products mode of the run (keep | ai; "" = the theme's default).
+	Products string `json:"products,omitempty"`
 
 	Status    string `json:"status"` // "" | generating | ready | error
 	Error     string `json:"error,omitempty"`

@@ -85,3 +85,47 @@ func RichDemo(t testing.TB, dir, theme string, withSpec bool) string {
 	}
 	return Zip(t, dir, theme+"-rich-demo.zip", files)
 }
+
+// RichDemoV2 returns a demo package with a contract v2 customize.json: sized image slots of every
+// standard ratio (two of them product photos) and two products.
+func RichDemoV2(t testing.TB, dir, theme string) string {
+	demo := `{"version":1,"theme":"` + theme + `","requires":[],
+ "images":[{"id":"hero","file":"images/hero.jpg"},{"id":"about","file":"images/about.jpg"},{"id":"team","file":"images/team.jpg"},
+  {"id":"side","file":"images/side.jpg"},{"id":"p-mug","file":"images/p-mug.jpg"},{"id":"p-tee","file":"images/p-tee.jpg"},{"id":"unlisted","file":"images/x.jpg"}],
+ "pages":[{"slug":"home","title":"Home","content":"<p>We build apps.</p>"}],
+ "products":[{"slug":"mug","name":"Code Mug","short_description":"A mug for coders.","description":"<p>Ceramic mug.</p>","regular_price":"19","sku":"MUG-1"},
+  {"slug":"tee","name":"Dev Tee","short_description":"A shirt.","description":"<p>Cotton tee.</p>","regular_price":"25","sku":"TEE-1"}],
+ "theme_mods":{"hero_title":"Software that ships","hero_sub":"We write code.","about_text":"A software studio.","svc":"Web apps","contact_title":"Say hi"},
+ "options":{"blogname":"Demo Studio"}}`
+	spec := `{"contract":"wpauto-customize","version":2,"theme":"` + theme + `",
+ "products":{"post_type":"product","default_mode":"keep"},
+ "images":[
+  {"id":"hero","label":"Hero","ratio":"16:9","width":160,"height":90,"priority":1},
+  {"id":"about","label":"About","ratio":"4:3","width":120,"height":90,"priority":2},
+  {"id":"team","label":"Team","ratio":"1:1","width":80,"height":80,"priority":3},
+  {"id":"side","label":"Side","ratio":"3:4","width":90,"height":120,"priority":4},
+  {"id":"p-mug","label":"Mug photo","ratio":"1:1","width":80,"height":80,"priority":5,"group":"products"},
+  {"id":"p-tee","label":"Tee photo","ratio":"1:1","width":80,"height":80,"priority":6,"group":"products"}],
+ "fields":[
+  {"path":"options.blogname","label":"Site","role":"site.name"},
+  {"path":"theme_mods.hero_title","label":"Hero","role":"hero.title"},
+  {"path":"theme_mods.hero_sub","label":"Sub","role":"hero.subtitle"},
+  {"path":"theme_mods.about_text","label":"About","role":"about.text"},
+  {"path":"theme_mods.svc","label":"Service","role":"services.item.title"},
+  {"path":"theme_mods.contact_title","label":"Contact","role":"contact.title"},
+  {"path":"products[slug=mug].name","label":"Mug","role":"product.item.title"},
+  {"path":"products[slug=mug].short_description","label":"Mug short","role":"product.item.short"},
+  {"path":"products[slug=mug].description","label":"Mug text","role":"product.item.description","kind":"html"},
+  {"path":"products[slug=mug].regular_price","label":"Mug price","role":"product.item.price"},
+  {"path":"products[slug=tee].name","label":"Tee","role":"product.item.title"},
+  {"path":"products[slug=tee].sku","label":"Tee SKU","role":"product.item.sku"}]}`
+	files := map[string]string{
+		"manifest.json":  `{"theme":"` + theme + `","version":"1.0.0","schema":1,"demo":"demo.json"}`,
+		"demo.json":      demo,
+		"customize.json": spec,
+	}
+	for _, n := range []string{"hero", "about", "team", "side", "p-mug", "p-tee", "x"} {
+		files["images/"+n+".jpg"] = "\xff\xd8\xff\xe0 demo " + n
+	}
+	return Zip(t, dir, theme+"-v2-demo.zip", files)
+}

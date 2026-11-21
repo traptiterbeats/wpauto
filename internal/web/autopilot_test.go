@@ -4,6 +4,7 @@ import (
 	"archive/zip"
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"io"
 	"mime/multipart"
 	"net/http"
@@ -211,15 +212,26 @@ func (e *apEnv) post(p string, v url.Values) *http.Response {
 }
 
 // start posts the AutoPilot form (multipart, like the browser) and returns the pipeline id.
-func (e *apEnv) start() string {
+func (e *apEnv) start() string { return e.startWith(nil, nil) }
+
+// startWith is start with extra or changed fields and photos for the multi-file input.
+func (e *apEnv) startWith(extra map[string]string, photos [][]byte) string {
 	e.t.Helper()
 	var buf bytes.Buffer
 	mw := multipart.NewWriter(&buf)
-	for k, v := range map[string]string{"csrf": e.csrf, "host": e.hostID, "domain": "example.com", "mode": "subfolder", "name": "new",
+	fields := map[string]string{"csrf": e.csrf, "host": e.hostID, "domain": "example.com", "mode": "subfolder", "name": "new",
 		"title": "کافه نارنج", "locale": "fa_IR", "admin_user": "boss", "admin_email": "a@example.com", "admin_pass": apPass,
 		"theme": "acme", "provider": e.s.ai.List()[0].ID, "site_name": "کافه نارنج", "business": "کافه",
-		"about": "کافه‌ای دنج در شیراز", "services": "قهوه\nکیک", "story": "یک کافه‌ی کوچک", "email": "hi@naranj.test"} {
+		"about": "کافه‌ای دنج در شیراز", "services": "قهوه\nکیک", "story": "یک کافه‌ی کوچک", "email": "hi@naranj.test"}
+	for k, v := range extra {
+		fields[k] = v
+	}
+	for k, v := range fields {
 		_ = mw.WriteField(k, v)
+	}
+	for i, p := range photos {
+		fw, _ := mw.CreateFormFile("photos", fmt.Sprintf("photo-%d.png", i))
+		_, _ = fw.Write(p)
 	}
 	_ = mw.Close()
 	r, err := e.cl.Post(e.base+"autopilot/start", mw.FormDataContentType(), &buf)

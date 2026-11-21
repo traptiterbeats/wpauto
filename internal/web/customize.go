@@ -160,6 +160,12 @@ type stdView struct {
 	OK      bool
 	Missing []string
 	NoDemo  bool
+	// contract v2: image slots and products
+	V2             bool
+	Slots          int
+	SizedSlots     int
+	Products       bool
+	ProductDefault string
 }
 
 // standards checks every catalogue theme's demo against the customisation standard.
@@ -179,7 +185,16 @@ func standards() map[string]stdView {
 		if !ok && len(missing) == 0 {
 			missing = []string{"customize.json با قرارداد wpauto-customize"}
 		}
-		out[t.Slug] = stdView{OK: ok, Missing: missing}
+		v := stdView{OK: ok, Missing: missing, V2: demo.V2, Slots: len(demo.Images), Products: demo.Products != nil}
+		for _, sl := range demo.Images {
+			if sl.Sized() {
+				v.SizedSlots++
+			}
+		}
+		if demo.Products != nil {
+			v.ProductDefault = demo.Products.DefaultMode
+		}
+		out[t.Slug] = v
 	}
 	return out
 }
@@ -231,7 +246,16 @@ type groupView struct {
 
 type slotView struct {
 	customize.ImageSlot
-	Upload string
+	Index   int
+	Upload  string             // current image of the slot ("" = the demo image)
+	Pick    customize.SlotPick // where it comes from (v2)
+	Skipped bool               // a product slot while products stay as in the demo
+}
+
+// uploadView is one of the client's photos on the draft page.
+type uploadView struct {
+	customize.Upload
+	UsedBy []string // labels of the slots that show it
 }
 
 func (s *Server) loadDraft(r *http.Request) (*customize.Draft, *catalog.Theme, *customize.Demo, error) {
@@ -274,8 +298,10 @@ func (s *Server) handleDraft(w http.ResponseWriter, r *http.Request) {
 		idx := map[string]int{}
 		changed := 0
 		fromBrief := map[string]string{}
-		customize.FromBrief(demo.Fields, d.Brief, fromBrief)
-		for _, f := range demo.Fields {
+		mode := demo.ProductMode(d.Products)
+		view := demo.ForProducts(mode)
+		customize.FromBrief(view.Fields, d.Brief, fromBrief)
+		for _, f := range view.Fields {
 			v, ok := d.Values[f.Path]
 			if bv, isBrief := fromBrief[f.Path]; isBrief && f.Data {
 				v, ok = bv, true
@@ -296,10 +322,22 @@ func (s *Server) handleDraft(w http.ResponseWriter, r *http.Request) {
 			groups[i].Fields = append(groups[i].Fields, fv)
 		}
 		var slots []slotView
-		for _, sl := range demo.Images {
-			slots = append(slots, slotView{ImageSlot: sl, Upload: d.Images[sl.ID]})
+		usedBy := map[string][]string{}
+		for i, sl := range demo.Images {
+			sv := slotView{ImageSlot: sl, Index: i, Upload: d.Images[sl.ID], Pick: d.Slots[sl.ID], Skipped: mode == customize.ProductsKeep && sl.Products()}
+			if sv.Pick.Src != "" && sv.Upload != "" && !sv.Skipped {
+				usedBy[sv.Pick.Src] = append(usedBy[sv.Pick.Src], sl.Label)
+			}
+			slots = append(slots, sv)
 		}
-		data["Groups"], data["Slots"], data["Changed"], data["FieldCount"] = groups, slots, changed, len(demo.Fields)
+		var ups []uploadView
+		for _, u := range d.Uploads {
+			ups = append(ups, uploadView{Upload: u, UsedBy: usedBy[u.File]})
+		}
+		data["V2"], data["Uploads"], data["SpecWarnings"] = demo.V2, ups, demo.Warnings
+		data["MaxPhotoMB"] = customize.MaxPhoto >> 20
+		data["HasProducts"], data["ProductMode"], data["ProductSlotsEmpty"] = demo.Products != nil, mode, len(demo.UnfilledProductSlots(d))
+		data["Groups"], data["Slots"], data["Changed"], data["FieldCount"] = groups, slots, changed, len(view.Fields)
 		data["LogoMod"], data["LogoText"] = demo.LogoMod, demo.LogoText
 		data["HasSpec"] = demo.Spec != nil
 		ok, missing := demo.Standard()
@@ -392,6 +430,10 @@ func (s *Server) handleDraftImages(w http.ResponseWriter, r *http.Request) {
 		b, err := io.ReadAll(io.LimitReader(f, customize.MaxImage+1))
 		return b, true, err
 	}
+	if demo.V2 {
+		s.draftImagesV2(w, r, d.ID, demo)
+		return
+	}
 	n := 0
 	_, err = engine.Drafts().Update(d.ID, func(d *customize.Draft) error {
 		if b, ok, err := read("logo"); err != nil {
@@ -417,6 +459,7 @@ func (s *Server) handleDraftImages(w http.ResponseWriter, r *http.Request) {
 				return fmt.Errorf("%s: %w", sl.Label, err)
 			}
 			d.Images[sl.ID] = name
+			delete(d.Slots, sl.ID)
 			n++
 		}
 		return nil
@@ -457,7 +500,15 @@ func (s *Server) handleDraftOp(w http.ResponseWriter, r *http.Request) {
 		s.draftBack(w, r, id, "msg", "بریف ذخیره شد", "#brief")
 	case "unset":
 		slot := r.FormValue("slot")
+		_, _, demo, _ := s.loadDraft(r)
 		_, _ = st.Update(id, func(d *customize.Draft) error {
+			if demo != nil {
+				for _, sl := range demo.Images {
+					if sl.ID == slot && (demo.V2 || d.Slots[slot].Src != "") {
+						return d.SetSlot(sl, "", true)
+					}
+				}
+			}
 			if slot == "logo" {
 				_ = os.Remove(d.File(d.Logo))
 				d.Logo = ""
@@ -468,6 +519,32 @@ func (s *Server) handleDraftOp(w http.ResponseWriter, r *http.Request) {
 			return nil
 		})
 		s.draftBack(w, r, id, "msg", "تصویر دمو برگردانده شد", "#images")
+	case "photo-del", "autoplace":
+		_, _, demo, err := s.loadDraft(r)
+		if err != nil {
+			s.draftBack(w, r, id, "err", err.Error(), "#images")
+			return
+		}
+		placed := 0
+		_, err = st.Update(id, func(d *customize.Draft) error {
+			if r.PathValue("op") == "photo-del" {
+				d.RemoveUpload(demo, r.FormValue("file"))
+				return nil
+			}
+			d.ClearAuto(demo)
+			var err error
+			placed, err = d.PlaceImages(demo.ForProducts(demo.ProductMode(d.Products)))
+			return err
+		})
+		msg := "تصویر حذف شد"
+		if r.PathValue("op") == "autoplace" {
+			msg = fmt.Sprintf("چیدن خودکار انجام شد: %d جای تصویر پر شد", placed)
+		}
+		if err != nil {
+			s.draftBack(w, r, id, "err", err.Error(), "#images")
+			return
+		}
+		s.draftBack(w, r, id, "msg", msg, "#images")
 	case "values":
 		_, _, demo, err := s.loadDraft(r)
 		if err != nil {
@@ -475,7 +552,7 @@ func (s *Server) handleDraftOp(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		_, err = st.Update(id, func(d *customize.Draft) error {
-			for _, f := range demo.Fields {
+			for _, f := range demo.ForProducts(demo.ProductMode(d.Products)).Fields {
 				v, ok := r.PostForm["v:"+f.Path]
 				if !ok || (f.Data && f.Role != "brand.latin") {
 					continue
@@ -632,6 +709,7 @@ func (s *Server) startGenerate(w http.ResponseWriter, r *http.Request, id string
 	}
 	markGenerating(id, p)
 	brief := d.Brief
+	demo = demo.ForProducts(demo.ProductMode(d.Products))
 	go func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Minute)
 		defer cancel()

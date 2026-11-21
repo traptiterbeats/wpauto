@@ -14,7 +14,18 @@ import (
 const LogoID = "wpauto-logo"
 
 // Apply returns a copy of demo.json with the draft's texts, images and logo.
+// With the products mode keep (contract v2), product texts and product image slots stay exactly
+// as in the demo, whatever the draft holds.
 func Apply(demo *Demo, d *Draft) (map[string]any, map[string]string, error) {
+	full := demo
+	demo = demo.ForProducts(demo.ProductMode(d.Products))
+	skipSlot := map[string]bool{}
+	for _, s := range full.Images {
+		skipSlot[s.ID] = true
+	}
+	for _, s := range demo.Images {
+		skipSlot[s.ID] = false
+	}
 	b, _ := json.Marshal(demo.JSON)
 	var out map[string]any
 	_ = json.Unmarshal(b, &out)
@@ -46,7 +57,7 @@ func Apply(demo *Demo, d *Draft) (map[string]any, map[string]string, error) {
 	for _, it := range imgs {
 		m, _ := it.(map[string]any)
 		id := fmt.Sprint(m["id"])
-		if f, ok := d.Images[id]; ok && m["id"] != nil {
+		if f, ok := d.Images[id]; ok && m["id"] != nil && !skipSlot[id] {
 			rel := "images/client-" + safeName(id) + path.Ext(f)
 			m["file"] = rel
 			files[rel] = f

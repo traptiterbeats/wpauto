@@ -75,7 +75,71 @@
   </form>
 
   {{end}}
-  {{if eq .Step "images"}}
+  {{if and (eq .Step "images") .V2}}
+  <form id="images" class="card form" method="post" action="{{.BasePath}}customize/{{.D.ID}}/images" enctype="multipart/form-data">
+    <h3>۲. لوگو و تصاویر</h3>
+    <input type="hidden" name="csrf" value="{{.CSRF}}">
+    {{range .SpecWarnings}}<p class="small warn">customize.json: {{.}}</p>{{end}}
+    {{if .LogoMod}}
+    <div class="slot">
+      {{if .D.Logo}}<img src="{{.BasePath}}customize/{{.D.ID}}/file/{{.D.Logo}}" alt="logo">{{else}}<div class="noshot"></div>{{end}}
+      <label>{{.LogoText}} <span class="muted small" dir="ltr">({{.LogoMod}})</span><input type="file" name="logo" accept="image/png,image/jpeg,image/webp,image/gif"></label>
+    </div>
+    {{end}}
+    {{if .HasProducts}}
+    <fieldset class="products-mode"><legend>محصولات</legend>
+      <label class="check"><input type="radio" name="products" value="keep" {{if eq .ProductMode "keep"}}checked{{end}}> محصولات دمو بمانند</label>
+      <label class="check"><input type="radio" name="products" value="ai" {{if eq .ProductMode "ai"}}checked{{end}}> هوش مصنوعی محصولات نمونه بسازد</label>
+      <p class="muted small">«بمانند»: نام، توضیح و تصویر محصولات دمو دست نمی‌خورد. «بسازد»: نام و توضیح محصولات برای کسب‌وکار مشتری نوشته می‌شود (قیمت و کد کالا مثل دمو می‌ماند) و تصویرهای محصول هم از عکس‌های شما پر می‌شوند.</p>
+    </fieldset>
+    {{if and (eq .ProductMode "ai") .ProductSlotsEmpty}}<p class="warn small">⚠ {{.ProductSlotsEmpty}} تصویر محصول هنوز تصویر دمو است؛ عکس‌های دمو ممکن است با متن تازه‌ی محصولات جور نباشند.</p>{{end}}
+    {{end}}
+    <label>عکس‌های مشتری (هر تعداد، هر اندازه)<input type="file" name="photos" multiple accept="image/png,image/jpeg,image/webp,image/gif"></label>
+    <p class="muted small">هر عکس خودکار به جای خالی‌ای می‌رود که نسبتش (16:9، 4:3، 1:1، 3:4) به عکس نزدیک‌تر است؛ جاهای مهم‌تر قالب اول پر می‌شوند. عکس از وسط برش می‌خورد، به اندازه‌ی همان جا درمی‌آید و WebP ذخیره می‌شود. جایی که عکس نگیرد تصویر دمو را نگه می‌دارد. حداکثر {{.MaxPhotoMB}} مگابایت برای هر عکس.</p>
+    {{if .Uploads}}
+    <div class="photos">
+      {{range .Uploads}}<figure class="photo"><img src="{{$.BasePath}}customize/{{$.D.ID}}/file/{{.Thumb}}" alt="{{.Name}}" loading="lazy">
+        <figcaption class="small"><span dir="ltr">{{.W}}×{{.H}} · {{.Ratio}}</span><br>{{if .UsedBy}}{{range $i, $l := .UsedBy}}{{if $i}}، {{end}}{{$l}}{{end}}{{else}}<span class="muted">استفاده نشده</span>{{end}}</figcaption></figure>{{end}}
+    </div>
+    {{end}}
+    <h4>جاهای تصویر قالب</h4>
+    {{range .Slots}}
+    <div class="slot slot2{{if .Skipped}} skipped{{end}}">
+      <div class="crop" style="aspect-ratio: {{.AspectW}} / {{.AspectH}}">{{if .Upload}}<img id="pv_{{.Index}}" src="{{$.BasePath}}customize/{{$.D.ID}}/file/{{.Upload}}" alt="">{{else}}<img id="pv_{{.Index}}" alt="" hidden><span class="muted small">تصویر دمو</span>{{end}}</div>
+      <div class="slotbody">
+        <b>{{.Label}}</b> <span class="muted small" dir="ltr">{{.Ratio}} · {{.Width}}×{{.Height}} · priority {{.Priority}}</span>{{if .Products}} <span class="badge">محصول</span>{{end}}
+        {{if .Skipped}}<p class="muted small">محصولات دمو می‌مانند؛ این تصویر عوض نمی‌شود.</p>
+        {{else}}
+        <div class="grid2">
+          <label class="small">منبع
+            <select name="pick_{{.Index}}" data-pv="pv_{{.Index}}" onchange="wpPick(this)">
+              <option value="auto" {{if not .Pick.Manual}}selected{{end}}>خودکار</option>
+              <option value="demo" {{if and .Pick.Manual (not .Pick.Src)}}selected{{end}}>تصویر دمو</option>
+              {{$p := .Pick}}{{range $.Uploads}}<option value="{{.File}}" data-thumb="{{$.BasePath}}customize/{{$.D.ID}}/file/{{.Thumb}}" {{if and $p.Manual (eq $p.Src .File)}}selected{{end}}>{{.Name}} ({{.Ratio}})</option>{{end}}
+            </select>
+          </label>
+          <label class="small">یا عکس تازه برای همین جا<input type="file" name="img_{{.Index}}" accept="image/png,image/jpeg,image/webp,image/gif"></label>
+        </div>
+        {{if .Pick.Small}}<p class="small warn">عکس از این جا کوچک‌تر بود و بزرگ شد؛ ممکن است تار باشد.</p>{{end}}
+        {{end}}
+      </div>
+    </div>
+    {{end}}
+    {{if not .Slots}}<p class="muted small">دموی این قالب تصویری ندارد که جایگزین شود.</p>{{end}}
+    <script>
+    function wpPick(sel){var o=sel.options[sel.selectedIndex],img=document.getElementById(sel.dataset.pv);if(!img)return;
+      if(o.dataset.thumb){img.src=o.dataset.thumb;img.hidden=false;}else if(o.value==='demo'){img.hidden=true;}}
+    </script>
+    <p class="muted small">پیش‌نمایش هر جا همان برش وسط است که در سایت می‌نشیند.</p>
+    <button type="submit">ذخیره‌ی تصاویر</button>
+  </form>
+  <div class="card chips">
+    {{if .D.Logo}}<form method="post" action="{{.BasePath}}customize/{{.D.ID}}/unset"><input type="hidden" name="csrf" value="{{.CSRF}}"><input type="hidden" name="slot" value="logo"><button class="ghost small" type="submit">حذف لوگو</button></form>{{end}}
+    {{if .Uploads}}<form method="post" action="{{.BasePath}}customize/{{.D.ID}}/autoplace"><input type="hidden" name="csrf" value="{{.CSRF}}"><button class="ghost small" type="submit">چیدن خودکار دوباره</button></form>{{end}}
+    {{range .Uploads}}<form method="post" action="{{$.BasePath}}customize/{{$.D.ID}}/photo-del"><input type="hidden" name="csrf" value="{{$.CSRF}}"><input type="hidden" name="file" value="{{.File}}"><button class="ghost danger small" type="submit">حذف «{{.Name}}»</button></form>{{end}}
+  </div>
+
+  {{else if eq .Step "images"}}
   <form id="images" class="card form" method="post" action="{{.BasePath}}customize/{{.D.ID}}/images" enctype="multipart/form-data">
     <h3>۲. لوگو و تصاویر</h3>
     <input type="hidden" name="csrf" value="{{.CSRF}}">
@@ -128,6 +192,7 @@
     {{end}}
     {{end}}
     {{if not .HasSpec}}<p class="muted small">این دمو customize.json ندارد؛ متن‌ها خودکار از demo.json پیدا شده‌اند.</p>{{end}}
+    {{if eq .ProductMode "keep"}}<p class="muted small">محصولات دمو می‌مانند؛ نام و توضیح محصولات نوشته یا پاک نمی‌شود (در «لوگو و تصاویر» عوضش کنید).</p>{{else if eq .ProductMode "ai"}}<p class="muted small">نام و توضیح محصولات نمونه هم برای این کسب‌وکار نوشته می‌شود؛ قیمت و کد کالا مثل دمو می‌ماند.</p>{{end}}
     {{if .Supports}}<p class="muted small">این قالب از قرارداد شخصی‌سازی پشتیبانی می‌کند: <span dir="ltr">{{range $i, $s := .Supports}}{{if $i}}، {{end}}{{$s}}{{end}}</span></p>{{end}}
 
     <form method="post" action="{{.BasePath}}customize/{{.D.ID}}/values">

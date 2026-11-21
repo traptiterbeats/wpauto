@@ -57,9 +57,9 @@
     <h3>قالب و هوش مصنوعی</h3>
     <fieldset><legend>قالب (از کاتالوگ)</legend>
       <div class="theme-pick">
-      {{range $i, $t := .Themes}}<label class="theme-card"><input type="radio" name="theme" value="{{$t.Slug}}" {{if eq $t.Slug $.F.Theme}}checked{{else if and (eq $i 0) (not $.F.Theme)}}checked{{end}} required>
+      {{range $i, $t := .Themes}}{{$in := index $.Info $t.Slug}}<label class="theme-card"><input type="radio" name="theme" value="{{$t.Slug}}" data-products="{{if $in.Products}}{{$in.ProductDefault}}{{end}}" data-slots="{{$in.Slots}}" data-v2="{{if $in.V2}}1{{end}}" onchange="apTheme()" {{if eq $t.Slug $.F.Theme}}checked{{else if and (eq $i 0) (not $.F.Theme)}}checked{{end}} required>
         {{if $t.Screenshot}}<img src="{{$.BasePath}}themes/{{$t.Slug}}/screenshot" alt="{{$t.Name}}" loading="lazy">{{else}}<div class="noshot"></div>{{end}}
-        <span>{{$t.Name}} <span class="muted small" dir="ltr">{{$t.Version}}</span></span></label>{{end}}
+        <span>{{$t.Name}} <span class="muted small" dir="ltr">{{$t.Version}}</span>{{if $in.Slots}} <span class="muted small">· 🖼 {{$in.Slots}}</span>{{end}}{{if $in.Products}} <span class="muted small">· 🛒</span>{{end}}</span></label>{{end}}
       </div>
     </fieldset>
     <div class="grid2">
@@ -107,7 +107,24 @@
     <label>نکته‌های دیگر برای نویسنده<textarea name="notes" rows="2">{{.Notes}}</textarea></label>
     {{end}}
     <label>لوگو (اختیاری)<input type="file" name="logo" accept="image/png,image/jpeg,image/webp,image/gif"></label>
-    <p class="muted small">اگر قالب جای لوگو داشته باشد، لوگو جای لوگوی دمو می‌نشیند. تصاویر دیگر را بعداً در «شخصی‌سازی» می‌توانید عوض کنید.</p>
+    <p class="muted small">اگر قالب جای لوگو داشته باشد، لوگو جای لوگوی دمو می‌نشیند.</p>
+    <div id="ap_images">
+    <label>عکس‌های مشتری (اختیاری؛ هر تعداد، هر اندازه)<input type="file" name="photos" multiple accept="image/png,image/jpeg,image/webp,image/gif"></label>
+    <p class="muted small" id="ap_images_note">قالب انتخاب‌شده <span id="ap_slots">چند</span> جای تصویر دارد. هر عکس خودکار به جای خالی‌ای می‌رود که نسبتش (16:9، 4:3، 1:1، 3:4) به عکس نزدیک‌تر است؛ جاهای مهم‌تر اول. عکس از وسط برش می‌خورد، به اندازه‌ی همان جا درمی‌آید و WebP می‌شود؛ جایی که عکس نگیرد تصویر دمو را نگه می‌دارد. دو عکس هم کافی است. حداکثر {{.MaxPhotoMB}} مگابایت برای هر عکس. بعداً در «شخصی‌سازی» می‌توانید جای هر عکس را دستی عوض کنید.</p>
+    </div>
+    <fieldset id="ap_products" class="products-mode"><legend>محصولات</legend>
+      <label class="check"><input type="radio" name="products" value="keep" {{if ne .F.Products "ai"}}checked{{end}}> محصولات دمو بمانند</label>
+      <label class="check"><input type="radio" name="products" value="ai" {{if eq .F.Products "ai"}}checked{{end}}> هوش مصنوعی محصولات نمونه بسازد</label>
+      <p class="muted small">«بسازد»: نام و توضیح محصولات برای این کسب‌وکار نوشته می‌شود (قیمت و کد کالا مثل دمو می‌ماند) و عکس‌ها به تصویرهای محصول هم می‌رسند؛ محصولی که عکس نگیرد تصویر دمو را نگه می‌دارد و ممکن است با متن تازه جور نباشد.</p>
+    </fieldset>
+    <script>
+    function apTheme(){var t=document.querySelector('#apform input[name=theme]:checked');if(!t)return;
+      var p=document.getElementById('ap_products'),im=document.getElementById('ap_images');
+      p.hidden=!t.dataset.products;
+      if(t.dataset.products&&!{{if .F.Products}}true{{else}}false{{end}}){var r=p.querySelector('input[value='+t.dataset.products+']');if(r)r.checked=true;}
+      im.hidden=t.dataset.slots==='0';document.getElementById('ap_slots').textContent=t.dataset.slots;}
+    apTheme();
+    </script>
     <button type="submit" onclick="if(this.form.checkValidity()){this.textContent='در حال شروع…'}">شروع AutoPilot</button>
   </form>
   {{end}}

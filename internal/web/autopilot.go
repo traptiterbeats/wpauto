@@ -96,6 +96,8 @@ type apInputs struct {
 	AdminEmail string `json:"admin_email"`
 	Theme      string `json:"theme"`
 	Provider   string `json:"provider,omitempty"`
+	Products   string `json:"products,omitempty"` // keep | ai ("" = the theme declares no products)
+	Photos     int    `json:"photos,omitempty"`   // photos uploaded with the form
 }
 
 type apLogLine struct {
@@ -351,7 +353,7 @@ func (s *Server) apRun(ctx context.Context, id string, from int) {
 		var warnings []string
 		switch key {
 		case "customize":
-			err = s.apCustomize(ctx, id, i)
+			warnings, err = s.apCustomize(ctx, id, i)
 		case "wpinstall":
 			err = s.apInstall(ctx, id, i)
 		case "theme":
@@ -404,25 +406,71 @@ func (s *Server) apCancelled(id string, i int) (string, string) {
 	return "cancelled", "با درخواست شما متوقف شد. با «ادامه از همین مرحله» از همان‌جا ادامه می‌دهید."
 }
 
-// apCustomize creates the client texts with the AI: up to len(apRetryWaits)+1 attempts, each
-// asking only for the texts still missing. Nothing on the host changes in this stage.
-func (s *Server) apCustomize(ctx context.Context, id string, idx int) error {
+// apImages puts the client's photos into the theme's empty image slots (cropped, resized and
+// converted for v2 slots) before the demo package is built. It returns warnings for the page.
+func (s *Server) apImages(id string, d *customize.Draft, demo *customize.Demo) ([]string, error) {
+	mode := demo.ProductMode(d.Products)
+	placed := 0
+	d, err := engine.Drafts().Update(d.ID, func(d *customize.Draft) error {
+		var err error
+		placed, err = d.PlaceImages(demo.ForProducts(mode))
+		return err
+	})
+	if err != nil {
+		return nil, fmt.Errorf("آماده‌سازی تصاویر: %w", err)
+	}
+	var warns []string
+	if len(d.Uploads) > 0 || placed > 0 {
+		s.ap.logf(id, "info", "%d عکس مشتری در %d جای تصویر قالب نشست (برش از وسط و تغییر اندازه)", len(d.Uploads), len(d.Images))
+		used := map[string]bool{}
+		for _, p := range d.Slots {
+			used[p.Src] = true
+		}
+		unused := 0
+		for _, u := range d.Uploads {
+			if !used[u.File] {
+				unused++
+			}
+		}
+		if unused > 0 {
+			warns = append(warns, fmt.Sprintf("%d عکس جای خالی پیدا نکرد و استفاده نشد", unused))
+		}
+		for _, sl := range demo.Images {
+			if d.Slots[sl.ID].Small {
+				warns = append(warns, "عکس «"+sl.Label+"» از اندازه‌ی آن جا کوچک‌تر بود و بزرگ شد؛ ممکن است تار باشد")
+			}
+		}
+	}
+	if n := len(demo.UnfilledProductSlots(d)); n > 0 {
+		warns = append(warns, fmt.Sprintf("%d تصویر محصول هنوز تصویر دمو است؛ عکس‌های دمو ممکن است با متن تازه‌ی محصولات جور نباشند", n))
+	}
+	return warns, nil
+}
+
+// apCustomize puts the client's photos into the image slots and creates the client texts with
+// the AI: up to len(apRetryWaits)+1 attempts, each asking only for the texts still missing.
+// Nothing on the host changes in this stage.
+func (s *Server) apCustomize(ctx context.Context, id string, idx int) ([]string, error) {
 	p, _ := s.ap.get(id)
 	d, err := engine.Drafts().Get(p.DraftID)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	t, err := engine.Catalog().Get(d.Theme)
 	if err != nil || !t.HasDemo() {
-		return fmt.Errorf("قالب %s دیگر در کاتالوگ نیست یا دمو ندارد", d.Theme)
+		return nil, fmt.Errorf("قالب %s دیگر در کاتالوگ نیست یا دمو ندارد", d.Theme)
 	}
 	demo, err := customize.LoadDemo(t.Path(t.DemoZip))
 	if err != nil {
-		return err
+		return nil, err
+	}
+	warns, err := s.apImages(id, d, demo)
+	if err != nil {
+		return nil, err
 	}
 	if prov, ok := s.ai.Get(p.In.Provider); !ok || prov.Model == "" {
 		// a missing provider or model does not fix itself: no retries
-		return errors.New("هوش مصنوعی وصل نیست یا مدلش انتخاب نشده؛ در منوی «هوش مصنوعی» درستش کنید و بعد «ادامه از همین مرحله» را بزنید")
+		return warns, errors.New("هوش مصنوعی وصل نیست یا مدلش انتخاب نشده؛ در منوی «هوش مصنوعی» درستش کنید و بعد «ادامه از همین مرحله» را بزنید")
 	}
 	total := len(apRetryWaits) + 1
 	var last error
@@ -435,7 +483,7 @@ func (s *Server) apCustomize(ctx context.Context, id string, idx int) error {
 			})
 			select {
 			case <-ctx.Done():
-				return ctx.Err()
+				return warns, ctx.Err()
 			case <-time.After(wait):
 			}
 		}
@@ -451,16 +499,19 @@ func (s *Server) apCustomize(ctx context.Context, id string, idx int) error {
 			}
 			s.ap.update(id, func(p *autoPilot) {
 				p.Stages[idx].Note = fmt.Sprintf("%d متن آماده شد (تلاش %d از %d)", n, attempt, total)
+				if d, err := engine.Drafts().Get(p.DraftID); err == nil && len(d.Images) > 0 {
+					p.Stages[idx].Note += fmt.Sprintf(" · %d تصویر", len(d.Images))
+				}
 			})
-			return nil
+			return warns, nil
 		}
 		s.ap.logf(id, "warn", "تلاش %d از %d ناموفق: %v", attempt, total, last)
 		if ctx.Err() != nil {
-			return ctx.Err()
+			return warns, ctx.Err()
 		}
 	}
 	s.ap.update(id, func(p *autoPilot) { p.Stages[idx].Note = "" })
-	return fmt.Errorf("شخصی‌سازی با هوش مصنوعی پس از %d تلاش انجام نشد (%v). هیچ چیزی روی هاست تغییر نکرد. پیش‌نویس را باز کنید، متن‌ها را دستی بسازید یا اصلاح کنید و بعد «ادامه از همین مرحله» را بزنید", total, last)
+	return warns, fmt.Errorf("شخصی‌سازی با هوش مصنوعی پس از %d تلاش انجام نشد (%v). هیچ چیزی روی هاست تغییر نکرد. پیش‌نویس را باز کنید، متن‌ها را دستی بسازید یا اصلاح کنید و بعد «ادامه از همین مرحله» را بزنید", total, last)
 }
 
 // apGenerateOnce is one AI attempt: fill the brief from the free description when its main
@@ -504,7 +555,8 @@ func (s *Server) apGenerateOnce(ctx context.Context, id string, demo *customize.
 	if !core(brief) {
 		return errors.New("بریف خالی است: حوزه‌ی کار، معرفی یا خدمات مشتری را بنویسید")
 	}
-	// ask only for the AI texts the draft does not have yet
+	// ask only for the AI texts the draft does not have yet (products only in the ai mode)
+	demo = demo.ForProducts(demo.ProductMode(d.Products))
 	sub := *demo
 	sub.Fields = nil
 	missing := 0
@@ -711,7 +763,7 @@ func demoLeftovers(draftID, body string) ([]string, int) {
 	page := plainText(body)
 	var left []string
 	checked := 0
-	for _, f := range demo.Fields {
+	for _, f := range demo.ForProducts(demo.ProductMode(d.Products)).Fields {
 		v, ok := d.Values[f.Path]
 		if !ok || !f.AI {
 			continue
@@ -737,6 +789,7 @@ func demoLeftovers(draftID, body string) ([]string, int) {
 // apForm is the AutoPilot form's values (re-shown after an error; never the password).
 type apForm struct {
 	Host, Domain, Mode, Name, Title, Locale, AdminUser, AdminEmail, Theme, Provider string
+	Products                                                                        string // keep | ai
 	Brief                                                                           customize.Brief
 }
 
@@ -775,8 +828,9 @@ func (s *Server) renderAutopilot(w http.ResponseWriter, r *http.Request, f apFor
 		}
 	}
 	s.render(w, "autopilot.html", s.page(r, map[string]any{
-		"F": f, "Hosts": hosts, "Domains": domains, "Themes": themes, "Providers": s.ai.List(),
-		"Socials": customize.Socials, "Pipelines": s.ap.list(), "Error": errMsg,
+		"F": f, "Hosts": hosts, "Domains": domains, "Themes": themes, "Providers": s.ai.List(), "Info": standards(),
+		"MaxPhotoMB": customize.MaxPhoto >> 20,
+		"Socials":    customize.Socials, "Pipelines": s.ap.list(), "Error": errMsg,
 	}))
 }
 
@@ -784,7 +838,7 @@ func (s *Server) handleAutopilotStart(w http.ResponseWriter, r *http.Request) {
 	v := func(k string) string { return strings.TrimSpace(r.FormValue(k)) }
 	f := apForm{Host: v("host"), Domain: strings.ToLower(v("domain")), Mode: v("mode"), Name: strings.ToLower(v("name")),
 		Title: v("title"), Locale: v("locale"), AdminUser: v("admin_user"), AdminEmail: v("admin_email"),
-		Theme: v("theme"), Provider: v("provider")}
+		Theme: v("theme"), Provider: v("provider"), Products: v("products")}
 	var tmp customize.Draft
 	s.briefFromForm(r, &tmp)
 	f.Brief = tmp.Brief
@@ -854,7 +908,18 @@ func (s *Server) handleAutopilotStart(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// the draft the AI will fill
+	demo, err := customize.LoadDemo(t.Path(t.DemoZip))
+	if err != nil {
+		fail("دموی قالب خوانده نشد: " + err.Error())
+		return
+	}
+	if f.Products != customize.ProductsKeep && f.Products != customize.ProductsAI {
+		f.Products = ""
+	}
+	products := demo.ProductMode(f.Products)
+	photos := formPhotos(r, "photos")
+
+	// the draft the AI will fill; the photos are placed in the slots by the pipeline
 	d, err := engine.Drafts().New(t.Slug, b.SiteName)
 	if err != nil {
 		fail(err.Error())
@@ -862,6 +927,7 @@ func (s *Server) handleAutopilotStart(w http.ResponseWriter, r *http.Request) {
 	}
 	_, err = engine.Drafts().Update(d.ID, func(d *customize.Draft) error {
 		s.briefFromForm(r, d)
+		d.Products = products
 		if d.Brief.Language == "" && f.Locale == "en_US" {
 			d.Brief.Language = "English"
 		}
@@ -871,6 +937,15 @@ func (s *Server) handleAutopilotStart(w http.ResponseWriter, r *http.Request) {
 				return fmt.Errorf("لوگو: %w", err)
 			}
 			d.Logo = name
+		}
+		for _, fh := range photos {
+			data, err := readUpload(fh)
+			if err == nil {
+				_, err = d.AddUpload(fh.Filename, data)
+			}
+			if err != nil {
+				return err
+			}
 		}
 		return nil
 	})
@@ -900,7 +975,8 @@ func (s *Server) handleAutopilotStart(w http.ResponseWriter, r *http.Request) {
 	p := &autoPilot{ID: now.Format("20060102-150405") + "-" + config.RandString(4), Title: b.SiteName,
 		ProjectID: proj.ID, DraftID: d.ID, Status: apRunning, Stages: newStages(), Created: now, Started: now,
 		In: apInputs{HostID: h.ID, HostName: h.Name, Domain: f.Domain, Mode: f.Mode, Name: inputs["name"], Title: inputs["title"],
-			Locale: f.Locale, AdminUser: f.AdminUser, AdminEmail: f.AdminEmail, Theme: t.Slug, Provider: prov.ID}}
+			Locale: f.Locale, AdminUser: f.AdminUser, AdminEmail: f.AdminEmail, Theme: t.Slug, Provider: prov.ID,
+			Products: products, Photos: len(photos)}}
 	s.ap.add(p)
 	s.ap.setPassword(p.ID, pass)
 	s.ap.logf(p.ID, "info", "AutoPilot برای %s شروع شد (هاست %s، قالب %s)", projects.Project{Domain: dom, Folder: folder}.Site(), h.Name, t.Slug)

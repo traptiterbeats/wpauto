@@ -207,3 +207,11 @@ button.small,a.btn.small{padding:4px 10px;font-size:12px}
 .theme-card:has(input:checked){border-color:#e0b84a;box-shadow:0 0 0 2px #e0b84a55}
 nav a.gold{color:#e0b84a;font-weight:700;border:1px solid #e0b84a66;border-radius:8px}
 nav a.gold.on{background:#e0b84a;color:#1a1405}
+.photos{display:flex;flex-wrap:wrap;gap:10px}
+.photo{margin:0;width:120px}
+.photo img{width:120px;height:90px;object-fit:cover;border:1px solid var(--line);border-radius:8px;display:block}
+.slot2{align-items:flex-start;border-top:1px solid var(--line);padding-top:10px}
+.slot2 .crop{width:160px;flex:none;background:#0c0f1b;border:1px solid var(--line);border-radius:8px;overflow:hidden;display:flex;align-items:center;justify-content:center}
+.slot2 .crop img{width:100%;height:100%;object-fit:cover;object-position:center;border:0;border-radius:0}
+.slot2 .slotbody{flex:1}
+.slot2.skipped{opacity:.6}
