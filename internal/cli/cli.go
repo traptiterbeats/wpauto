@@ -288,13 +288,20 @@ func SSLMenu(c *config.Config) error {
 
 // Update installs the latest release and restarts the service.
 func Update() error {
-	fmt.Println("Checking latest release ...")
+	start := time.Now()
+	fmt.Println("[1/3] Checking latest release ...")
+	updater.Progress = os.Stdout
 	tag, err := updater.Update(BinPath)
+	updater.Progress = nil
 	if err != nil {
 		return err
 	}
-	fmt.Println("Installed", tag)
-	return systemctl("restart", Service)
+	fmt.Println("[2/3] Restarting the panel service ...")
+	if err := systemctl("restart", Service); err != nil {
+		return err
+	}
+	fmt.Printf("[3/3] ✔ wpauto %s installed and running (%s)\n", tag, time.Since(start).Round(time.Second))
+	return nil
 }
 
 // Uninstall removes the service, binary and (optionally) the configuration.

@@ -19,25 +19,54 @@ case "$(uname -m)" in
   *) red "Unsupported architecture: $(uname -m)"; exit 1 ;;
 esac
 
+STEPS=6
+T0=$SECONDS
+step() { printf '\n\033[1;36m[%s/%s] %s\033[0m\n' "$1" "$STEPS" "$2"; }
+ok()   { printf '\033[32m  ✔ %s\033[0m\n' "$*"; }
+info() { printf '  %s\n' "$*"; }
+# --speed-limit/--speed-time: abort (and retry) if the download stalls below 1 KB/s for 30 s,
+# instead of hanging silently.
+CURL=(curl -fL --connect-timeout 15 --retry 3 --retry-delay 3 --speed-limit 1024 --speed-time 30)
+
+step 1 "Checking this server"
+info "architecture: $ARCH · $(. /etc/os-release 2>/dev/null && echo "$PRETTY_NAME")"
+if [ -x "$BIN" ]; then info "currently installed: $("$BIN" version 2>/dev/null || echo unknown)"; else info "currently installed: none (fresh install)"; fi
+
+step 2 "Finding the release"
 VERSION="${WPAUTO_VERSION:-latest}"
 if [ "$VERSION" = "latest" ]; then
+  TAG=$("${CURL[@]}" -s -H 'Accept: application/vnd.github+json' "https://api.github.com/repos/$REPO/releases/latest" 2>/dev/null | grep -m1 '"tag_name"' | cut -d'"' -f4 || true)
   BASE="https://github.com/$REPO/releases/latest/download"
+  ok "latest release: ${TAG:-latest}"
 else
   BASE="https://github.com/$REPO/releases/download/$VERSION"
+  ok "release: $VERSION"
 fi
 ASSET="wpauto_linux_${ARCH}.tar.gz"
 
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
 
-echo "Downloading $ASSET ..."
-curl -fsSL "$BASE/$ASSET" -o "$TMP/$ASSET"
-curl -fsSL "$BASE/checksums.txt" -o "$TMP/checksums.txt"
-( cd "$TMP" && grep " ${ASSET}\$" checksums.txt | sha256sum -c - >/dev/null ) || { red "Checksum verification failed."; exit 1; }
-tar -xzf "$TMP/$ASSET" -C "$TMP"
+step 3 "Downloading $ASSET"
+S=$SECONDS
+if ! "${CURL[@]}" --progress-bar "$BASE/$ASSET" -o "$TMP/$ASSET"; then
+  red "Download failed or stalled (no data for 30 s, 3 retries). Check the server's connection to github.com and run the installer again."
+  exit 1
+fi
+SIZE=$(du -k "$TMP/$ASSET" | cut -f1)
+ok "downloaded $(awk "BEGIN{printf \"%.1f MB\", $SIZE/1024}") in $((SECONDS-S)) s"
 
+step 4 "Verifying checksum"
+"${CURL[@]}" -s "$BASE/checksums.txt" -o "$TMP/checksums.txt" || { red "Could not download checksums.txt."; exit 1; }
+( cd "$TMP" && grep " ${ASSET}\$" checksums.txt | sha256sum -c - >/dev/null ) || { red "Checksum verification failed."; exit 1; }
+ok "sha256 matches"
+tar -xzf "$TMP/$ASSET" -C "$TMP"
+ok "extracted: $(cd "$TMP" && ls -1 | grep -v -e "$ASSET" -e checksums.txt | tr '\n' ' ')"
+
+step 5 "Installing the program"
 systemctl stop wpauto 2>/dev/null || true
 install -m 0755 "$TMP/wpauto" "$BIN"
+ok "installed $BIN ($("$BIN" version 2>/dev/null || echo "${TAG:-}"))"
 
 if [ ! -f /etc/wpauto/config.json ]; then
   DEFAULT_PORT=$(( (RANDOM % 40000) + 20000 ))
@@ -56,11 +85,14 @@ if [ ! -f /etc/wpauto/config.json ]; then
     fi
   done
   "$BIN" init --port "$PORT"
+  ok "created /etc/wpauto/config.json (panel port $PORT)"
   if command -v ufw >/dev/null && ufw status | grep -q "Status: active"; then
     ufw allow "${PORT}/tcp" >/dev/null || true
+    ok "opened port $PORT in ufw"
   fi
 fi
 
+step 6 "Starting the panel service"
 cat > "$UNIT" <<'EOF'
 [Unit]
 Description=wpauto panel
@@ -80,6 +112,9 @@ EOF
 
 systemctl daemon-reload
 systemctl enable --now wpauto >/dev/null 2>&1
+ok "wrote $UNIT"
 sleep 1
-green "Installation finished. Run 'wpauto' to open the management menu."
+if systemctl is-active --quiet wpauto; then ok "service wpauto is running"; else red "service wpauto did not start: journalctl -u wpauto -n 50"; fi
+echo
+green "Installation finished in $((SECONDS-T0)) s. Run 'wpauto' to open the management menu."
 "$BIN" info || true
