@@ -116,5 +116,9 @@ ok "wrote $UNIT"
 sleep 1
 if systemctl is-active --quiet wpauto; then ok "service wpauto is running"; else red "service wpauto did not start: journalctl -u wpauto -n 50"; fi
 echo
-green "Installation finished in $((SECONDS-T0)) s. Run 'wpauto' to open the management menu."
+green "Installation finished in $((SECONDS-T0)) s."
 "$BIN" info || true
+echo
+info "Opening the management menu (run 'wpauto' anytime to open it again) ..."
+sleep 2
+if [ -e /dev/tty ]; then "$BIN" </dev/tty >/dev/tty 2>&1 || true; fi

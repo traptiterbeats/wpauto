@@ -147,21 +147,31 @@ func Menu(version string) error {
 			return err
 		}
 		fmt.Print("\033[H\033[2J")
-		fmt.Println(cBold + "══════════════ wpauto " + version + " ══════════════" + cReset)
-		fmt.Printf(" Panel:  %s%s%s\n", cCyan, PanelURL(c), cReset)
-		fmt.Printf(" Status: %s   User: %s\n", Status(), c.Username)
-		fmt.Println(cBold + "═══════════════════════════════════════════════" + cReset)
-		fmt.Println(" 1) Change username / password")
-		fmt.Println(" 2) Change port")
-		fmt.Println(" 3) SSL settings")
-		fmt.Println(" 4) Start")
-		fmt.Println(" 5) Stop")
-		fmt.Println(" 6) Restart")
-		fmt.Println(" 7) Show logs")
-		fmt.Println(" 8) Update")
-		fmt.Println(" 9) Uninstall")
-		fmt.Println(" 0) Exit")
-		choice := ask("\nSelect: ")
+		line := cCyan + strings.Repeat("═", 46) + cReset
+		fmt.Println(line)
+		fmt.Printf("%s   wpauto %s%s%s — management menu\n", cBold, cGreen, version, cReset+cBold)
+		fmt.Print(cReset)
+		fmt.Println(line)
+		fmt.Printf("  %-8s %s%s%s\n", "Panel:", cCyan, PanelURL(c), cReset)
+		fmt.Printf("  %-8s %s\n", "Status:", Status())
+		fmt.Printf("  %-8s %s\n", "User:", c.Username)
+		fmt.Println(line)
+		menuSection("Panel")
+		menuItem("1", "Change username / password")
+		menuItem("2", "Change port")
+		menuItem("3", "SSL settings")
+		menuSection("Service")
+		menuItem("4", "Start")
+		menuItem("5", "Stop")
+		menuItem("6", "Restart")
+		menuItem("7", "Show logs")
+		menuSection("Program")
+		menuItem("8", "Update")
+		menuItem("9", "Uninstall")
+		fmt.Println()
+		fmt.Printf("  %s[0]%s Exit\n", cRed+cBold, cReset)
+		fmt.Println(line)
+		choice := ask("\n" + cBold + "Select an option: " + cReset)
 		switch choice {
 		case "1":
 			err = ChangeCredentials(c)
@@ -193,12 +203,20 @@ func Menu(version string) error {
 			err = fmt.Errorf("unknown option")
 		}
 		if err != nil {
-			fmt.Println(cRed+"Error:"+cReset, err)
+			fmt.Println(cRed+"  ✘ Error:"+cReset, err)
 		} else {
-			fmt.Println(cGreen + "Done." + cReset)
+			fmt.Println(cGreen + "  ✔ Done." + cReset)
 		}
 		ask("\nPress Enter to continue...")
 	}
+}
+
+func menuSection(name string) {
+	fmt.Printf("\n  %s%s%s\n", cYellow+cBold, name, cReset)
+}
+
+func menuItem(key, label string) {
+	fmt.Printf("  %s[%s]%s %s\n", cCyan+cBold, key, cReset, label)
 }
 
 // ChangeCredentials sets a new username and password.
@@ -246,10 +264,14 @@ func ChangePort(c *config.Config, s string) error {
 
 // SSLMenu configures HTTPS for the panel.
 func SSLMenu(c *config.Config) error {
-	fmt.Println(" 1) Let's Encrypt certificate (needs a domain pointing to this server, port 80 free)")
-	fmt.Println(" 2) Self-signed certificate (browser will warn)")
-	fmt.Println(" 3) Disable SSL")
-	switch ask("Select: ") {
+	menuSection("SSL")
+	menuItem("1", "Let's Encrypt certificate (needs a domain pointing to this server, port 80 free)")
+	menuItem("2", "Self-signed certificate (browser will warn)")
+	menuItem("3", "Disable SSL")
+	fmt.Printf("  %s[0]%s Back\n", cRed+cBold, cReset)
+	switch ask("\n" + cBold + "Select an option: " + cReset) {
+	case "0", "":
+		return nil
 	case "1":
 		d := ask("Domain (e.g. panel.example.com): ")
 		if d == "" {
