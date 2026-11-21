@@ -53,6 +53,9 @@ func TestHostCheckFindsWordPress(t *testing.T) {
 	var gotReport *cpanel.Report
 	tg := target(t, srv.URL, "secret", &rej)
 	tg.OnReport = func(rep *cpanel.Report) { gotReport = rep }
+	var used, limit float64
+	tg.OnDisk = func(u, l float64) { used, limit = u, l }
+	tg.ProjectID = "p1"
 	id, err := r.Start(wf, tg, map[string]string{})
 	if err != nil {
 		t.Fatal(err)
@@ -66,6 +69,12 @@ func TestHostCheckFindsWordPress(t *testing.T) {
 	}
 	if gotReport == nil || !gotReport.ReadyForWP {
 		t.Fatal("report not delivered")
+	}
+	if used != 235.13 || limit != 1024 {
+		t.Fatalf("disk not read after run: %v %v", used, limit)
+	}
+	if n := r.DeleteProjectRuns("p1"); n != 1 || len(r.List(0)) != 0 {
+		t.Fatalf("project runs not deleted: %d", n)
 	}
 	all := ""
 	for _, l := range run.Log {

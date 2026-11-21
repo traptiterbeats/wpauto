@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"sync"
 	"time"
 
@@ -26,6 +27,49 @@ type Host struct {
 	CreatedAt    time.Time      `json:"created_at"`
 	FailedLogins int            `json:"failed_logins"`
 	LastReport   *cpanel.Report `json:"last_report,omitempty"`
+	Disk         *Disk          `json:"disk,omitempty"`
+}
+
+// Disk is the account's disk usage as cPanel last reported it.
+type Disk struct {
+	UsedMB  float64   `json:"used_mb"`
+	LimitMB float64   `json:"limit_mb"` // 0 = unlimited
+	At      time.Time `json:"at"`
+}
+
+// Pct is the used share of the quota (0 when unlimited).
+func (d *Disk) Pct() int {
+	if d == nil || d.LimitMB <= 0 {
+		return 0
+	}
+	p := int(d.UsedMB / d.LimitMB * 100)
+	if p > 100 {
+		p = 100
+	}
+	return p
+}
+
+// Text is the usage for people, e.g. «۸۵۰ MB از ۲٫۰ GB».
+func (d *Disk) Text() string {
+	if d == nil {
+		return ""
+	}
+	if d.LimitMB <= 0 {
+		return mb(d.UsedMB) + " (نامحدود)"
+	}
+	return mb(d.UsedMB) + " از " + mb(d.LimitMB)
+}
+
+func mb(v float64) string {
+	if v >= 1024 {
+		return strconv.FormatFloat(v/1024, 'f', 1, 64) + " GB"
+	}
+	return strconv.FormatFloat(v, 'f', 0, 64) + " MB"
+}
+
+// SetDisk records fresh disk usage.
+func (h *Host) SetDisk(used, limit float64) {
+	h.Disk = &Disk{UsedMB: used, LimitMB: limit, At: time.Now()}
 }
 
 // Locked reports whether automatic logins are paused after failures.

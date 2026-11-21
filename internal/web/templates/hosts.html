@@ -12,13 +12,14 @@
   {{if .Error}}<div class="error">{{.Error}}</div>{{end}}
   {{if .Hosts}}
   <table class="list">
-    <tr><th>نام</th><th>پروفایل</th><th>آدرس</th><th>وضعیت</th></tr>
+    <tr><th>نام</th><th>پروفایل</th><th>آدرس</th><th>وضعیت</th><th>فضای هاست</th></tr>
     {{range .Hosts}}
     <tr>
       <td><a href="{{$.BasePath}}hosts/{{.ID}}">{{.Name}}</a></td>
       <td>{{.ProfileID}}</td>
       <td dir="ltr">{{.URL}}</td>
       <td>{{if .LastReport}}{{if .LastReport.ReadyForWP}}<span class="ok">آماده</span>{{else if .LastReport.LoginOK}}<span class="warn">نیاز به بررسی</span>{{else}}<span class="bad">ورود ناموفق</span>{{end}}{{else}}<span class="muted">تست نشده</span>{{end}}</td>
+      <td>{{template "disk" .Disk}}</td>
     </tr>
     {{end}}
   </table>

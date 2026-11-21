@@ -121,6 +121,9 @@ func (s *Server) handleHostTest(w http.ResponseWriter, r *http.Request) {
 		x.LastReport = rep
 		if rep.LoginOK {
 			x.FailedLogins = 0
+			if rep.DiskUsedMB > 0 || rep.DiskLimitMB > 0 {
+				x.SetDisk(rep.DiskUsedMB, rep.DiskLimitMB)
+			}
 		} else if loginRejected(rep) {
 			x.FailedLogins++
 		}

@@ -212,14 +212,11 @@ func probeMySQL(ctx context.Context, c *Client, rep *Report) Check {
 }
 
 func probeQuota(ctx context.Context, c *Client, rep *Report) Check {
-	data, err := c.Call(ctx, "Quota", "get_quota_info", nil)
+	var err error
+	rep.DiskUsedMB, rep.DiskLimitMB, err = c.DiskUsage(ctx)
 	if err != nil {
 		return fail(ProbeQuota, "فضای دیسک", err)
 	}
-	var q map[string]any
-	_ = json.Unmarshal(data, &q)
-	rep.DiskUsedMB = num(q["megabytes_used"])
-	rep.DiskLimitMB = num(q["megabyte_limit"])
 	limit := "نامحدود"
 	if rep.DiskLimitMB > 0 {
 		limit = fmt.Sprintf("%.0f MB", rep.DiskLimitMB)
@@ -266,4 +263,15 @@ func num(v any) float64 {
 		}
 	}
 	return 0
+}
+
+// DiskUsage returns the account's used and allowed disk space in MB (limit 0 = unlimited).
+func (c *Client) DiskUsage(ctx context.Context) (usedMB, limitMB float64, err error) {
+	data, err := c.Call(ctx, "Quota", "get_quota_info", nil)
+	if err != nil {
+		return 0, 0, err
+	}
+	var q map[string]any
+	_ = json.Unmarshal(data, &q)
+	return num(q["megabytes_used"]), num(q["megabyte_limit"]), nil
 }

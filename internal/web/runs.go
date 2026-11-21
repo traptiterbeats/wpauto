@@ -150,6 +150,7 @@ func (s *Server) handleRunStart(w http.ResponseWriter, r *http.Request) {
 		OnReport: func(rep *cpanel.Report) {
 			_ = s.store.Update(h.ID, func(x *store.Host) { x.LastReport = rep; x.FailedLogins = 0 })
 		},
+		OnDisk: s.diskSaver(h.ID),
 		OnDomain: func(d string) {
 			_ = s.store.Update(h.ID, func(x *store.Host) {
 				if x.LastReport != nil && !slices.Contains(x.LastReport.Domains, d) {
@@ -195,8 +196,19 @@ func (s *Server) handleRunView(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	data := map[string]any{"Run": run, "Crumb": run.Title}
-	if p, ok := s.projects.Get(run.ProjectID); ok {
+	p, hasProject := s.projects.Get(run.ProjectID)
+	if hasProject {
 		data["RunProject"] = p
+	}
+	if run.Status == engine.StatusSuccess && (run.WorkflowID == "wp-install" || run.WorkflowID == "theme-install") {
+		site := p.URL()
+		if dom, folder := projectSite(run.WorkflowID, run.Inputs); dom != "" {
+			site = projects.Project{Domain: strings.ToLower(dom), Folder: folder}.URL()
+		}
+		if site != "" {
+			data["SiteURL"] = site
+			data["Bust"] = run.EndedAt.Unix()
+		}
 	}
 	s.render(w, "run.html", s.page(r, data))
 }

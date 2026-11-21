@@ -1,6 +1,9 @@
 package web
 
 import (
+	"fmt"
+
+	"github.com/traptiterbeats/wpauto/internal/engine"
 	"net/http"
 	"net/url"
 	"slices"
@@ -50,7 +53,7 @@ func (s *Server) handleProjectOp(w http.ResponseWriter, r *http.Request) {
 		}
 		err = s.projects.SetActive(id)
 	case "delete":
-		err, msg = s.projects.Delete(id), "پروژه حذف شد؛ اجراها و پیش‌نویس‌هایش سر جایشان هستند."
+		err, msg = s.deleteProject(id, r.FormValue("purge") != "")
 	case "mark":
 		stage, on := r.FormValue("stage"), r.FormValue("on") != ""
 		if !slices.Contains(pipelineKeys, stage) {
@@ -133,4 +136,33 @@ func (s *Server) projectCards() []projectCard {
 		out = append(out, c)
 	}
 	return out
+}
+
+// deleteProject removes a project and, with purge, its finished runs and its draft
+// (unless another project uses the same draft). The site on the host is not touched.
+func (s *Server) deleteProject(id string, purge bool) (error, string) {
+	p, ok := s.projects.Get(id)
+	if !ok {
+		return projects.ErrNotFound, ""
+	}
+	if err := s.projects.Delete(id); err != nil {
+		return err, ""
+	}
+	if !purge {
+		return nil, "پروژه حذف شد؛ اجراها و پیش‌نویسش ماندند. سایت روی هاست دست نخورد."
+	}
+	runs := s.runner.DeleteProjectRuns(id)
+	drafts := 0
+	if p.DraftID != "" {
+		shared := false
+		for _, o := range s.projects.List() {
+			if o.DraftID == p.DraftID {
+				shared = true
+			}
+		}
+		if !shared && engine.Drafts().Delete(p.DraftID) == nil {
+			drafts = 1
+		}
+	}
+	return nil, fmt.Sprintf("پروژه حذف شد، با %d اجرا و %d پیش‌نویس. سایت روی هاست دست نخورد.", runs, drafts)
 }

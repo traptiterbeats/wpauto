@@ -3,6 +3,7 @@ package web
 import (
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/traptiterbeats/wpauto/internal/projects"
 
@@ -209,6 +210,7 @@ func (s *Server) layout(r *http.Request, d map[string]any) {
 	}
 	d["Recent"] = s.runner.List(12)
 	d["Here"] = r.URL.Path
+	d["Now"] = time.Now().Unix()
 	if _, ok := d["Crumb"]; !ok {
 		d["Crumb"] = ""
 	}

@@ -38,7 +38,15 @@ func (s *Server) hostTarget(hostID string) (*engine.Target, error) {
 		Options: cpanel.Options{BaseURL: h.URL, Username: h.Username, Secret: secret,
 			Auth: cpanel.AuthMethod(prof.Auth), InsecureTLS: prof.InsecureTLS},
 		OnLoginRejected: func() { _ = s.store.Update(h.ID, func(x *store.Host) { x.FailedLogins++ }) },
+		OnDisk:          s.diskSaver(h.ID),
 	}, nil
+}
+
+// diskSaver stores the disk usage a run read on the host.
+func (s *Server) diskSaver(hostID string) func(used, limit float64) {
+	return func(used, limit float64) {
+		_ = s.store.Update(hostID, func(x *store.Host) { x.SetDisk(used, limit) })
+	}
 }
 
 // lastScan returns the newest successful wp-scan run of a host and what it found.

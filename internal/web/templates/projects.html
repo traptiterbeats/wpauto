@@ -10,7 +10,7 @@
   <a class="back" href="{{.BasePath}}">→ بازگشت به کارها</a>
   <h2>پروژه‌ها</h2>
   <p class="muted">هر پروژه یک سایت مشتری است. مرحله‌های ساختش (بررسی هاست، وردپرس، شخصی‌سازی، نصب قالب) در ستون کناری با موفق شدن هر کار روشن می‌شوند. کارهایی که اجرا می‌کنید به پروژه‌ی فعال نسبت داده می‌شوند.</p>
-  <p class="small warn">«حذف» در این فهرست فقط پروژه را از wpauto برمی‌دارد و به سایت دست نمی‌زند. برای پاک کردن هر وردپرسِ روی هاست (حتی اگر پروژه نداشته باشد) به <a href="{{.BasePath}}wordpress">وردپرس‌ها</a> بروید.</p>
+  <p class="small warn">«حذف» در این فهرست پروژه (و اگر تیک بخورد، اجراها و پیش‌نویسش) را از wpauto برمی‌دارد و به سایت روی هاست دست نمی‌زند. برای پاک کردن هر وردپرسِ روی هاست (حتی اگر پروژه نداشته باشد) به <a href="{{.BasePath}}wordpress">وردپرس‌ها</a> بروید.</p>
   {{if .Error}}<div class="error">{{.Error}}</div>{{end}}
   <form class="card form" method="post" action="{{.BasePath}}projects/new">
     <h3>پروژه‌ی تازه</h3>
@@ -31,7 +31,7 @@
       <td dir="ltr">{{.Created.Format "2006-01-02"}}</td>
       <td class="inline">
         {{if not (and $.Project (eq .ID $.Project.ID))}}<form method="post" action="{{$.BasePath}}projects/{{.ID}}/activate"><input type="hidden" name="csrf" value="{{$.CSRF}}"><input type="hidden" name="back" value="{{$.BasePath}}"><button class="small" type="submit">فعال کن</button></form>{{end}}
-        <form method="post" action="{{$.BasePath}}projects/{{.ID}}/delete" onsubmit="return confirm('پروژه حذف شود؟ اجراها و پیش‌نویس‌ها می‌مانند.')"><input type="hidden" name="csrf" value="{{$.CSRF}}"><button class="ghost danger small" type="submit">حذف</button></form>
+        <form method="post" action="{{$.BasePath}}projects/{{.ID}}/delete" onsubmit="return confirm(this.purge.checked?'پروژه همراه اجراها و پیش‌نویسش حذف شود؟':'پروژه حذف شود؟ اجراها و پیش‌نویس می‌مانند.')"><input type="hidden" name="csrf" value="{{$.CSRF}}"><label class="small inline-check"><input type="checkbox" name="purge" checked> با اجراها و پیش‌نویس</label> <button class="ghost danger small" type="submit">حذف</button></form>
       </td>
     </tr>
     {{end}}

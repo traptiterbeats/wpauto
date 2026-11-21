@@ -22,6 +22,7 @@
   </form>
   {{end}}
 
+  {{if .Host.Disk}}<p>فضای هاست: {{template "disk" .Host.Disk}}</p>{{end}}
   {{with .Host.LastReport}}
   <section class="card report">
     <h3>گزارش هاست <span class="muted small">{{.At.Format "2006-01-02 15:04"}}</span></h3>

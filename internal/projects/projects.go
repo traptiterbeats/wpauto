@@ -28,6 +28,14 @@ type Project struct {
 	Created time.Time       `json:"created"`
 }
 
+// URL is the site's address in a browser ("" until the site is known).
+func (p Project) URL() string {
+	if p.Domain == "" {
+		return ""
+	}
+	return "https://" + p.Site() + "/"
+}
+
 // Site is the address shown to the user (domain/folder).
 func (p Project) Site() string {
 	if p.Folder != "" {

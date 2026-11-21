@@ -100,6 +100,25 @@ func TestLayoutAndPlan(t *testing.T) {
 	if f := get("run/theme-install"); !strings.Contains(f, `value="shop"`) || !strings.Contains(f, `value="example.com"`) {
 		t.Fatal("run form does not take the project's folder")
 	}
+	// the side panel links to the project's site and admin
+	if h := get(""); !strings.Contains(h, `href="https://example.com/shop/wp-admin/"`) {
+		t.Fatal("no site/admin link for the project")
+	}
+	// disk usage shows on the hosts tab, red when nearly full
+	hs := s.store.List()
+	_ = s.store.Update(hs[0].ID, func(x *store.Host) { x.SetDisk(950, 1024) })
+	if h := get("hosts"); !strings.Contains(h, "950 MB از 1.0 GB") || !strings.Contains(h, "پر شده") {
+		t.Fatal("disk usage missing on hosts page")
+	}
+	// deleting a project with purge removes it and reports the count
+	r, err := cl.PostForm(base+"projects/"+p.ID+"/delete", url.Values{"purge": {"on"}, "csrf": {csrfOf(t, home)}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	r.Body.Close()
+	if _, ok := s.projects.Get(p.ID); ok || !strings.Contains(r.Request.URL.RawQuery, "msg=") {
+		t.Fatal("project not deleted with purge")
+	}
 	// bad back targets never leave the panel
 	if s.safeBack("//evil.com") != "" || s.safeBack("https://evil.com") != "" || s.safeBack(cfg.BasePath+"runs") == "" {
 		t.Fatal("safeBack")

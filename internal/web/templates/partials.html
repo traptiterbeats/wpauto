@@ -43,7 +43,8 @@
       </select>
     </form>
     {{end}}
-    {{with .Project}}<p class="small muted" dir="auto">{{if .Domain}}<span dir="ltr">{{.Site}}</span>{{else}}سایت هنوز مشخص نشده{{end}}</p>{{end}}
+    {{with .Project}}<p class="small muted" dir="auto">{{if .Domain}}<span dir="ltr">{{.Site}}</span>{{else}}سایت هنوز مشخص نشده{{end}}</p>
+    {{with .URL}}<p class="small"><a href="{{.}}?v={{$.Now}}" target="_blank" rel="noopener">دیدن سایت ↗</a> · <a href="{{.}}wp-admin/" target="_blank" rel="noopener">پیشخوان ↗</a></p>{{end}}{{end}}
     <a class="small" href="{{.BasePath}}projects">+ پروژه‌ی تازه</a>
   </section>
   <section class="side-card">
@@ -120,3 +121,5 @@
   {{end}}
 </table>
 {{end}}
+
+{{define "disk"}}{{if .}}<span class="disk{{if ge .Pct 90}} full{{end}}" title="به‌روز شده: {{.At.Format "2006-01-02 15:04"}}"><span class="disk-bar"><span style="width:{{.Pct}}%"></span></span> <span class="small" dir="ltr">{{.Text}}</span>{{if ge .Pct 90}} <span class="small bad">پر شده</span>{{end}}</span>{{else}}<span class="muted small">هنوز خوانده نشده</span>{{end}}{{end}}

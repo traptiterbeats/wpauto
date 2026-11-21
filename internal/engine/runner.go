@@ -84,6 +84,8 @@ type Target struct {
 	// ProjectID ties the run to a client project; OnDone is called with the final status.
 	ProjectID string
 	OnDone    func(status string)
+	// OnDisk receives the account's disk usage (MB) read at the end of every run that logged in.
+	OnDisk func(usedMB, limitMB float64)
 }
 
 // RunContext is handed to each step.
@@ -274,6 +276,12 @@ func (r *Runner) execute(ctx context.Context, wf *Workflow, t *Target, inputs ma
 				r.log(run, "info", "cleanup", rc.finally[i].desc)
 			}
 		}
+		if rc.client != nil && t.OnDisk != nil {
+			if used, limit, err := rc.client.DiskUsage(cctx); err == nil {
+				t.OnDisk(used, limit)
+				r.log(run, "info", "cleanup", fmt.Sprintf("فضای هاست: %.0f MB از %.0f MB (۰ = نامحدود)", used, limit))
+			}
+		}
 		if rc.client != nil {
 			rc.client.Logout(cctx)
 		}
@@ -424,4 +432,25 @@ func (r *Runner) List(limit int) []Run {
 		out = out[:limit]
 	}
 	return out
+}
+
+// DeleteProjectRuns removes the finished runs of a project (logs included) and returns how many.
+func (r *Runner) DeleteProjectRuns(projectID string) int {
+	if projectID == "" {
+		return 0
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	n := 0
+	for id, run := range r.runs {
+		if run.ProjectID != projectID || !run.Done() {
+			continue
+		}
+		if err := os.Remove(filepath.Join(r.dir, id+".json")); err != nil && !os.IsNotExist(err) {
+			continue
+		}
+		delete(r.runs, id)
+		n++
+	}
+	return n
 }
