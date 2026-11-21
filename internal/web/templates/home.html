@@ -12,17 +12,7 @@
       <label>نام پروژه<input name="name" required placeholder="مثلاً کارگاه نجاری سیس"></label>
       <label>دامنه<input name="domain" id="np-domain" dir="ltr" placeholder="example.com/blog یا shop.example.com"></label>
       <p class="np-kind small" id="np-kind" aria-live="polite">دامنه‌ی اصلی، ساب‌دامین یا پوشه — نوعش خودکار تشخیص داده می‌شود.</p>
-      {{if .HostOptions}}
-      <label id="np-hostwrap">هاست
-        <select name="host" id="np-host">
-          <option value="">— خودکار —</option>
-          {{range .HostOptions}}<option value="{{.ID}}" data-domains="{{.Domains}}">{{.Name}}</option>{{end}}
-        </select>
-      </label>
-      <p class="small muted" id="np-hostnote" aria-live="polite"></p>
-      {{else}}
-      <p class="small muted">هنوز هاستی ثبت نشده؛ بعداً از <a href="{{.BasePath}}hosts">هاست‌ها</a> اضافه کنید.</p>
-      {{end}}
+      <p class="small muted" id="np-hostnote">هاست لازم نیست: بعداً در «بررسی هاست» پروژه وارد می‌شود؛ اگر هاستِ همین دامنه‌ی اصلی قبلاً برای پروژه‌ی دیگری ذخیره شده باشد، خودکار وصل می‌شود.</p>
       <button type="submit">ساختن پروژه ←</button>
     </form>
   </section>
@@ -62,7 +52,7 @@
     if(none) none.hidden=shown>0;
   }); }
 
-  // domain kind + host match; the server (domain.go) does the same and has the last word
+  // domain kind; the server (domain.go) does the same and has the last word
   var SUF={{.Suffixes}}, LABEL=/^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$/, NAME=/^[a-z0-9]([a-z0-9-]{0,30}[a-z0-9])?$/;
   var KIND={root:'اصلی', subdomain:'ساب‌دامین', subfolder:'پوشه'};
   function parse(v){
@@ -78,8 +68,7 @@
     if(host!==parent){ var lab=host.slice(0,-parent.length-1); return (lab.indexOf('.')<0&&NAME.test(lab))?{kind:'subdomain',host:host,parent:parent}:{err:1}; }
     return {kind:'root',host:host,parent:parent};
   }
-  var d=document.getElementById('np-domain'), k=document.getElementById('np-kind'), sel=document.getElementById('np-host'),
-      wrap=document.getElementById('np-hostwrap'), note=document.getElementById('np-hostnote');
+  var d=document.getElementById('np-domain'), k=document.getElementById('np-kind');
   if(!d) return;
   function update(){
     var a=parse(d.value);
@@ -87,19 +76,7 @@
     if(!a){ k.textContent='دامنه‌ی اصلی، ساب‌دامین یا پوشه — نوعش خودکار تشخیص داده می‌شود.'; }
     else if(a.err){ k.textContent='آدرس معتبر نیست'; k.className+=' bad'; }
     else { k.innerHTML=''; var b=document.createElement('strong'); b.textContent=KIND[a.kind]; k.append('نوع: ', b, a.kind==='root'?'':' روی '+a.parent); k.setAttribute('data-kind',a.kind); }
-    if(!sel) return;
-    var m=[];
-    if(a&&!a.err){ Array.prototype.forEach.call(sel.options,function(o){
-      (o.getAttribute('data-domains')||'').split(' ').forEach(function(x){ if(x&&(a.host===x||a.host.slice(-x.length-1)==='.'+x)&&m.indexOf(o)<0) m.push(o); });
-    }); }
-    if(sel.getAttribute('data-auto')&&m.length!==1){ sel.value=''; sel.removeAttribute('data-auto'); }
-    if(m.length===1){ sel.value=m[0].value; sel.setAttribute('data-auto','1'); wrap.hidden=true; note.textContent='هاست: '+m[0].textContent+' (دامنه روی این هاست است)'; }
-    else { wrap.hidden=false;
-      if(m.length>1){ note.textContent='چند هاست این دامنه را دارند؛ یکی را انتخاب کنید.'; }
-      else { note.textContent=(a&&!a.err)?'هیچ هاستِ ثبت‌شده‌ای این دامنه را ندارد؛ هاست را انتخاب کنید.':''; }
-    }
   }
-  if(sel) sel.addEventListener('change', function(){ sel.removeAttribute('data-auto'); });
   d.addEventListener('input', update); update();
 })();
 </script>

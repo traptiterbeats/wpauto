@@ -8,7 +8,7 @@
 <main>
   {{template "flash" .}}
   <h2>وردپرس‌های هاست</h2>
-  {{if not .Hosts}}<p class="muted">اول یک <a href="{{.BasePath}}hosts">هاست</a> اضافه کنید.</p>{{else}}
+  {{if or .NeedHost (not .Hosts)}}{{template "nohost" .}}{{else}}
   <form method="get" action="{{.BasePath}}wordpress" class="card row">
     <label>هاست
       <select name="host" onchange="this.form.submit()">{{range .Hosts}}<option value="{{.ID}}" {{if eq .ID $.HostID}}selected{{end}}>{{.Name}}</option>{{end}}</select>

@@ -140,6 +140,8 @@ func (s *Server) pipeline(p *projects.Project) []pipeStep {
 			steps[i].Link += q
 		}
 	}
+	// the host is entered and checked inside the project
+	steps[idx["host"]].Link = bp + "p/" + p.ID + "/host"
 	// runs come newest first: the newest run decides running/failed, any success means done
 	seen := map[string]bool{}
 	for _, run := range s.runner.List(500) {
@@ -207,7 +209,6 @@ type tool struct {
 }
 
 var tools = []tool{
-	{"هاست‌ها", "hosts", "افزودن، بررسی و ویرایش هاست‌های cPanel"},
 	{"همه‌ی کارها", "tasks", "فهرست کامل کارها و پروژه‌ها به شکل قبلی"},
 	{"اجراها", "runs", "تاریخچه‌ی همه‌ی اجراها"},
 	{"فهرست پروژه‌ها", "projects", "ساختن، فعال کردن و حذف پروژه‌ها"},

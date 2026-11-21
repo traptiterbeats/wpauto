@@ -20,8 +20,8 @@
     <p class="muted small">مرحله‌های کم‌رنگ با تنظیمات فعلی فرم لازم نیستند و اجرا نمی‌شوند.</p>
   </section>
   {{end}}
-  {{if not .Hosts}}
-  <div class="card hint">هنوز هاستی ندارید. <a href="{{.BasePath}}hosts">افزودن هاست</a></div>
+  {{if or .NeedHost (not .Hosts)}}
+  {{template "nohost" .}}
   {{else}}
   <form class="card form" id="runform" method="post" action="{{.BasePath}}run/{{.WF.ID}}" autocomplete="off">
     <input type="hidden" name="csrf" value="{{.CSRF}}">

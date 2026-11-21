@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="fa" dir="rtl">
+<head>{{template "head" .}}<title>بررسی هاست · {{.P.Name}} | wpauto</title></head>
+<body>
+{{template "nav" .}}
+<main class="narrow">
+  {{template "flash" .}}
+  <header class="phead">
+    <h1>بررسی هاست <span class="muted">· {{.P.Name}}</span></h1>
+    <p class="muted">{{if .P.Domain}}<span dir="ltr">{{.P.Site}}</span>{{with .Addr.Parent}} · دامنه‌ی اصلی <span dir="ltr">{{.}}</span>{{end}}{{else}}آدرس پروژه هنوز مشخص نشده{{end}}</p>
+  </header>
+  {{if .Msg}}<div class="card hint ok" id="hostmsg">{{.Msg}}</div>{{end}}
+  {{if .Error}}<div class="error">{{.Error}}</div>{{end}}
+
+  {{if .Host}}
+  <section class="card" id="hostsummary" aria-labelledby="hs-title">
+    <h2 id="hs-title" class="step">هاست این پروژه: <span dir="ltr">{{.HostLabel}}</span></h2>
+    <dl class="kv">
+      <dt>آدرس cPanel</dt><dd dir="ltr">{{.Host.URL}}</dd>
+      <dt>نام کاربری</dt><dd dir="ltr">{{.Host.Username}}</dd>
+      <dt>پروفایل</dt><dd>{{if .HostProfile}}{{.HostProfile.Name}}{{else}}{{.Host.ProfileID}}{{end}}</dd>
+      <dt>آخرین بررسی</dt><dd>{{with .Host.LastReport}}<span class="{{if .ReadyForWP}}ok{{else if .LoginOK}}warn{{else}}bad{{end}}">{{if .ReadyForWP}}آماده برای وردپرس{{else if .LoginOK}}نیاز به بررسی{{else}}ورود ناموفق{{end}}</span> · <span dir="ltr">{{.At.Format "2006-01-02 15:04"}}</span>{{else}}<span class="muted">هنوز بررسی نشده</span>{{end}}</dd>
+      {{if .Host.Disk}}<dt>فضای هاست</dt><dd>{{template "disk" .Host.Disk}}</dd>{{end}}
+    </dl>
+    {{if .SharedWith}}<p class="small muted">این هاست در پروژه‌های دیگر هم استفاده می‌شود: {{range $i, $n := .SharedWith}}{{if $i}}، {{end}}{{$n}}{{end}}</p>{{end}}
+    {{if .Locked}}
+    <div class="error">ورود قبلی رد شد. برای جلوگیری از بلاک شدن IP، تلاش خودکار متوقف شده؛ اطلاعات اتصال را اصلاح کنید.</div>
+    {{else}}
+    <form method="post" action="{{.BasePath}}p/{{.P.ID}}/host/check" class="inline" id="recheck">
+      <input type="hidden" name="csrf" value="{{.CSRF}}">
+      <button type="submit">بررسی دوباره</button>
+      <span class="muted small">فقط خواندنی است و چیزی روی هاست تغییر نمی‌کند.</span>
+    </form>
+    {{end}}
+    <details class="hostedit" id="hostedit" {{if or .Locked .Error}}open{{end}}>
+      <summary class="btn ghost small">ویرایش اطلاعات اتصال</summary>
+      <form class="form" method="post" action="{{.BasePath}}p/{{.P.ID}}/host/save" autocomplete="off">
+        <input type="hidden" name="csrf" value="{{.CSRF}}">
+        <label>آدرس cPanel<input name="url" required dir="ltr" value="{{.Host.URL}}"></label>
+        <label>نام کاربری cPanel<input name="username" required dir="ltr" value="{{.Host.Username}}"></label>
+        <label>رمز عبور یا API Token جدید (خالی = بدون تغییر)<input name="secret" type="password" dir="ltr" autocomplete="new-password"></label>
+        <label>پروفایل هاست
+          <select name="profile">{{range .Profiles}}<option value="{{.ID}}" {{if eq .ID $.Host.ProfileID}}selected{{end}}>{{.Name}}</option>{{end}}</select>
+        </label>
+        {{if .SharedWith}}<p class="small warn">تغییر، برای همه‌ی پروژه‌هایی که از این هاست استفاده می‌کنند اعمال می‌شود.</p>{{end}}
+        <button type="submit">ذخیره و بررسی</button>
+      </form>
+    </details>
+  </section>
+
+  {{with .CheckRun}}
+  <section class="card" id="hostrun" aria-labelledby="hr-title">
+    <h2 id="hr-title" class="step">{{if .Done}}نتیجه‌ی بررسی{{else}}در حال بررسی…{{end}} <span class="small muted">· <span id="status">{{template "status" .Status}}</span> · <span dir="ltr">{{.StartedAt.Format "2006-01-02 15:04"}}</span></span></h2>
+    {{if .Error}}<div class="error">{{.Error}}</div>{{end}}
+    <ol class="plan steps-run" id="steps">
+      {{range .Steps}}<li data-id="{{.ID}}" class="st-{{.Status}}"><span class="dot"></span><span class="t">{{.Title}}</span>{{if .Error}} <span class="bad small">{{.Error}}</span>{{end}}</li>{{end}}
+    </ol>
+    {{if and .Done $.Host.LastReport}}{{with $.Host.LastReport}}
+    <p class="{{if .ReadyForWP}}ok{{else}}warn{{end}}">{{.Recommendation}}</p>
+    <ul class="checks">
+      {{range .Checks}}<li><span class="{{if .OK}}ok{{else}}bad{{end}}">{{if .OK}}✔{{else}}✘{{end}}</span> <strong>{{.Title}}</strong> <span class="muted" dir="auto">{{.Detail}}</span></li>{{end}}
+    </ul>
+    {{end}}{{end}}
+    <details {{if not .Done}}open{{end}}>
+      <summary>لاگ اجرا</summary>
+      <pre class="log" id="log">{{range .Log}}<span class="lv-{{.Level}}">{{.T.Format "15:04:05"}}  {{.Msg}}</span>
+{{end}}</pre>
+    </details>
+    <p class="small"><a href="{{$.BasePath}}runs/{{.ID}}">صفحه‌ی کامل این اجرا</a>{{if and .Done (eq .Status "success")}} · <a href="{{$.BasePath}}p/{{$.P.ID}}/wordpress">ادامه: کارهای وردپرس ←</a>{{end}}</p>
+  </section>
+  <script>
+  (function(){
+    var done = {{.Done}}, after = {{len .Log}};
+    if (done) return;
+    var url = "{{$.BasePath}}runs/{{.ID}}/json";
+    var labels = {success:"موفق",failed:"ناموفق",running:"در حال اجرا",cancelled:"متوقف شد",skipped:"رد شد",pending:"در صف",interrupted:"قطع شد"};
+    function tick(){
+      fetch(url+"?after="+after,{credentials:"same-origin"}).then(function(r){return r.json()}).then(function(d){
+        var log = document.getElementById("log");
+        d.log.forEach(function(l){
+          var s = document.createElement("span");
+          s.className = "lv-"+l.level;
+          s.textContent = new Date(l.t).toTimeString().slice(0,8)+"  "+l.msg+"\n";
+          log.appendChild(s); after = l.n;
+        });
+        d.steps.forEach(function(st){
+          var li = document.querySelector('#steps li[data-id="'+st.id+'"]');
+          if (li) li.className = "st-"+st.status;
+        });
+        document.getElementById("status").textContent = labels[d.status]||d.status;
+        if (d.done) { location.reload(); return; }
+        setTimeout(tick, 1200);
+      }).catch(function(){ setTimeout(tick, 3000); });
+    }
+    tick();
+  })();
+  </script>
+  {{end}}
+
+  {{else}}
+  <section class="card" id="hostform" aria-labelledby="hf-title">
+    <h2 id="hf-title" class="step">هاست این پروژه هنوز وصل نشده</h2>
+    <p class="muted small">اطلاعات cPanel دامنه‌ی اصلی پروژه را وارد کنید؛ ذخیره می‌شود، به این پروژه وصل می‌شود و بلافاصله بررسی هاست (فقط خواندنی) اجرا می‌شود. پروژه‌های دیگرِ روی همین دامنه‌ی اصلی، همین هاست را خودکار برمی‌دارند.</p>
+    <form class="form" method="post" action="{{.BasePath}}p/{{.P.ID}}/host/save" autocomplete="off">
+      <input type="hidden" name="csrf" value="{{.CSRF}}">
+      <label>آدرس cPanel<input name="url" required dir="ltr" value="{{.DefaultURL}}" placeholder="https://example.com:2083"></label>
+      <label>نام کاربری cPanel<input name="username" required dir="ltr"></label>
+      <label>رمز عبور یا API Token<input name="secret" type="password" required dir="ltr" autocomplete="new-password"></label>
+      <label>پروفایل هاست
+        <select name="profile">{{range .Profiles}}<option value="{{.ID}}">{{.Name}} — {{.Description}}</option>{{end}}</select>
+      </label>
+      <p class="muted small">رمز به‌صورت رمزنگاری‌شده (AES-256) روی سرور خودتان ذخیره می‌شود و دیگر نمایش داده نمی‌شود.</p>
+      <button type="submit">ذخیره و بررسی</button>
+    </form>
+  </section>
+  {{end}}
+</main>
+</body>
+</html>

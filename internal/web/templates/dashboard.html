@@ -8,7 +8,7 @@
 <main>
   {{template "flash" .}}
   {{if eq .HostCount 0}}
-  <div class="card hint">اول یک هاست اضافه کنید: <a href="{{.BasePath}}hosts">هاست‌ها</a></div>
+  <div class="card hint">هنوز هاستی وارد نشده؛ هاست هر پروژه در «بررسی هاست» همان پروژه وارد می‌شود.</div>
   {{end}}
   <div class="ribbons">
     <section class="ribbon ribbon-new">
@@ -17,10 +17,8 @@
       <form method="post" action="{{.BasePath}}projects/new" class="ribbon-form">
         <input type="hidden" name="csrf" value="{{.CSRF}}"><input type="hidden" name="back" value="{{.BasePath}}">
         <input name="name" required placeholder="نام مشتری یا سایت، مثلاً کارگاه نجاری سیس">
-        {{if gt (len .Hosts) 1}}<select name="host">{{range .Hosts}}<option value="{{.ID}}">{{.Name}}</option>{{end}}</select>{{else}}{{range .Hosts}}<input type="hidden" name="host" value="{{.ID}}">{{end}}{{end}}
         <button type="submit">شروع ←</button>
       </form>
-      {{if eq .HostCount 0}}<p class="small warn">هنوز هاستی ندارید؛ <a href="{{.BasePath}}hosts">اول یک هاست اضافه کنید</a>.</p>{{end}}
     </section>
     <section class="ribbon ribbon-old">
       <h2>ادامه‌ی پروژه‌های قبلی</h2>

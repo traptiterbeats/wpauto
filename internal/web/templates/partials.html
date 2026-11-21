@@ -84,8 +84,8 @@
     <ul class="ready">
       {{with .Ready}}
       <li class="{{if .CheckedHosts}}r-ok{{else if .Hosts}}r-warn{{else}}r-bad{{end}}">
-        <span class="dot"></span><a href="{{$.BasePath}}hosts">هاست</a>
-        <span class="small muted">{{if .CheckedHosts}}{{.CheckedHosts}} هاست بررسی‌شده{{else if .Hosts}}هنوز بررسی نشده{{else}}هاستی اضافه نشده{{end}}</span>
+        <span class="dot"></span>{{if $.Project}}<a href="{{$.BasePath}}p/{{$.Project.ID}}/host">هاست</a>{{else}}<span>هاست</span>{{end}}
+        <span class="small muted">{{if .CheckedHosts}}{{.CheckedHosts}} هاست بررسی‌شده{{else if .Hosts}}هنوز بررسی نشده{{else}}هنوز هاستی در پروژه‌ها وارد نشده{{end}}</span>
       </li>
       <li class="r-{{.AIState}}">
         <span class="dot"></span><a href="{{$.BasePath}}ai">هوش مصنوعی</a>
@@ -136,3 +136,5 @@
 {{end}}
 
 {{define "disk"}}{{if .}}<span class="disk{{if ge .Pct 90}} full{{end}}" title="به‌روز شده: {{.At.Format "2006-01-02 15:04"}}"><span class="disk-bar"><span style="width:{{.Pct}}%"></span></span> <span class="small" dir="ltr">{{.Text}}</span>{{if ge .Pct 90}} <span class="small bad">پر شده</span>{{end}}</span>{{else}}<span class="muted small">هنوز خوانده نشده</span>{{end}}{{end}}
+
+{{define "nohost"}}<div class="card hint" id="needhost">این کار روی هاست پروژه انجام می‌شود و هاست هنوز وصل نیست. {{with .NeedHost}}اول <a href="{{$.BasePath}}p/{{.ID}}/host">بررسی هاست</a> پروژه‌ی «{{.Name}}» را انجام دهید.{{else}}{{with $.Project}}اول <a href="{{$.BasePath}}p/{{.ID}}/host">بررسی هاست</a> پروژه‌ی «{{.Name}}» را انجام دهید.{{else}}یک <a href="{{$.BasePath}}">پروژه</a> بسازید و در «بررسی هاست» آن، اطلاعات هاست را وارد کنید.{{end}}{{end}}</div>{{end}}

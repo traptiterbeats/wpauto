@@ -165,7 +165,7 @@ func TestHomePage(t *testing.T) {
 	for _, want := range []string{
 		`wpauto 9.9.9-test`, `id="tehran-clock"`, `timeZone:'Asia/Tehran'`, // version + live Tehran clock
 		`action="` + e.s.cfg.BasePath + `projects/new"`, `name="name"`, `name="domain"`, `id="np-domain"`,
-		`id="np-host"`, `data-domains="example.com shop.ir"`, // host selector with the domains to match
+		`id="np-hostnote"`, // no host selector: the host belongs to the project
 		`id="psearch"`, `type="search"`, "هنوز پروژه‌ای نساخته‌اید", `class="toolmenu"`,
 		`"co.ir"`, // the script's suffix list
 	} {
@@ -174,7 +174,7 @@ func TestHomePage(t *testing.T) {
 		}
 	}
 	// home is minimal: no breadcrumb, no old menu, no side panel, no runs drawer
-	for _, bad := range []string{`class="trail"`, `class="side"`, `id="drawer"`, "شما این‌جا هستید", "مسیر ساخت سایت"} {
+	for _, bad := range []string{`class="trail"`, `class="side"`, `id="drawer"`, "شما این‌جا هستید", "مسیر ساخت سایت", `id="np-host"`, `name="host"`} {
 		if strings.Contains(home, bad) {
 			t.Errorf("home still has %q", bad)
 		}
@@ -260,17 +260,19 @@ func TestProjectSectionAndWordPressPages(t *testing.T) {
 	for _, want := range []string{"بررسی هاست", "نصب وردپرس", "شخصی‌سازی برای مشتری (AI)", "نصب قالب و دمو", "AutoPilot",
 		"وردپرس‌های نصب‌شده / حذف", "بررسی سئو", "انجام‌شده برای این پروژه", "هنوز اجرایی برای این پروژه ثبت نشده",
 		`action="` + bp + `projects/` + p.ID + `/activate"`,
-		`value="` + bp + `run/host-check?project=` + p.ID + `&amp;host=` + e.h1 + `"`,
+		`value="` + bp + `p/` + p.ID + `/host"`, // the host card opens the project's own host page
+		`value="` + bp + `run/wp-check-domain?project=` + p.ID + `&amp;host=` + e.h1 + `"`,
 		`value="` + bp + `run/wp-install?project=`, `value="` + bp + `customize"`, `value="` + bp + `autopilot?project=` + p.ID + `"`,
-		`value="` + bp + `wordpress?host=` + e.h1 + `"`,
+		`value="` + bp + `wordpress?project=` + p.ID + `&amp;host=` + e.h1 + `"`,
+		"بررسی افزونه‌ها", "بررسی قالب‌ها", `id="g-setup"`, `id="g-site"`, ">راه‌اندازی<", ">سایت وردپرسی<",
 		`<a href="` + bp + `p/` + p.ID + `">فروشگاه نارنج</a>`, `<strong aria-current="page">وردپرس</strong>`,
 		`href="` + bp + `p/` + p.ID + `" id="backbtn"`} {
 		if !strings.Contains(wp, want) {
 			t.Errorf("wordpress page lacks %q", want)
 		}
 	}
-	if strings.Count(wp, `class="tile soon"`) != 1 || strings.Count(wp, `class="pp-todo"`) != 5 {
-		t.Error("seo should be the only disabled card; a new project has every stage dark")
+	if strings.Count(wp, `class="tile soon"`) != 3 || strings.Count(wp, `class="pp-todo"`) != 5 {
+		t.Error("plugins, themes and seo should be the disabled cards; a new project has every stage dark")
 	}
 	if strings.Contains(wp, "wp-admin/") {
 		t.Error("admin link shown before WordPress is installed")
@@ -328,10 +330,14 @@ func TestOldRoutesStillReachable(t *testing.T) {
 			t.Errorf("%s: back button missing", path)
 		}
 	}
-	for _, path := range []string{"hosts", "tasks", "runs", "projects", "themes", "customize", "ai", "wordpress", "autopilot", "tools"} {
+	for _, path := range []string{"tasks", "runs", "projects", "themes", "customize", "ai", "wordpress", "autopilot", "tools"} {
 		if !strings.Contains(tools, `href="`+e.s.cfg.BasePath+path+`"`) {
 			t.Errorf("tools menu lacks %s", path)
 		}
+	}
+	// hosts belong to projects now: the /hosts pages still work but are not listed
+	if strings.Contains(tools, `href="`+e.s.cfg.BasePath+`hosts"`) || strings.Contains(tools, "هاست‌ها") {
+		t.Error("tools page still lists هاست‌ها")
 	}
 	// the logout form (with csrf) lives in the tools menu
 	if !strings.Contains(tools, `action="`+e.s.cfg.BasePath+`logout"`) {

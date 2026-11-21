@@ -30,23 +30,31 @@
     {{with .Last}}<p class="small">آخرین اجرا: <a href="{{$.BasePath}}runs/{{.ID}}">{{.Title}}</a> · {{template "status" .Status}} · <span dir="ltr">{{.StartedAt.Format "2006-01-02 15:04"}}</span></p>{{else}}<p class="small muted">هنوز اجرایی برای این پروژه ثبت نشده.</p>{{end}}
   </section>
 
-  <h2 class="step">کار را انتخاب کنید</h2>
-  <div class="cards" id="wptasks">
-    {{range .Tasks}}
-    {{if .Soon}}
-    <div class="tile soon" aria-disabled="true"><strong>{{.Title}}</strong><span class="badge">به‌زودی</span></div>
-    {{else}}
-    <form method="post" action="{{$.BasePath}}projects/{{$.P.ID}}/activate" class="tile-form">
-      <input type="hidden" name="csrf" value="{{$.CSRF}}"><input type="hidden" name="back" value="{{.Link}}">
-      <button type="submit" class="tile{{with .Stage}} st-{{.State}}{{end}}" data-link="{{.Link}}">
-        <strong>{{.Title}}</strong>
-        <span class="small muted">{{.Note}}</span>
-        {{with .Stage}}{{if eq .State "done"}}<span class="badge ok">✔ انجام شد</span>{{else if eq .State "running"}}<span class="badge warn">در حال انجام</span>{{else if eq .State "failed"}}<span class="badge bad">ناموفق</span>{{end}}{{end}}
-        <span class="go">←</span>
-      </button>
-    </form>
-    {{end}}
-    {{end}}
+  <p class="small" id="hostline">{{if .HasHost}}هاست پروژه: <a href="{{.HostLink}}"><span dir="ltr">{{.HostLabel}}</span></a>{{else}}<span class="warn">هاست این پروژه هنوز وصل نشده.</span> <a href="{{.HostLink}}">بررسی هاست ←</a>{{end}}</p>
+  <div id="wptasks">
+  {{range .Groups}}
+  <section class="wpgroup" id="g-{{.Key}}" aria-labelledby="gt-{{.Key}}">
+    <h2 class="step" id="gt-{{.Key}}">{{.Title}}</h2>
+    <div class="cards">
+      {{range .Tasks}}
+      {{if .Soon}}
+      <div class="tile soon" aria-disabled="true" data-key="{{.Key}}"><strong>{{.Title}}</strong><span class="badge">به‌زودی</span></div>
+      {{else}}
+      <form method="post" action="{{$.BasePath}}projects/{{$.P.ID}}/activate" class="tile-form">
+        <input type="hidden" name="csrf" value="{{$.CSRF}}"><input type="hidden" name="back" value="{{.Link}}">
+        <button type="submit" class="tile{{with .Stage}} st-{{.State}}{{end}}" data-key="{{.Key}}" data-link="{{.Link}}">
+          <strong>{{.Title}}</strong>
+          <span class="small muted">{{.Note}}</span>
+          {{if .NeedsHost}}<span class="badge need">اول بررسی هاست</span>{{else}}{{with .Stage}}{{if eq .State "done"}}<span class="badge ok">✔ انجام شد</span>{{else if eq .State "running"}}<span class="badge warn">در حال انجام</span>{{else if eq .State "failed"}}<span class="badge bad">ناموفق</span>{{end}}{{end}}{{end}}
+          <span class="go">←</span>
+        </button>
+      </form>
+      {{end}}
+      {{end}}
+    </div>
+    {{if .NeedsHost}}<p class="small muted needhost">کارهای «نیازمند هاست» از هاست پروژه استفاده می‌کنند؛ اول <a href="{{$.HostLink}}">بررسی هاست</a> این پروژه را انجام دهید.</p>{{end}}
+  </section>
+  {{end}}
   </div>
 </main>
 </body>

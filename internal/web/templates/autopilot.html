@@ -12,8 +12,8 @@
     ۱. شخصی‌سازی متن‌ها با هوش مصنوعی (هنوز چیزی روی هاست تغییر نمی‌کند) · ۲. نصب وردپرس · ۳. نصب قالب و درون‌ریزی دموی شخصی‌سازی‌شده · ۴. بررسی سایت.
     بررسی هاست و بررسی وردپرس انجام نمی‌شود؛ فرض بر این است که هاست آماده است.</p>
   {{if .Error}}<div class="error">{{.Error}}</div>{{end}}
-  {{if not .Hosts}}
-  <div class="card hint">هنوز هاستی ندارید. <a href="{{.BasePath}}hosts">افزودن هاست</a></div>
+  {{if or .NeedHost (not .Hosts)}}
+  {{template "nohost" .}}
   {{else if not .Themes}}
   <div class="card hint">قالبی با بسته‌ی دمو در کاتالوگ نیست. <a href="{{.BasePath}}themes">افزودن قالب</a></div>
   {{else if not .Providers}}

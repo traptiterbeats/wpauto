@@ -103,7 +103,7 @@ func (s *Server) handleRunForm(w http.ResponseWriter, r *http.Request) {
 	}
 	s.render(w, "run_form.html", s.page(r, map[string]any{
 		"Crumb": wf.Title, "Steps": planSteps(wf, nil), "WF": wf, "Hosts": hosts, "HostID": hostID, "Domains": domains, "Error": q.Get("err"),
-		"Themes": engine.Catalog().List(), "Drafts": engine.Drafts().List(), "Q": pre,
+		"Themes": engine.Catalog().List(), "Drafts": engine.Drafts().List(), "Q": pre, "NeedHost": s.needHostPtr(r),
 	}))
 }
 

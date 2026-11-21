@@ -830,7 +830,7 @@ func (s *Server) renderAutopilot(w http.ResponseWriter, r *http.Request, f apFor
 	s.render(w, "autopilot.html", s.page(r, map[string]any{
 		"F": f, "Hosts": hosts, "Domains": domains, "Themes": themes, "Providers": s.ai.List(), "Info": standards(),
 		"MaxPhotoMB": customize.MaxPhoto >> 20,
-		"Socials":    customize.Socials, "Pipelines": s.ap.list(), "Error": errMsg,
+		"Socials":    customize.Socials, "Pipelines": s.ap.list(), "Error": errMsg, "NeedHost": s.needHostPtr(r),
 	}))
 }
 

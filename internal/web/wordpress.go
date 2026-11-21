@@ -80,6 +80,7 @@ func (s *Server) handleWordPress(w http.ResponseWriter, r *http.Request) {
 	run, list := s.lastScan(hostID)
 	s.render(w, "wordpress.html", s.page(r, map[string]any{
 		"Crumb": "وردپرس‌های هاست", "Hosts": hosts, "HostID": hostID, "Scan": run, "Sites": list, "RemoveWord": removeWord,
+		"NeedHost": s.needHostPtr(r),
 	}))
 }
 

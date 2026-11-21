@@ -47,20 +47,10 @@ func (s *Server) projectRows() []projectRow {
 	return out
 }
 
-// hostOption is a saved host in the new-project form, with the domains the page's script
-// matches the typed address against.
-type hostOption struct {
-	ID, Name, Domains string
-}
-
 func (s *Server) handleHome(w http.ResponseWriter, r *http.Request) {
-	var hosts []hostOption
-	for _, h := range s.store.List() {
-		hosts = append(hosts, hostOption{ID: h.ID, Name: h.Name, Domains: strings.Join(hostDomains(h), " ")})
-	}
 	suffixes, _ := json.Marshal(multiSuffixes)
 	s.render(w, "home.html", s.page(r, map[string]any{
-		"IsHome": true, "Rows": s.projectRows(), "HostOptions": hosts,
+		"IsHome": true, "Rows": s.projectRows(),
 		"Suffixes": template.JS(suffixes), "Crumbs": []crumb{{"پروژه‌ها", ""}},
 	}))
 }
@@ -111,9 +101,92 @@ func (s *Server) handleProjectView(w http.ResponseWriter, r *http.Request) {
 
 // wpTask is one card on a project's WordPress page.
 type wpTask struct {
-	Title, Note, Link string
-	Stage             *pipeStep // the path stage the task completes (nil for tools)
-	Soon              bool
+	Key, Title, Note, Link string
+	Stage                  *pipeStep // the path stage the task completes (nil for tools)
+	Soon                   bool
+	NeedsHost              bool // the task works on the project's host and none is linked yet
+}
+
+// wpGroup is a titled group of cards on a project's WordPress page.
+type wpGroup struct {
+	Key, Title string
+	Tasks      []wpTask
+	NeedsHost  bool // some card of the group waits for the project's host
+}
+
+// wpCtx is what a card needs to build its link.
+type wpCtx struct {
+	bp string
+	p  projects.Project
+	by map[string]*pipeStep
+}
+
+// wpCard is one entry of the WordPress page's card registry. To add a task, add a line here
+// (Soon: true until it works); Stage ties it to a path stage, Host says it runs on the host.
+type wpCard struct {
+	Group, Key, Title, Note string
+	Stage                   string
+	Host                    bool
+	Soon                    bool
+	Link                    func(c wpCtx) string
+}
+
+// wpGroups are the groups of the WordPress page, in order.
+var wpGroups = []struct{ Key, Title string }{
+	{"setup", "راه‌اندازی"},
+	{"site", "سایت وردپرسی"},
+}
+
+func stageLink(key string) func(wpCtx) string {
+	return func(c wpCtx) string { return c.by[key].Link }
+}
+
+var wpCards = []wpCard{
+	{Group: "setup", Key: "host", Title: "بررسی هاست", Note: "اطلاعات cPanel پروژه، PHP، دیتابیس و فضای دیسک", Stage: "host", Link: stageLink("host")},
+	{Group: "setup", Key: "wpcheck", Title: "بررسی وردپرس دامنه", Note: "آیا روی این آدرس وردپرس نصب است؟", Stage: "wpcheck", Host: true, Link: stageLink("wpcheck")},
+	{Group: "setup", Key: "wpinstall", Title: "نصب وردپرس", Note: "روی دامنه، ساب‌دامین یا پوشه‌ی پروژه", Stage: "wpinstall", Host: true, Link: stageLink("wpinstall")},
+	{Group: "setup", Key: "autopilot", Title: "AutoPilot", Note: "همه‌ی مرحله‌ها خودکار و پشت سر هم", Host: true,
+		Link: func(c wpCtx) string { return c.bp + "autopilot?project=" + url.QueryEscape(c.p.ID) }},
+	{Group: "site", Key: "customize", Title: "شخصی‌سازی برای مشتری (AI)", Note: "متن‌ها و تصاویر دمو برای این مشتری", Stage: "customize", Link: stageLink("customize")},
+	{Group: "site", Key: "theme", Title: "نصب قالب و دمو", Note: "قالب از کاتالوگ با دموی شخصی‌شده", Stage: "theme", Host: true, Link: stageLink("theme")},
+	{Group: "site", Key: "wplist", Title: "وردپرس‌های نصب‌شده / حذف", Note: "وردپرس‌های روی هاست را ببینید و پاک کنید", Host: true,
+		Link: func(c wpCtx) string {
+			l := c.bp + "wordpress?project=" + url.QueryEscape(c.p.ID)
+			if c.p.HostID != "" {
+				l += "&host=" + url.QueryEscape(c.p.HostID)
+			}
+			return l
+		}},
+	{Group: "site", Key: "plugins", Title: "بررسی افزونه‌ها", Soon: true},
+	{Group: "site", Key: "themes", Title: "بررسی قالب‌ها", Soon: true},
+	{Group: "site", Key: "seo", Title: "بررسی سئو", Soon: true},
+}
+
+// wpTaskGroups builds the WordPress page's cards from the registry.
+func wpTaskGroups(c wpCtx, hasHost bool) []wpGroup {
+	var out []wpGroup
+	for _, g := range wpGroups {
+		grp := wpGroup{Key: g.Key, Title: g.Title}
+		for _, card := range wpCards {
+			if card.Group != g.Key {
+				continue
+			}
+			t := wpTask{Key: card.Key, Title: card.Title, Note: card.Note, Soon: card.Soon}
+			if !card.Soon {
+				if card.Link != nil {
+					t.Link = card.Link(c)
+				}
+				if card.Stage != "" {
+					t.Stage = c.by[card.Stage]
+				}
+				t.NeedsHost = card.Host && !hasHost
+				grp.NeedsHost = grp.NeedsHost || t.NeedsHost
+			}
+			grp.Tasks = append(grp.Tasks, t)
+		}
+		out = append(out, grp)
+	}
+	return out
 }
 
 func (s *Server) handleProjectWP(w http.ResponseWriter, r *http.Request) {
@@ -122,26 +195,14 @@ func (s *Server) handleProjectWP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	bp := s.cfg.BasePath
+	msg := s.autoLinkHost(&p)
+	_, hasHost := s.store.Get(p.HostID)
 	stages := s.pipeline(&p)
 	by := map[string]*pipeStep{}
 	for i := range stages {
 		by[stages[i].Key] = &stages[i]
 	}
-	q := "?project=" + url.QueryEscape(p.ID)
-	wpList := bp + "wordpress"
-	if p.HostID != "" {
-		wpList += "?host=" + url.QueryEscape(p.HostID)
-	}
-	tasks := []wpTask{
-		{Title: "بررسی هاست", Note: "ورود به cPanel، PHP، دیتابیس و فضای دیسک", Link: by["host"].Link, Stage: by["host"]},
-		{Title: "بررسی وردپرس دامنه", Note: "آیا روی این آدرس وردپرس نصب است؟", Link: by["wpcheck"].Link, Stage: by["wpcheck"]},
-		{Title: "نصب وردپرس", Note: "روی دامنه، ساب‌دامین یا پوشه‌ی پروژه", Link: by["wpinstall"].Link, Stage: by["wpinstall"]},
-		{Title: "شخصی‌سازی برای مشتری (AI)", Note: "متن‌ها و تصاویر دمو برای این مشتری", Link: by["customize"].Link, Stage: by["customize"]},
-		{Title: "نصب قالب و دمو", Note: "قالب از کاتالوگ با دموی شخصی‌شده", Link: by["theme"].Link, Stage: by["theme"]},
-		{Title: "AutoPilot", Note: "همه‌ی مرحله‌ها خودکار و پشت سر هم", Link: bp + "autopilot" + q},
-		{Title: "وردپرس‌های نصب‌شده / حذف", Note: "وردپرس‌های روی هاست را ببینید و پاک کنید", Link: wpList},
-		{Title: "بررسی سئو", Soon: true},
-	}
+	groups := wpTaskGroups(wpCtx{bp: bp, p: p, by: by}, hasHost)
 	var last *engine.Run
 	for _, run := range s.runner.List(500) {
 		if run.ProjectID == p.ID {
@@ -151,8 +212,16 @@ func (s *Server) handleProjectWP(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	installed := by["wpinstall"].State == "done" || by["theme"].State == "done"
-	s.render(w, "project_wp.html", s.page(r, map[string]any{
-		"P": p, "Addr": projectAddr(p), "Tasks": tasks, "Stages": stages, "Last": last, "Installed": installed,
+	data := map[string]any{
+		"P": p, "Addr": projectAddr(p), "Groups": groups, "Stages": stages, "Last": last, "Installed": installed,
+		"HasHost": hasHost, "HostLink": bp + "p/" + p.ID + "/host",
 		"Crumbs": []crumb{{"پروژه‌ها", bp}, {p.Name, bp + "p/" + p.ID}, {"وردپرس", ""}},
-	}))
+	}
+	if msg != "" && r.URL.Query().Get("msg") == "" && r.URL.Query().Get("err") == "" {
+		data["Flash"], data["FlashKind"] = msg, "msg"
+	}
+	if h, ok := s.store.Get(p.HostID); ok {
+		data["HostLabel"] = hostLabel(h)
+	}
+	s.render(w, "project_wp.html", s.page(r, data))
 }

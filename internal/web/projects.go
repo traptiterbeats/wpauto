@@ -37,26 +37,26 @@ func (s *Server) handleProjectNew(w http.ResponseWriter, r *http.Request) {
 	}
 	p := projects.Project{Name: r.FormValue("name"), HostID: r.FormValue("host"),
 		Domain: addr.Domain, Folder: addr.Folder, Mode: addr.Kind}
-	if p.HostID == "" {
-		// no host picked: take the one saved host whose main/addon domain fits the address,
-		// or the only host there is
-		hosts := s.store.List()
-		if m := matchHosts(hosts, addr); len(m) == 1 {
-			p.HostID = m[0].ID
-		} else if len(hosts) == 1 {
-			p.HostID = hosts[0].ID
+	if p.HostID != "" {
+		// older forms (and scripts) may still name a host
+		if _, ok := s.store.Get(p.HostID); !ok {
+			fail("هاست انتخاب‌شده پیدا نشد")
+			return
 		}
-	} else if _, ok := s.store.Get(p.HostID); !ok {
-		fail("هاست انتخاب‌شده پیدا نشد")
-		return
 	}
 	np, err := s.projects.Add(p)
 	if err != nil {
 		fail(err.Error())
 		return
 	}
+	msg := "پروژه‌ی «" + np.Name + "» ساخته شد."
+	// no host is needed to create a project: the saved host of the same main domain (another
+	// project on the same cPanel) is linked right away, else it is entered in «بررسی هاست»
+	if m := s.autoLinkHost(&np); m != "" {
+		msg += " " + m + "."
+	}
 	// step 2: choose the section (WordPress, ...)
-	http.Redirect(w, r, s.cfg.BasePath+"p/"+np.ID+"?msg="+url.QueryEscape("پروژه‌ی «"+np.Name+"» ساخته شد."), http.StatusSeeOther)
+	http.Redirect(w, r, s.cfg.BasePath+"p/"+np.ID+"?msg="+url.QueryEscape(msg), http.StatusSeeOther)
 }
 
 func (s *Server) handleProjectOp(w http.ResponseWriter, r *http.Request) {

@@ -307,3 +307,15 @@ details.quiet form{display:flex;flex-direction:column;gap:8px;align-items:flex-s
   .pr-site{grid-column:1}.pr-kind{grid-column:2;grid-row:1}.pr-last{grid-column:1/-1}.pr-prog{display:none}
   .cards{grid-template-columns:1fr 1fr}
 }
+/* project host page + grouped WordPress task cards */
+.kv{display:grid;grid-template-columns:max-content 1fr;gap:6px 16px;margin:8px 0 12px}
+.kv dt{color:var(--muted)}
+.kv dd{margin:0}
+.hostedit{margin-top:12px}
+.hostedit>summary{display:inline-block;cursor:pointer;list-style:none}
+.hostedit>summary::-webkit-details-marker{display:none}
+.hostedit[open]>summary{margin-bottom:12px}
+.wpgroup{margin-bottom:8px}
+.wpgroup h2.step{margin-top:24px}
+.needhost{margin:8px 0 0}
+.badge.need{color:var(--warnc)}
