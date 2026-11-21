@@ -74,10 +74,14 @@ func dirState(ctx context.Context, c *cpanel.Client, dir string) (bool, []string
 
 func stepPlan(ctx context.Context, rc *RunContext, a map[string]string) (map[string]string, error) {
 	mode, domain, name := a["mode"], strings.ToLower(strings.TrimSpace(a["domain"])), strings.ToLower(strings.TrimSpace(a["name"]))
-	if mode != "subdomain" && mode != "subfolder" {
-		return nil, fmt.Errorf("mode must be subdomain or subfolder")
+	if mode != "subdomain" && mode != "subfolder" && mode != "root" {
+		return nil, fmt.Errorf("mode must be subdomain, subfolder or root")
 	}
-	if !labelRe.MatchString(name) {
+	if mode == "root" {
+		name = ""
+	} else if name == "" {
+		return nil, fmt.Errorf("نام ساب‌دامین یا پوشه را وارد کنید (یا «روی خود دامنه» را انتخاب کنید)")
+	} else if !labelRe.MatchString(name) {
 		return nil, fmt.Errorf("نام «%s» مجاز نیست: فقط حروف کوچک انگلیسی، عدد و خط تیره", name)
 	}
 	if strings.HasPrefix(name, "wp-") || name == "cgi-bin" {
@@ -124,11 +128,19 @@ func stepPlan(ctx context.Context, rc *RunContext, a map[string]string) (map[str
 		}
 		rel := strings.NewReplacer("{host}", host, "{sub}", name, "{domain}", domain).Replace(tpl)
 		out["host"], out["docroot"], out["docroot_rel"], out["path"] = host, path.Join(home, rel), rel, "/"
-	} else {
+	} else if mode == "subfolder" {
 		out["host"], out["docroot"], out["path"] = domain, path.Join(parent.Root, name), "/"+name+"/"
 		out["docroot_rel"] = strings.TrimPrefix(out["docroot"], home+"/")
+	} else {
+		out["host"], out["docroot"], out["path"] = domain, parent.Root, "/"
+		out["docroot_rel"] = strings.TrimPrefix(out["docroot"], home+"/")
+		if err := planRoot(ctx, rc, c, parent.Root); err != nil {
+			return nil, err
+		}
 	}
-	if exists, names := dirState(ctx, c, out["docroot"]); exists && len(names) > 0 {
+	if mode == "root" {
+		// the domain's own folder normally holds other sites' folders; planRoot checked it
+	} else if exists, names := dirState(ctx, c, out["docroot"]); exists && len(names) > 0 {
 		return nil, fmt.Errorf("پوشه‌ی %s خالی نیست (%s)؛ برای جلوگیری از آسیب به سایت موجود متوقف شد", out["docroot"], strings.Join(first(names, 5), ", "))
 	} else if exists {
 		out["dir_exists"] = "true"
@@ -346,6 +358,11 @@ func stepFiles(ctx context.Context, rc *RunContext, a map[string]string) (map[st
 	}
 	s, token := rc.site(a), rc.Vars["helper_token"]
 	helper := wp.HelperName(token)
+	if rc.Inputs["mode"] == "root" {
+		if err := prepareRoot(ctx, rc, c, a["docroot"]); err != nil {
+			return nil, err
+		}
+	}
 	rc.Logf("دانلود وردپرس روی هاست از %s", wp.ZipURL(a["locale"]))
 	res, err := s.Helper(ctx, helper, token, "download")
 	if err != nil {
@@ -437,7 +454,22 @@ func stepSetup(ctx context.Context, rc *RunContext, a map[string]string) (map[st
 		return nil, err
 	}
 	rc.Logf("وردپرس %v نصب شد؛ مدیر: %s", res["version"], rc.Inputs["admin_user"])
-	if err := c.SaveFile(ctx, a["docroot"], ".htaccess", wp.Htaccess(a["path"])); err != nil {
+	ht := wp.Htaccess(a["path"])
+	if rc.Inputs["mode"] == "root" && strings.Contains("\n"+rc.Vars["root_existing"]+"\n", "\n.htaccess\n") {
+		// keep the host's own rules (PHP version, redirects) and put WordPress's block first
+		old, err := readFile(ctx, rc, a["docroot"], ".htaccess")
+		if err != nil {
+			rc.Warnf(".htaccess موجود خوانده نشد؛ دست نخورد (پیوندهای یکتا را از پیشخوان ذخیره کنید)")
+			return map[string]string{"version": fmt.Sprint(res["version"])}, nil
+		}
+		if strings.Contains(old, "# BEGIN WordPress") {
+			return map[string]string{"version": fmt.Sprint(res["version"])}, nil
+		}
+		ht += "\n" + old
+		dir := a["docroot"]
+		rc.Undo("برگرداندن .htaccess قبلی", func(ctx context.Context) error { return c.SaveFile(ctx, dir, ".htaccess", old) })
+	}
+	if err := c.SaveFile(ctx, a["docroot"], ".htaccess", ht); err != nil {
 		rc.Warnf(".htaccess نوشته نشد: %v (پیوندهای یکتا را از پیشخوان ذخیره کنید)", err)
 	}
 	return map[string]string{"version": fmt.Sprint(res["version"])}, nil
@@ -471,4 +503,100 @@ func stepHealth(ctx context.Context, rc *RunContext, a map[string]string) (map[s
 	u := strings.TrimSuffix(a["url"], "/")
 	rc.Logf("آدرس سایت: %s · پیشخوان: %s/wp-admin/", u, u)
 	return map[string]string{"url": u, "admin_url": u + "/wp-admin/"}, nil
+}
+
+// hostConfigFile names files the host itself may keep in a domain's folder; they are never
+// treated as another site and never deleted on rollback.
+func hostConfigFile(name string) bool {
+	switch name {
+	case ".htaccess", ".user.ini", "php.ini", "error_log":
+		return true
+	}
+	return false
+}
+
+// shadowIndex names start pages that the web server serves before WordPress's index.php.
+func shadowIndex(name string) bool {
+	switch name {
+	case "index.html", "index.htm", "default.html", "index.shtml":
+		return true
+	}
+	return false
+}
+
+// planRoot checks a domain's own folder before WordPress goes into it: other sites' folders may
+// stay, but files WordPress would overwrite mean a site is already there. It remembers what was
+// there so rollback removes only what this run added.
+func planRoot(ctx context.Context, rc *RunContext, c *cpanel.Client, dir string) error {
+	data, err := c.Call(ctx, "Fileman", "list_files", url.Values{"dir": {dir}})
+	if err != nil {
+		return fmt.Errorf("cannot list %s: %w", dir, err)
+	}
+	var files []struct {
+		File string `json:"file"`
+	}
+	_ = json.Unmarshal(data, &files)
+	var existing, conflicts, shadows []string
+	for _, f := range files {
+		if f.File == "." || f.File == ".." {
+			continue
+		}
+		existing = append(existing, f.File)
+		switch {
+		case shadowIndex(f.File):
+			shadows = append(shadows, f.File)
+		case wpOwnFile(f.File) && !hostConfigFile(f.File):
+			conflicts = append(conflicts, f.File)
+		}
+	}
+	if len(conflicts) > 0 {
+		return fmt.Errorf("روی ریشه‌ی دامنه (%s) فایل‌های یک سایت دیگر هست (%s)؛ برای جلوگیری از آسیب متوقف شد", dir, strings.Join(first(conflicts, 5), ", "))
+	}
+	rc.Vars["root_existing"] = strings.Join(existing, "\n")
+	rc.Vars["root_shadow"] = strings.Join(shadows, "\n")
+	if len(existing) > 0 {
+		rc.Logf("پوشه‌های موجود روی ریشه دست نمی‌خورند (%d مورد)", len(existing))
+	}
+	return nil
+}
+
+// prepareRoot runs before WordPress files go into a domain's own folder: it renames start pages
+// that would hide WordPress and registers a rollback that removes only files this run added.
+func prepareRoot(ctx context.Context, rc *RunContext, c *cpanel.Client, dir string) error {
+	had := map[string]bool{}
+	for _, n := range strings.Split(rc.Vars["root_existing"], "\n") {
+		had[n] = true
+	}
+	rc.Undo("حذف فایل‌های وردپرس از ریشه‌ی دامنه (پوشه‌های دیگر می‌مانند)", func(ctx context.Context) error {
+		data, err := c.Call(ctx, "Fileman", "list_files", url.Values{"dir": {dir}})
+		if err != nil {
+			return err
+		}
+		var files []struct {
+			File string `json:"file"`
+		}
+		_ = json.Unmarshal(data, &files)
+		var del []string
+		for _, f := range files {
+			if !had[f.File] && (wpOwnFile(f.File) || f.File == ".wpauto-x") {
+				del = append(del, path.Join(dir, f.File))
+			}
+		}
+		return c.Remove(ctx, del...)
+	})
+	for _, n := range strings.Split(rc.Vars["root_shadow"], "\n") {
+		if n == "" {
+			continue
+		}
+		from, to := path.Join(dir, n), path.Join(dir, n+".wpauto-bak")
+		if _, err := c.API2(ctx, "Fileman", "fileop", url.Values{"op": {"rename"}, "sourcefiles": {from}, "destfiles": {to}, "doubledecode": {"0"}}); err != nil {
+			return fmt.Errorf("نتوانستم %s را کنار بگذارم: %w", n, err)
+		}
+		rc.Logf("%s که جلوی وردپرس را می‌گرفت به %s تغییر نام داد", n, n+".wpauto-bak")
+		rc.Undo("برگرداندن "+n, func(ctx context.Context) error {
+			_, err := c.API2(ctx, "Fileman", "fileop", url.Values{"op": {"rename"}, "sourcefiles": {to}, "destfiles": {from}, "doubledecode": {"0"}})
+			return err
+		})
+	}
+	return nil
 }

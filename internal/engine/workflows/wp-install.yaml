@@ -1,14 +1,14 @@
 id: wp-install
 title: نصب وردپرس
-description: نصب وردپرس تازه روی یک ساب‌دامین یا پوشه‌ی جدا. به سایت‌های موجود دست نمی‌زند و اگر وسط کار خطایی پیش بیاید، هر چه ساخته شده برگردانده می‌شود.
+description: نصب وردپرس تازه روی خود دامنه، یک ساب‌دامین یا پوشه‌ی جدا. به سایت‌های موجود دست نمی‌زند و اگر وسط کار خطایی پیش بیاید، هر چه ساخته شده برگردانده می‌شود.
 order: 30
 rollback: true
 inputs:
   - name: mode
     label: محل نصب
     type: select
-    options: [subdomain, subfolder]
-    labels: {subdomain: "ساب‌دامین (پیشنهادی) — مثل test.example.com", subfolder: "پوشه — مثل example.com/test"}
+    options: [subdomain, subfolder, root]
+    labels: {subdomain: "ساب‌دامین (پیشنهادی) — مثل test.example.com", subfolder: "پوشه — مثل example.com/test", root: "روی خود دامنه — مثل example.com"}
     default: subdomain
   - name: domain
     label: دامنه‌ی اصلی
@@ -16,9 +16,8 @@ inputs:
     required: true
   - name: name
     label: نام ساب‌دامین یا پوشه
-    required: true
     pattern: "[a-z0-9]([a-z0-9-]{0,30}[a-z0-9])?"
-    help: فقط حروف کوچک انگلیسی، عدد و خط تیره. مثلاً test
+    help: فقط حروف کوچک انگلیسی، عدد و خط تیره. مثلاً test — برای «روی خود دامنه» خالی بگذارید.
   - name: title
     label: عنوان سایت
     default: سایت من

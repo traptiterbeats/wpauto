@@ -145,3 +145,35 @@ func TestWPInstallRefusesExistingSite(t *testing.T) {
 		t.Fatal("changes made despite refusal")
 	}
 }
+
+func TestWPInstallOnDomainRoot(t *testing.T) {
+	// the main domain already has WordPress files in its folder → refused, nothing changed
+	in := installInputs()
+	in["mode"], in["name"] = "root", ""
+	run, fake := runInstall(t, false, in)
+	if run.Status != StatusFailed || !strings.Contains(run.Error, "سایت دیگر") {
+		t.Fatalf("expected refusal on occupied root, got %s: %s", run.Status, run.Error)
+	}
+	if fake.Called("Mysql/create_database") {
+		t.Fatal("changes made despite refusal")
+	}
+	// blog.example.com's folder only has a start page → WordPress goes in, the page is set aside
+	in["domain"] = "blog.example.com"
+	run, fake = runInstall(t, false, in)
+	logs := ""
+	for _, l := range run.Log {
+		logs += l.Msg + "\n"
+	}
+	if run.Status != StatusSuccess {
+		t.Fatalf("status %s: %s\n%s", run.Status, run.Error, logs)
+	}
+	if fake.Called("SubDomain/addsubdomain") || !fake.Called("api2:Fileman/fileop") {
+		t.Fatal("root install created a subdomain or did not set index.html aside")
+	}
+	if _, ok := fake.File("/home/kfncspot/blog/wp-config.php"); !ok {
+		t.Fatal("wp-config not written in the domain's folder")
+	}
+	if !strings.Contains(logs, "index.html.wpauto-bak") {
+		t.Fatalf("start page not set aside:\n%s", logs)
+	}
+}
