@@ -130,7 +130,7 @@ func TestProjectHostInlineFormWhenNoHost(t *testing.T) {
 	}
 }
 
-func TestProjectHostSaveCheckAndReuse(t *testing.T) {
+func TestProjectHostSaveCheckAndSeparate(t *testing.T) {
 	e := newBareEnv(t)
 	bp := e.s.cfg.BasePath
 	const secret = "s3cret-Pass"
@@ -217,53 +217,116 @@ func TestProjectHostSaveCheckAndReuse(t *testing.T) {
 		t.Fatalf("check after edit: %s", st)
 	}
 
-	// a second project on the same main domain takes the host automatically
+	// a second project on the same main domain does not get the first one's host
 	r2, p2 := e.create("سهند", "sah.example.com", "")
-	if p2.HostID != h.ID {
-		t.Fatal("host not reused for a project on the same main domain")
-	}
-	if msg := r2.Request.URL.Query().Get("msg"); !strings.Contains(msg, "هاست example.com از پروژه‌ی دیگر استفاده شد") {
-		t.Fatalf("reuse not announced: %q", msg)
+	if p2.HostID != "" || strings.Contains(r2.Request.URL.Query().Get("msg"), "پروژه‌ی دیگر") {
+		t.Fatal("host shared with a second project")
 	}
 	page = e.page("p/" + p2.ID + "/host")
-	if !strings.Contains(page, `id="hostsummary"`) || !strings.Contains(page, "احمد") {
-		t.Error("second project's host page should show the shared host")
+	if !strings.Contains(page, `id="hostform"`) || strings.Contains(page, `id="hostsummary"`) {
+		t.Fatal("second project should ask for its own host")
 	}
-	// a project on another domain gets nothing
-	if _, p3 := e.create("other", "other.org", ""); p3.HostID != "" {
-		t.Fatal("unrelated domain linked to a host")
+	// it enters and checks the same cPanel account itself: a record of its own
+	r, _ = e.post("p/"+p2.ID+"/host/save", url.Values{"csrf": {csrf}, "profile": {"fake"}, "url": {fake.URL},
+		"username": {"kfncspot"}, "secret": {secret}})
+	if st := e.waitRun(r.Request.URL.Query().Get("run")); st != "success" {
+		t.Fatalf("second project's check: %s", st)
+	}
+	p2, _ = e.s.projects.Get(p2.ID)
+	h2, ok := e.s.store.Get(p2.HostID)
+	if !ok || h2.ID == h.ID || h2.ProjectID != p2.ID || len(e.s.store.List()) != 2 {
+		t.Fatal("second project has no independent host record")
+	}
+	if h1, _ := e.s.store.Get(h.ID); h1.ProjectID != p.ID {
+		t.Fatal("first record changed owner")
+	}
+	// editing one project's connection leaves the other alone
+	r, _ = e.post("p/"+p2.ID+"/host/save", url.Values{"csrf": {csrf}, "profile": {"fake"}, "url": {fake.URL}, "username": {"someoneelse"}, "secret": {"other"}})
+	if st := e.waitRun(r.Request.URL.Query().Get("run")); st != "failed" {
+		t.Fatalf("check with a wrong login: %s", st)
+	}
+	if h1, _ := e.s.store.Get(h.ID); h1.Username != "kfncspot" || h1.SealedSecret != h.SealedSecret || h1.LastReport == nil {
+		t.Fatal("editing the second project's host changed the first one's")
+	}
+	if h2, _ = e.s.store.Get(p2.HostID); h2.Username != "someoneelse" {
+		t.Fatal("edit not saved")
+	}
+	// deleting a project deletes its host record, and only that one
+	r, _ = e.post("projects/"+p2.ID+"/delete", url.Values{"csrf": {csrf}, "back": {bp}})
+	if _, ok := e.s.store.Get(h2.ID); ok {
+		t.Fatal("deleted project's host record is still there")
+	}
+	if pp, _ := e.s.projects.Get(p.ID); pp.HostID != h.ID {
+		t.Fatal("first project lost its host")
+	}
+	if _, ok := e.s.store.Get(h.ID); !ok || len(e.s.store.List()) != 1 {
+		t.Fatal("first project's host record removed")
+	}
+	if pg := e.page("p/" + p.ID + "/host"); !strings.Contains(pg, `id="hostsummary"`) {
+		t.Fatal("first project's host page broken after the other was deleted")
 	}
 }
 
-func TestAutoLinkHostByMainDomain(t *testing.T) {
-	e := newBareEnv(t)
-	// a host saved for ahmad.autopilo.ir that was never checked: its cPanel address names the domain
-	h, _ := e.s.store.Add(store.Host{Name: "autopilo.ir", ProfileID: "generic", URL: "https://autopilo.ir:2083", Username: "u"})
-	a, _ := e.s.projects.Add(projects.Project{Name: "ahmad", Domain: "ahmad.autopilo.ir", Mode: kindSubdomain, HostID: h.ID})
-	r, p := e.create("sah", "sah.autopilo.ir", "")
-	if p.HostID != h.ID {
-		t.Fatal("host of the same main domain not linked")
+func TestHostMigrationAndOwnership(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("WPAUTO_DIR", dir)
+	cfg, _, _ := config.New(1)
+	s, err := New(cfg, "test")
+	if err != nil {
+		t.Fatal(err)
 	}
-	if msg := r.Request.URL.Query().Get("msg"); !strings.Contains(msg, "هاست autopilo.ir از پروژه‌ی دیگر استفاده شد") {
-		t.Fatalf("message: %q", msg)
+	// before: one host record shared by two projects, one unused legacy record
+	shared, _ := s.store.Add(store.Host{Name: "autopilo.ir", ProfileID: "generic", URL: "https://autopilo.ir:2083", Username: "u", SealedSecret: "sealed-x"})
+	unused, _ := s.store.Add(store.Host{Name: "spare", ProfileID: "generic", URL: "https://spare.ir:2083", Username: "v"})
+	a, _ := s.projects.Add(projects.Project{Name: "ahmad", Domain: "ahmad.autopilo.ir", HostID: shared.ID})
+	time.Sleep(2 * time.Millisecond)
+	b, _ := s.projects.Add(projects.Project{Name: "sah", Domain: "sah.autopilo.ir", HostID: shared.ID})
+	c, _ := s.projects.Add(projects.Project{Name: "none", Domain: "x.org"})
+
+	for round := 0; round < 2; round++ { // the migration runs on every start and is idempotent
+		s, err = New(cfg, "test")
+		if err != nil {
+			t.Fatal(err)
+		}
+		pa, _ := s.projects.Get(a.ID)
+		pb, _ := s.projects.Get(b.ID)
+		pc, _ := s.projects.Get(c.ID)
+		ha, _ := s.store.Get(pa.HostID)
+		hb, okb := s.store.Get(pb.HostID)
+		if pa.HostID != shared.ID || ha.ProjectID != a.ID {
+			t.Fatal("the oldest project should keep the shared record")
+		}
+		if !okb || pb.HostID == shared.ID || hb.ProjectID != b.ID || hb.URL != shared.URL || hb.Username != "u" || hb.SealedSecret != "sealed-x" {
+			t.Fatal("the other project did not get its own copy")
+		}
+		if pc.HostID != "" || len(s.store.List()) != 3 {
+			t.Fatalf("round %d: %d host records", round, len(s.store.List()))
+		}
+		if h, _ := s.store.Get(unused.ID); h.ProjectID != "" {
+			t.Fatal("unused legacy record was claimed")
+		}
 	}
-	if pg, _ := e.get(r.Request.URL.String()[len(e.base):]); !strings.Contains(pg, "هاست autopilo.ir از پروژه‌ی دیگر استفاده شد") {
-		t.Error("message not shown after creating")
+	// running a task for a project with another project's record copies it once
+	pa, _ := s.projects.Get(a.ID)
+	id, err := s.ensureOwnHost(c.ID, pa.HostID)
+	if err != nil || id == pa.HostID {
+		t.Fatalf("ensureOwnHost: %s %v", id, err)
 	}
-	// an older project without a host gets linked when its pages open
-	old, _ := e.s.projects.Add(projects.Project{Name: "old", Domain: "autopilo.ir", Mode: kindRoot})
-	wp := e.page("p/" + old.ID + "/wordpress")
-	if o, _ := e.s.projects.Get(old.ID); o.HostID != h.ID || !strings.Contains(wp, "از پروژه‌ی دیگر استفاده شد") {
-		t.Error("older project not linked on its WordPress page")
+	if again, _ := s.ensureOwnHost(c.ID, pa.HostID); again != id {
+		t.Fatal("a second copy was made")
 	}
-	_ = a
-	// unit: two hosts on the same main domain are not guessed
-	_, _ = e.s.store.Add(store.Host{Name: "x", ProfileID: "generic", URL: "https://cpanel.autopilo.ir:2083", Username: "v"})
-	if _, ok := hostForSite(e.s.store.List(), siteAddr{Kind: kindSubdomain, Domain: "z.autopilo.ir", Parent: "autopilo.ir"}); ok {
-		t.Fatal("ambiguous host picked")
+	if pc, _ := s.projects.Get(c.ID); pc.HostID != id {
+		t.Fatal("project not pointed at its copy")
 	}
-	if hostMain(store.Host{URL: "https://1.2.3.4:2083", Name: "n"}) != "n" {
-		t.Fatal("an IP is not a main domain")
+	// an unused legacy record is simply taken over
+	if got, _ := s.ensureOwnHost(c.ID, unused.ID); got != unused.ID {
+		t.Fatal("unused record not claimed")
+	}
+	if _, ok := s.store.Get(id); ok {
+		t.Fatal("the replaced copy was left behind")
+	}
+	if hostMain(store.Host{URL: "https://1.2.3.4:2083", Name: "n"}) != "n" || hostMain(store.Host{URL: "https://cpanel.autopilo.ir:2083"}) != "autopilo.ir" {
+		t.Fatal("hostMain")
 	}
 }
 

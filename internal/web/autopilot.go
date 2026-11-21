@@ -808,7 +808,7 @@ func (s *Server) handleAutopilot(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) renderAutopilot(w http.ResponseWriter, r *http.Request, f apForm, errMsg string) {
-	hosts := s.store.List()
+	hosts := s.hostsFor()
 	if f.Host == "" && len(hosts) > 0 {
 		f.Host = hosts[0].ID
 	}
@@ -960,15 +960,22 @@ func (s *Server) handleAutopilotStart(w http.ResponseWriter, r *http.Request) {
 	dom = strings.ToLower(dom)
 	proj, ok := s.projects.Active()
 	if !ok || !((proj.Domain == dom && proj.Folder == folder) || (proj.Domain == "" && proj.Name == b.SiteName)) {
-		proj, err = s.projects.Add(projects.Project{Name: b.SiteName, HostID: h.ID, Domain: dom, Folder: folder, DraftID: d.ID})
+		proj, err = s.projects.Add(projects.Project{Name: b.SiteName, Domain: dom, Folder: folder, DraftID: d.ID})
 		if err != nil {
 			fail(err.Error())
 			return
 		}
 	} else {
 		_ = s.projects.Update(proj.ID, func(x *projects.Project) {
-			x.HostID, x.Domain, x.Folder, x.DraftID = h.ID, dom, folder, d.ID
+			x.Domain, x.Folder, x.DraftID = dom, folder, d.ID
 		})
+	}
+	// the project works on its own host record (a copy when the chosen one is another project's)
+	if own, err := s.ensureOwnHost(proj.ID, h.ID); err != nil {
+		fail(err.Error())
+		return
+	} else if oh, ok := s.store.Get(own); ok {
+		h = oh
 	}
 
 	now := time.Now()

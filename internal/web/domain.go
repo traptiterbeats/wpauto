@@ -6,7 +6,6 @@ import (
 	"strings"
 
 	"github.com/traptiterbeats/wpauto/internal/projects"
-	"github.com/traptiterbeats/wpauto/internal/store"
 )
 
 // Site kinds map one to one onto the wp-install modes.
@@ -133,47 +132,4 @@ func installInputs(p projects.Project) (mode, domain, name string, ok bool) {
 		return kindSubdomain, a.Parent, a.Label, true
 	}
 	return kindRoot, a.Domain, "", true
-}
-
-// hostDomains lists the domains a saved host reported (main domain first).
-func hostDomains(h store.Host) []string {
-	if h.LastReport == nil {
-		return nil
-	}
-	var out []string
-	if h.LastReport.MainDomain != "" {
-		out = append(out, strings.ToLower(h.LastReport.MainDomain))
-	}
-	for _, d := range h.LastReport.Domains {
-		out = append(out, strings.ToLower(d))
-	}
-	return out
-}
-
-// hostFits reports whether a host serves the site: one of its main/addon domains is the site's
-// domain or a parent of it.
-func hostFits(h store.Host, a siteAddr) bool {
-	for _, d := range hostDomains(h) {
-		if d == "" {
-			continue
-		}
-		if a.Domain == d || strings.HasSuffix(a.Domain, "."+d) {
-			return true
-		}
-	}
-	return false
-}
-
-// matchHosts returns the hosts whose domains fit the address.
-func matchHosts(hosts []store.Host, a siteAddr) []store.Host {
-	var out []store.Host
-	if a.Kind == "" {
-		return nil
-	}
-	for _, h := range hosts {
-		if hostFits(h, a) {
-			out = append(out, h)
-		}
-	}
-	return out
 }

@@ -199,12 +199,14 @@ func TestProjectCreateDomainKinds(t *testing.T) {
 		domain, host                string
 		kind, dom, folder, wantHost string
 	}{
-		{"example.com", "", kindRoot, "example.com", "", e.h1},                // matches h1's main domain
-		{"shop.example.com", "", kindSubdomain, "shop.example.com", "", e.h1}, // subdomain of h1's domain
-		{"https://shop.ir/blog/", "", kindSubfolder, "shop.ir", "blog", e.h1}, // folder of h1's addon domain
-		{"other.com", "", kindRoot, "other.com", "", ""},                      // no host fits: none picked
-		{"other.com/x", e.h2, kindSubfolder, "other.com", "x", e.h2},          // host picked by hand
-		{"", "", "", "", "", ""},                                              // address can come later
+		// no host at creation, even when a saved host has the domain or one is named:
+		// each project enters its own host in «بررسی هاست»
+		{"example.com", "", kindRoot, "example.com", "", ""},
+		{"shop.example.com", "", kindSubdomain, "shop.example.com", "", ""},
+		{"https://shop.ir/blog/", "", kindSubfolder, "shop.ir", "blog", ""},
+		{"other.com", "", kindRoot, "other.com", "", ""},
+		{"other.com/x", e.h2, kindSubfolder, "other.com", "x", ""},
+		{"", "", "", "", "", ""}, // address can come later
 	} {
 		r, p := e.create("p-"+c.domain, c.domain, c.host)
 		if p.Mode != c.kind || p.Domain != c.dom || p.Folder != c.folder || p.HostID != c.wantHost {
@@ -221,16 +223,6 @@ func TestProjectCreateDomainKinds(t *testing.T) {
 	if len(e.s.projects.List()) != n || !strings.Contains(r.Request.URL.RawQuery, "err=") || r.Request.URL.Path != e.s.cfg.BasePath {
 		t.Fatalf("invalid domain: %s", r.Request.URL)
 	}
-	// an unknown host id is refused
-	r, _ = e.create("bad host", "example.com", "nope")
-	if len(e.s.projects.List()) != n || !strings.Contains(r.Request.URL.RawQuery, "err=") {
-		t.Fatal("unknown host accepted")
-	}
-	// two hosts that both fit: the server does not guess
-	_ = e.s.store.Update(e.h2, func(x *store.Host) { x.LastReport = &cpanel.Report{Domains: []string{"example.com"}} })
-	if _, p := e.create("ambiguous", "blog.example.com", ""); p.HostID != "" {
-		t.Fatal("ambiguous host picked automatically")
-	}
 	// without csrf nothing is created
 	if r, _ := e.cl.PostForm(e.base+"projects/new", url.Values{"name": {"x"}}); r.StatusCode != 400 {
 		t.Fatal("csrf not enforced on project create")
@@ -241,6 +233,10 @@ func TestProjectSectionAndWordPressPages(t *testing.T) {
 	e := newHomeEnv(t)
 	_, p := e.create("فروشگاه نارنج", "example.com/shop", "")
 	bp := e.s.cfg.BasePath
+	// the project's host: h1 is unowned and unused, so the project takes it as its own
+	if id, err := e.s.ensureOwnHost(p.ID, e.h1); err != nil || id != e.h1 {
+		t.Fatalf("own host: %s %v", id, err)
+	}
 
 	sec := e.page("p/" + p.ID)
 	for _, want := range []string{"فروشگاه نارنج", "example.com/shop", ">پوشه<", "first-host",

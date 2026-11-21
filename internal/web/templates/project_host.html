@@ -22,7 +22,7 @@
       <dt>آخرین بررسی</dt><dd>{{with .Host.LastReport}}<span class="{{if .ReadyForWP}}ok{{else if .LoginOK}}warn{{else}}bad{{end}}">{{if .ReadyForWP}}آماده برای وردپرس{{else if .LoginOK}}نیاز به بررسی{{else}}ورود ناموفق{{end}}</span> · <span dir="ltr">{{.At.Format "2006-01-02 15:04"}}</span>{{else}}<span class="muted">هنوز بررسی نشده</span>{{end}}</dd>
       {{if .Host.Disk}}<dt>فضای هاست</dt><dd>{{template "disk" .Host.Disk}}</dd>{{end}}
     </dl>
-    {{if .SharedWith}}<p class="small muted">این هاست در پروژه‌های دیگر هم استفاده می‌شود: {{range $i, $n := .SharedWith}}{{if $i}}، {{end}}{{$n}}{{end}}</p>{{end}}
+    <p class="small muted">این اطلاعات اتصال فقط مال همین پروژه است؛ ویرایش یا حذفش روی پروژه‌های دیگر اثری ندارد.</p>
     {{if .Locked}}
     <div class="error">ورود قبلی رد شد. برای جلوگیری از بلاک شدن IP، تلاش خودکار متوقف شده؛ اطلاعات اتصال را اصلاح کنید.</div>
     {{else}}
@@ -42,7 +42,6 @@
         <label>پروفایل هاست
           <select name="profile">{{range .Profiles}}<option value="{{.ID}}" {{if eq .ID $.Host.ProfileID}}selected{{end}}>{{.Name}}</option>{{end}}</select>
         </label>
-        {{if .SharedWith}}<p class="small warn">تغییر، برای همه‌ی پروژه‌هایی که از این هاست استفاده می‌کنند اعمال می‌شود.</p>{{end}}
         <button type="submit">ذخیره و بررسی</button>
       </form>
     </details>
@@ -100,7 +99,7 @@
   {{else}}
   <section class="card" id="hostform" aria-labelledby="hf-title">
     <h2 id="hf-title" class="step">هاست این پروژه هنوز وصل نشده</h2>
-    <p class="muted small">اطلاعات cPanel دامنه‌ی اصلی پروژه را وارد کنید؛ ذخیره می‌شود، به این پروژه وصل می‌شود و بلافاصله بررسی هاست (فقط خواندنی) اجرا می‌شود. پروژه‌های دیگرِ روی همین دامنه‌ی اصلی، همین هاست را خودکار برمی‌دارند.</p>
+    <p class="muted small">اطلاعات cPanel دامنه‌ی اصلی پروژه را وارد کنید؛ فقط برای همین پروژه ذخیره می‌شود و بلافاصله بررسی هاست (فقط خواندنی) اجرا می‌شود.</p>
     <form class="form" method="post" action="{{.BasePath}}p/{{.P.ID}}/host/save" autocomplete="off">
       <input type="hidden" name="csrf" value="{{.CSRF}}">
       <label>آدرس cPanel<input name="url" required dir="ltr" value="{{.DefaultURL}}" placeholder="https://example.com:2083"></label>

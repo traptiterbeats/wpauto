@@ -61,7 +61,7 @@ func (s *Server) handleRunForm(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	hosts := s.store.List()
+	hosts := s.hostsFor()
 	q := r.URL.Query()
 	proj, hasProj := s.projects.Active()
 	hostID := q.Get("host")
@@ -143,6 +143,14 @@ func (s *Server) handleRunStart(w http.ResponseWriter, r *http.Request) {
 // On success the project remembers the host, the site and the draft the run used. after (optional)
 // is called last, once the run and the project are completely saved.
 func (s *Server) startWorkflow(wf *engine.Workflow, hostID, projectID string, inputs map[string]string, after func(status string)) (string, error) {
+	if projectID != "" {
+		// a project always runs on its own host record
+		id, err := s.ensureOwnHost(projectID, hostID)
+		if err != nil {
+			return "", err
+		}
+		hostID = id
+	}
 	h, ok := s.store.Get(hostID)
 	if !ok {
 		return "", errors.New("یک هاست انتخاب کنید")

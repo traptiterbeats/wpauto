@@ -68,7 +68,7 @@ func (s *Server) lastScan(hostID string) (*engine.Run, []engine.FoundWP) {
 }
 
 func (s *Server) handleWordPress(w http.ResponseWriter, r *http.Request) {
-	hosts := s.store.List()
+	hosts := s.hostsFor()
 	hostID := r.URL.Query().Get("host")
 	if hostID == "" {
 		if p, ok := s.projects.Active(); ok && p.HostID != "" {

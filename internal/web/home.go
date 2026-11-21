@@ -195,8 +195,7 @@ func (s *Server) handleProjectWP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	bp := s.cfg.BasePath
-	msg := s.autoLinkHost(&p)
-	_, hasHost := s.store.Get(p.HostID)
+	_, hasHost := s.ownHost(p)
 	stages := s.pipeline(&p)
 	by := map[string]*pipeStep{}
 	for i := range stages {
@@ -217,10 +216,7 @@ func (s *Server) handleProjectWP(w http.ResponseWriter, r *http.Request) {
 		"HasHost": hasHost, "HostLink": bp + "p/" + p.ID + "/host",
 		"Crumbs": []crumb{{"پروژه‌ها", bp}, {p.Name, bp + "p/" + p.ID}, {"وردپرس", ""}},
 	}
-	if msg != "" && r.URL.Query().Get("msg") == "" && r.URL.Query().Get("err") == "" {
-		data["Flash"], data["FlashKind"] = msg, "msg"
-	}
-	if h, ok := s.store.Get(p.HostID); ok {
+	if h, ok := s.ownHost(p); ok {
 		data["HostLabel"] = hostLabel(h)
 	}
 	s.render(w, "project_wp.html", s.page(r, data))

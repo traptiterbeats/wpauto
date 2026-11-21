@@ -82,6 +82,10 @@ func New(cfg *config.Config, version string) (*Server, error) {
 		return nil, err
 	}
 	resetStuckDrafts()
+	srv0 := &Server{store: st, projects: projStore}
+	if err := srv0.migrateHosts(); err != nil {
+		return nil, err
+	}
 	apStore, err := openAP(filepath.Join(dir, "autopilot"))
 	if err != nil {
 		return nil, err

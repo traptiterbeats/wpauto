@@ -28,6 +28,10 @@ type Host struct {
 	FailedLogins int            `json:"failed_logins"`
 	LastReport   *cpanel.Report `json:"last_report,omitempty"`
 	Disk         *Disk          `json:"disk,omitempty"`
+	// ProjectID is the project this connection belongs to. Every project keeps its own record,
+	// even when another project uses the same cPanel account. Empty on records made before
+	// hosts belonged to projects (and not yet migrated).
+	ProjectID string `json:"project_id,omitempty"`
 }
 
 // Disk is the account's disk usage as cPanel last reported it.

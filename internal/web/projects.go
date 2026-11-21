@@ -35,26 +35,14 @@ func (s *Server) handleProjectNew(w http.ResponseWriter, r *http.Request) {
 		fail(err.Error())
 		return
 	}
-	p := projects.Project{Name: r.FormValue("name"), HostID: r.FormValue("host"),
-		Domain: addr.Domain, Folder: addr.Folder, Mode: addr.Kind}
-	if p.HostID != "" {
-		// older forms (and scripts) may still name a host
-		if _, ok := s.store.Get(p.HostID); !ok {
-			fail("هاست انتخاب‌شده پیدا نشد")
-			return
-		}
-	}
+	// no host at creation: each project enters and checks its own host in «بررسی هاست»
+	p := projects.Project{Name: r.FormValue("name"), Domain: addr.Domain, Folder: addr.Folder, Mode: addr.Kind}
 	np, err := s.projects.Add(p)
 	if err != nil {
 		fail(err.Error())
 		return
 	}
 	msg := "پروژه‌ی «" + np.Name + "» ساخته شد."
-	// no host is needed to create a project: the saved host of the same main domain (another
-	// project on the same cPanel) is linked right away, else it is entered in «بررسی هاست»
-	if m := s.autoLinkHost(&np); m != "" {
-		msg += " " + m + "."
-	}
 	// step 2: choose the section (WordPress, ...)
 	http.Redirect(w, r, s.cfg.BasePath+"p/"+np.ID+"?msg="+url.QueryEscape(msg), http.StatusSeeOther)
 }
@@ -168,8 +156,12 @@ func (s *Server) deleteProject(id string, purge bool) (error, string) {
 	if err := s.projects.Delete(id); err != nil {
 		return err, ""
 	}
+	// the project's own host connection goes with it (never a record another project uses)
+	if h, ok := s.store.Get(p.HostID); ok && h.ProjectID == p.ID && !s.hostUsedByOthers(h.ID, p.ID) {
+		_ = s.store.Delete(h.ID)
+	}
 	if !purge {
-		return nil, "پروژه حذف شد؛ اجراها و پیش‌نویسش ماندند. سایت روی هاست دست نخورد."
+		return nil, "پروژه و اطلاعات اتصال هاستش حذف شد؛ اجراها و پیش‌نویسش ماندند. سایت روی هاست دست نخورد."
 	}
 	runs := s.runner.DeleteProjectRuns(id)
 	drafts := 0
@@ -184,5 +176,5 @@ func (s *Server) deleteProject(id string, purge bool) (error, string) {
 			drafts = 1
 		}
 	}
-	return nil, fmt.Sprintf("پروژه حذف شد، با %d اجرا و %d پیش‌نویس. سایت روی هاست دست نخورد.", runs, drafts)
+	return nil, fmt.Sprintf("پروژه و اطلاعات اتصال هاستش حذف شد، با %d اجرا و %d پیش‌نویس. سایت روی هاست دست نخورد.", runs, drafts)
 }

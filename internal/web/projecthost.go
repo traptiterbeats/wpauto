@@ -1,6 +1,7 @@
 package web
 
 import (
+	"errors"
 	"net/http"
 	"net/url"
 	"strings"
@@ -12,9 +13,10 @@ import (
 	"github.com/traptiterbeats/wpauto/internal/store"
 )
 
-// A project's host is the cPanel account of its main domain. Hosts stay records in hosts.json
-// (one per cPanel account, shared by every project on the same main domain); the user only
-// meets them inside a project, in the «بررسی هاست» task.
+// A project's host is the cPanel connection of that project. Hosts stay records in hosts.json,
+// but each record belongs to one project (Host.ProjectID): two projects on the same cPanel
+// account have two independent records, each entered and checked inside its project, and
+// deleting a project deletes its record. The user meets hosts only in «بررسی هاست».
 
 // hostMain is the main domain a saved host stands for: the one cPanel reported, else the
 // address of its cPanel (without a cpanel./www. prefix), else its name.
@@ -40,45 +42,126 @@ func hostLabel(h store.Host) string {
 	return h.Name
 }
 
-// hostForSite returns the one saved host that serves the address: a host whose reported
-// main/addon domains fit it, or whose main domain is the address's main domain. Two or more
-// candidates means no automatic choice.
-func hostForSite(hosts []store.Host, a siteAddr) (store.Host, bool) {
-	if a.Kind == "" {
+// ownHost returns the project's own host record, if it has one linked.
+func (s *Server) ownHost(p projects.Project) (store.Host, bool) {
+	h, ok := s.store.Get(p.HostID)
+	if !ok || (h.ProjectID != "" && h.ProjectID != p.ID) {
 		return store.Host{}, false
 	}
-	var found []store.Host
-	for _, h := range hosts {
-		if hostFits(h, a) || (hostMain(h) != "" && hostMain(h) == a.Parent) {
-			found = append(found, h)
-		}
-	}
-	if len(found) == 1 {
-		return found[0], true
-	}
-	return store.Host{}, false
+	return h, true
 }
 
-// autoLinkHost links a project that has no host to the saved host of its main domain. It
-// returns the message to show, or "" when nothing was linked.
-func (s *Server) autoLinkHost(p *projects.Project) string {
-	if p.HostID != "" {
-		return ""
-	}
-	h, ok := hostForSite(s.store.List(), projectAddr(*p))
+// ensureOwnHost makes sure a project works on a host record of its own and returns its id: an
+// unowned record only this project uses is claimed; a record of another project (or a shared
+// legacy one) is copied for this project, keeping one copy per account. The project is
+// pointed at the returned record.
+func (s *Server) ensureOwnHost(projectID, hostID string) (string, error) {
+	h, ok := s.store.Get(hostID)
 	if !ok {
-		return ""
+		return "", errors.New("یک هاست انتخاب کنید")
 	}
-	if err := s.projects.Update(p.ID, func(x *projects.Project) { x.HostID = h.ID }); err != nil {
-		return ""
+	p, ok := s.projects.Get(projectID)
+	if !ok || h.ProjectID == projectID {
+		return hostID, nil
 	}
-	p.HostID = h.ID
-	for _, o := range s.projects.List() {
-		if o.ID != p.ID && o.HostID == h.ID {
-			return "هاست " + hostLabel(h) + " از پروژه‌ی دیگر استفاده شد"
+	id := ""
+	if h.ProjectID == "" && !s.hostUsedByOthers(hostID, projectID) {
+		if err := s.store.Update(hostID, func(x *store.Host) { x.ProjectID = projectID }); err != nil {
+			return "", err
+		}
+		id = hostID
+	} else if cur, ok := s.store.Get(p.HostID); ok && cur.ProjectID == projectID && cur.URL == h.URL && strings.EqualFold(cur.Username, h.Username) {
+		id = cur.ID // the project already has its own copy of this account
+	} else {
+		c, err := s.copyHost(h, projectID)
+		if err != nil {
+			return "", err
+		}
+		id = c.ID
+	}
+	if p.HostID != id {
+		if err := s.projects.Update(projectID, func(x *projects.Project) { x.HostID = id }); err != nil {
+			return "", err
+		}
+		// the project's previous own record is replaced, not left behind
+		if old, ok := s.store.Get(p.HostID); ok && old.ProjectID == projectID && !s.hostUsedByOthers(old.ID, projectID) {
+			_ = s.store.Delete(old.ID)
 		}
 	}
-	return "هاست ذخیره‌شده‌ی " + hostLabel(h) + " به این پروژه وصل شد"
+	return id, nil
+}
+
+// copyHost saves a copy of a host record that belongs to projectID.
+func (s *Server) copyHost(h store.Host, projectID string) (store.Host, error) {
+	c := h
+	c.ProjectID, c.FailedLogins = projectID, 0
+	if h.LastReport != nil {
+		r := *h.LastReport
+		c.LastReport = &r
+	}
+	if h.Disk != nil {
+		d := *h.Disk
+		c.Disk = &d
+	}
+	return s.store.Add(c)
+}
+
+func (s *Server) hostUsedByOthers(hostID, projectID string) bool {
+	for _, o := range s.projects.List() {
+		if o.ID != projectID && o.HostID == hostID {
+			return true
+		}
+	}
+	return false
+}
+
+// migrateHosts gives every project its own host record: a record shared by several projects
+// stays with the first (oldest) one and the others get copies; an unowned record used by one
+// project becomes that project's. Records no project uses are left alone. Safe to run on
+// every start.
+func (s *Server) migrateHosts() error {
+	list := s.projects.List()
+	for i := len(list) - 1; i >= 0; i-- { // oldest first
+		p := list[i]
+		if p.HostID == "" {
+			continue
+		}
+		h, ok := s.store.Get(p.HostID)
+		if !ok || h.ProjectID == p.ID {
+			continue
+		}
+		if h.ProjectID == "" {
+			claimed := false
+			for j := len(list) - 1; j > i; j-- { // an older project uses it too: it was claimed there
+				claimed = claimed || list[j].HostID == p.HostID
+			}
+			if !claimed {
+				if err := s.store.Update(h.ID, func(x *store.Host) { x.ProjectID = p.ID }); err != nil {
+					return err
+				}
+				continue
+			}
+		}
+		c, err := s.copyHost(h, p.ID)
+		if err != nil {
+			return err
+		}
+		if err := s.projects.Update(p.ID, func(x *projects.Project) { x.HostID = c.ID }); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// hostsFor is the host list a task page offers: only the active project's own host when it
+// has one, else every saved host (tools used outside a project).
+func (s *Server) hostsFor() []store.Host {
+	if p, ok := s.projects.Active(); ok {
+		if h, ok := s.ownHost(p); ok {
+			return []store.Host{h}
+		}
+	}
+	return s.store.List()
 }
 
 // projectHostURL is the default cPanel address for a project: https://<main domain>:2083.
@@ -101,11 +184,7 @@ func (s *Server) needHost(r *http.Request) (projects.Project, bool) {
 	if !ok {
 		return projects.Project{}, false
 	}
-	if _, linked := s.store.Get(p.HostID); linked {
-		return projects.Project{}, false
-	}
-	p.HostID = ""
-	if s.autoLinkHost(&p) != "" {
+	if _, linked := s.ownHost(p); linked {
 		return projects.Project{}, false
 	}
 	return p, true
@@ -138,32 +217,17 @@ func (s *Server) handleProjectHost(w http.ResponseWriter, r *http.Request) {
 	}
 	bp := s.cfg.BasePath
 	msg := r.URL.Query().Get("msg")
-	if p.HostID != "" {
-		if _, ok := s.store.Get(p.HostID); !ok {
-			p.HostID = "" // the host was removed from the panel
-		}
-	}
-	if m := s.autoLinkHost(&p); m != "" && msg == "" {
-		msg = m
-	}
 	data := map[string]any{
 		"P": p, "Addr": projectAddr(p), "Profiles": s.profiles(), "DefaultURL": projectHostURL(p),
 		"Msg": msg, "Error": r.URL.Query().Get("err"),
 		"Crumbs": []crumb{{"پروژه‌ها", bp}, {p.Name, bp + "p/" + p.ID}, {"وردپرس", bp + "p/" + p.ID + "/wordpress"}, {"بررسی هاست", ""}},
 	}
-	if h, ok := s.store.Get(p.HostID); ok {
+	if h, ok := s.ownHost(p); ok {
 		prof, _ := profile.Find(s.profiles(), h.ProfileID)
 		data["Host"] = h
 		data["HostLabel"] = hostLabel(h)
 		data["HostProfile"] = prof
 		data["Locked"] = prof != nil && h.Locked(prof.MaxLoginAttempts)
-		var shared []string
-		for _, o := range s.projects.List() {
-			if o.ID != p.ID && o.HostID == h.ID {
-				shared = append(shared, o.Name)
-			}
-		}
-		data["SharedWith"] = shared
 		data["CheckRun"] = s.lastHostCheck(p.ID, r.URL.Query().Get("run"))
 	}
 	s.render(w, "project_host.html", s.page(r, data))
@@ -206,15 +270,8 @@ func (s *Server) handleProjectHostSave(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	hostID := ""
-	if cur, linked := s.store.Get(p.HostID); linked {
-		hostID = cur.ID
-	} else {
-		// the same cPanel account saved before (another project): reuse it
-		for _, h := range s.store.List() {
-			if h.URL == base && strings.EqualFold(h.Username, user) {
-				hostID = h.ID
-			}
-		}
+	if cur, linked := s.ownHost(p); linked {
+		hostID = cur.ID // edit this project's own record; other projects are not touched
 	}
 	if hostID != "" {
 		err = s.store.Update(hostID, func(h *store.Host) {
@@ -240,7 +297,7 @@ func (s *Server) handleProjectHostSave(w http.ResponseWriter, r *http.Request) {
 		if name == "" {
 			name = strings.TrimPrefix(strings.SplitN(base, "://", 2)[1], "www.")
 		}
-		h, err := s.store.Add(store.Host{Name: name, ProfileID: prof.ID, URL: base, Username: user, SealedSecret: sealed})
+		h, err := s.store.Add(store.Host{Name: name, ProfileID: prof.ID, URL: base, Username: user, SealedSecret: sealed, ProjectID: p.ID})
 		if err != nil {
 			fail(err.Error())
 			return
@@ -260,7 +317,7 @@ func (s *Server) handleProjectHostCheck(w http.ResponseWriter, r *http.Request) 
 	if !ok {
 		return
 	}
-	if _, linked := s.store.Get(p.HostID); !linked {
+	if _, linked := s.ownHost(p); !linked {
 		http.Redirect(w, r, s.cfg.BasePath+"p/"+p.ID+"/host?err="+url.QueryEscape("اول اطلاعات اتصال هاست را وارد کنید"), http.StatusSeeOther)
 		return
 	}
