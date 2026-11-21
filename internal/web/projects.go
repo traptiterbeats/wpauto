@@ -99,7 +99,7 @@ func projectSite(wfID string, in map[string]string) (domain, folder string) {
 		if in["mode"] == "subfolder" {
 			return in["domain"], in["name"]
 		}
-		if in["mode"] == "root" {
+		if in["mode"] == "root" || in["name"] == "" {
 			return in["domain"], ""
 		}
 		if in["name"] != "" && in["domain"] != "" {

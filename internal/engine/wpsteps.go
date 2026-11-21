@@ -77,10 +77,14 @@ func stepPlan(ctx context.Context, rc *RunContext, a map[string]string) (map[str
 	if mode != "subdomain" && mode != "subfolder" && mode != "root" {
 		return nil, fmt.Errorf("mode must be subdomain, subfolder or root")
 	}
+	if mode != "root" && name == "" {
+		// an empty name means the domain itself, whatever the location select says
+		rc.Logf("نام ساب‌دامین یا پوشه خالی است؛ وردپرس روی خود دامنه (%s) نصب می‌شود", domain)
+		mode = "root"
+	}
 	if mode == "root" {
 		name = ""
-	} else if name == "" {
-		return nil, fmt.Errorf("نام ساب‌دامین یا پوشه را وارد کنید (یا «روی خود دامنه» را انتخاب کنید)")
+		rc.Inputs["mode"], rc.Inputs["name"] = "root", ""
 	} else if !labelRe.MatchString(name) {
 		return nil, fmt.Errorf("نام «%s» مجاز نیست: فقط حروف کوچک انگلیسی، عدد و خط تیره", name)
 	}

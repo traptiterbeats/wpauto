@@ -177,3 +177,19 @@ func TestWPInstallOnDomainRoot(t *testing.T) {
 		t.Fatalf("start page not set aside:\n%s", logs)
 	}
 }
+
+func TestWPInstallEmptyNameMeansRoot(t *testing.T) {
+	// location left on «ساب‌دامین» but no name → installs on the domain itself
+	in := installInputs()
+	in["mode"], in["name"], in["domain"] = "subdomain", "", "blog.example.com"
+	run, fake := runInstall(t, false, in)
+	if run.Status != StatusSuccess {
+		t.Fatalf("status %s: %s", run.Status, run.Error)
+	}
+	if fake.Called("SubDomain/addsubdomain") {
+		t.Fatal("created a subdomain for an empty name")
+	}
+	if _, ok := fake.File("/home/kfncspot/blog/wp-config.php"); !ok {
+		t.Fatal("wp-config not written in the domain's folder")
+	}
+}
