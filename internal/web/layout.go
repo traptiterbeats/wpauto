@@ -18,6 +18,7 @@ type section struct {
 
 var sections = []section{
 	{"tasks", "کارها", ""},
+	{"autopilot", "AutoPilot", "autopilot"},
 	{"projects", "پروژه‌ها", "projects"},
 	{"hosts", "هاست‌ها", "hosts"},
 	{"themes", "قالب‌ها", "themes"},
@@ -33,7 +34,7 @@ func sectionFor(rel string) section {
 	case "", "run":
 		return sections[0]
 	case "plugins":
-		return sections[3] // themes
+		first = "themes"
 	}
 	for _, s := range sections {
 		if s.Path == first {

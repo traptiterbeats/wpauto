@@ -538,7 +538,12 @@ func (s *Server) briefFromForm(r *http.Request, d *customize.Draft) {
 
 // readyAI returns the chosen (or default) provider's client, testing it first when needed.
 func (s *Server) readyAI(r *http.Request) (ai.Provider, *ai.Client, error) {
-	p, ok := s.ai.Get(r.FormValue("provider"))
+	return s.readyAIProvider(r.Context(), r.FormValue("provider"))
+}
+
+// readyAIProvider is readyAI for a provider id ("" = default).
+func (s *Server) readyAIProvider(ctx context.Context, id string) (ai.Provider, *ai.Client, error) {
+	p, ok := s.ai.Get(id)
 	if !ok {
 		return p, nil, fmt.Errorf("هوش مصنوعی وصل نیست. اول در منوی «هوش مصنوعی» یک سرویس اضافه و تست کنید.")
 	}
@@ -546,7 +551,7 @@ func (s *Server) readyAI(r *http.Request) (ai.Provider, *ai.Client, error) {
 		return p, nil, fmt.Errorf("برای «%s» هنوز مدلی انتخاب نشده. اول در منوی «هوش مصنوعی» مدل را انتخاب کنید.", p.Name)
 	}
 	if !p.Tested() || !p.TestOK {
-		if err := s.testAI(r.Context(), p); err != nil {
+		if err := s.testAI(ctx, p); err != nil {
 			return p, nil, fmt.Errorf("هوش مصنوعی «%s» جواب نمی‌دهد: %v — اول در منوی «هوش مصنوعی» درستش کنید.", p.Name, err)
 		}
 	}
@@ -625,48 +630,65 @@ func (s *Server) startGenerate(w http.ResponseWriter, r *http.Request, id string
 		s.draftBack(w, r, id, "err", err.Error(), "#texts")
 		return
 	}
-	st := engine.Drafts()
-	_, _ = st.Update(id, func(d *customize.Draft) error {
-		d.Status, d.Error, d.Progress, d.Provider = "generating", "", "در حال ارسال به "+p.Name, p.Name+" · "+p.Model
-		return nil
-	})
+	markGenerating(id, p)
 	brief := d.Brief
 	go func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Minute)
 		defer cancel()
-		values, tokens, err := customize.Generate(ctx, client, demo, brief, func(done, total int) {
-			_, _ = st.Update(id, func(d *customize.Draft) error {
-				d.Progress = fmt.Sprintf("بخش %d از %d", done+1, total)
-				if done >= total {
-					d.Progress = "در حال ذخیره"
-				}
-				return nil
-			})
-		})
-		_, _ = st.Update(id, func(d *customize.Draft) error {
-			d.Tokens += tokens
-			d.Progress = ""
-			if len(values) > 0 {
-				for k, v := range values {
-					d.Values[k] = v
-				}
-				d.Generated = len(values)
-			}
-			if err == nil || len(values) > 0 {
-				s.ai.SetTest(p.ID, nil)
-			}
-			if err != nil {
-				d.Status, d.Error = "error", err.Error()
-				if len(values) > 0 {
-					d.Error += fmt.Sprintf(" — %d متن نوشته و ذخیره شد، ولی بخش‌های ناموفق هنوز متن دموی اصلی را دارند. «نوشتن متن‌ها» را دوباره بزنید.", len(values))
-				}
-				return nil
-			}
-			d.Status = "ready"
-			return nil
-		})
+		_ = s.generateDraft(ctx, id, p, client, demo, brief, false)
 	}()
 	s.draftBack(w, r, id, "msg", "تولید متن‌ها شروع شد", "#texts")
+}
+
+// markGenerating shows a draft as being written by provider p.
+func markGenerating(id string, p ai.Provider) {
+	_, _ = engine.Drafts().Update(id, func(d *customize.Draft) error {
+		d.Status, d.Error, d.Progress, d.Provider = "generating", "", "در حال ارسال به "+p.Name, p.Name+" · "+p.Model
+		return nil
+	})
+}
+
+// generateDraft writes the AI texts of demo's fields into the draft and returns the generator's
+// error. Texts written before an error are kept. With merge, Generated counts up (a retry that
+// asked only for the missing fields); otherwise it is the number of texts written.
+func (s *Server) generateDraft(ctx context.Context, id string, p ai.Provider, client customize.Chatter, demo *customize.Demo, brief customize.Brief, merge bool) error {
+	st := engine.Drafts()
+	values, tokens, err := customize.Generate(ctx, client, demo, brief, func(done, total int) {
+		_, _ = st.Update(id, func(d *customize.Draft) error {
+			d.Progress = fmt.Sprintf("بخش %d از %d", done+1, total)
+			if done >= total {
+				d.Progress = "در حال ذخیره"
+			}
+			return nil
+		})
+	})
+	_, _ = st.Update(id, func(d *customize.Draft) error {
+		d.Tokens += tokens
+		d.Progress = ""
+		if len(values) > 0 {
+			for k, v := range values {
+				d.Values[k] = v
+			}
+			if merge {
+				d.Generated += len(values)
+			} else {
+				d.Generated = len(values)
+			}
+		}
+		if err == nil || len(values) > 0 {
+			s.ai.SetTest(p.ID, nil)
+		}
+		if err != nil {
+			d.Status, d.Error = "error", err.Error()
+			if len(values) > 0 {
+				d.Error += fmt.Sprintf(" — %d متن نوشته و ذخیره شد، ولی بخش‌های ناموفق هنوز متن دموی اصلی را دارند. «نوشتن متن‌ها» را دوباره بزنید.", len(values))
+			}
+			return nil
+		}
+		d.Status = "ready"
+		return nil
+	})
+	return err
 }
 
 // draftSteps is the side panel checklist of one customisation draft.

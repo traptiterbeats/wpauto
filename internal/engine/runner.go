@@ -188,25 +188,34 @@ func NewRunner(dir string) (*Runner, error) {
 	return r, nil
 }
 
-// Start validates inputs and begins the workflow in the background.
-func (r *Runner) Start(wf *Workflow, t *Target, inputs map[string]string) (string, error) {
+// ValidateInputs checks inputs against the workflow's form (required, select options, patterns),
+// fills defaults and trims values in place.
+func ValidateInputs(wf *Workflow, inputs map[string]string) error {
 	for _, in := range wf.Inputs {
 		v := strings.TrimSpace(inputs[in.Name])
 		if v == "" && in.Default != "" {
 			v = in.Default
 		}
 		if in.Required && v == "" {
-			return "", fmt.Errorf("«%s» لازم است", in.Label)
+			return fmt.Errorf("«%s» لازم است", in.Label)
 		}
 		if in.Type == "select" && v != "" && !contains(in.Options, v) {
-			return "", fmt.Errorf("مقدار «%s» نامعتبر است", in.Label)
+			return fmt.Errorf("مقدار «%s» نامعتبر است", in.Label)
 		}
 		if in.Pattern != "" && v != "" {
 			if re, err := regexp.Compile("^(?:" + in.Pattern + ")$"); err == nil && !re.MatchString(v) {
-				return "", fmt.Errorf("«%s» قالب درستی ندارد", in.Label)
+				return fmt.Errorf("«%s» قالب درستی ندارد", in.Label)
 			}
 		}
 		inputs[in.Name] = v
+	}
+	return nil
+}
+
+// Start validates inputs and begins the workflow in the background.
+func (r *Runner) Start(wf *Workflow, t *Target, inputs map[string]string) (string, error) {
+	if err := ValidateInputs(wf, inputs); err != nil {
+		return "", err
 	}
 	r.mu.Lock()
 	if id, ok := r.busy[t.HostID]; ok {

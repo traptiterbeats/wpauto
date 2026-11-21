@@ -55,6 +55,58 @@ func (f *Fake) File(p string) (string, bool) {
 	return v, ok
 }
 
+// FindFile returns the content of a written file whose path ends with suffix.
+func (f *Fake) FindFile(suffix string) (string, bool) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	for p, c := range f.Files {
+		if strings.HasSuffix(p, suffix) {
+			return c, true
+		}
+	}
+	return "", false
+}
+
+// CallCount returns how many Module/function calls were made so far.
+func (f *Fake) CallCount() int {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return len(f.Calls)
+}
+
+// Put stores a file as if the site had written it (e.g. WordPress files a fake helper extracted).
+func (f *Fake) Put(p, content string) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.Files[p] = content
+}
+
+// children lists the files and folders written directly inside dir.
+func (f *Fake) children(dir string) []map[string]any {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	seen := map[string]bool{}
+	var out []map[string]any
+	prefix := strings.TrimSuffix(dir, "/") + "/"
+	for p := range f.Files {
+		rest, ok := strings.CutPrefix(p, prefix)
+		if !ok || rest == "" {
+			continue
+		}
+		name, _, isDir := strings.Cut(rest, "/")
+		if seen[name] {
+			continue
+		}
+		seen[name] = true
+		typ := "file"
+		if isDir {
+			typ = "dir"
+		}
+		out = append(out, map[string]any{"file": name, "type": typ})
+	}
+	return out
+}
+
 // New starts a fake cPanel (TLS) for user/pass. The main domain example.com has WordPress 6.8.3
 // installed; blog.example.com is empty.
 func New(t *testing.T, user, pass string) *Fake {
@@ -123,6 +175,11 @@ func New(t *testing.T, user, pass string) *Fake {
 			case home + "/blog":
 				ok(w, []map[string]any{{"file": "index.html", "type": "file"}})
 			default:
+				// a folder the tests wrote into lists what was written there
+				if list := f.children(r.FormValue("dir")); len(list) > 0 {
+					ok(w, list)
+					return
+				}
 				_ = json.NewEncoder(w).Encode(map[string]any{"status": 0, "errors": []string{"No such directory"}})
 			}
 		case "Fileman/save_file_content":

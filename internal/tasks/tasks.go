@@ -14,6 +14,7 @@ type Task struct {
 // Catalogue is shown on the dashboard after the workflows: tasks with a Link open that page,
 // the rest are "coming soon".
 var Catalogue = []Task{
+	{ID: "autopilot", Title: "AutoPilot — ساخت خودکار سایت", Description: "چند خانه را پر کنید و «شروع» بزنید: شخصی‌سازی با هوش مصنوعی، نصب وردپرس، نصب قالب و دموی شخصی‌سازی‌شده و بررسی سایت، پشت سر هم و خودکار.", Link: "autopilot", Order: 5},
 	{ID: "ai-customize", Title: "شخصی‌سازی با هوش مصنوعی", Description: "درباره‌ی مشتری بنویسید؛ بریف و همه‌ی متن‌های دمو با هوش مصنوعی برای او نوشته می‌شود و لوگو و تصاویرش جای دمو می‌نشیند. مرحله‌ی قبل از نصب قالب؛ پیش از نصب قالب", Link: "customize", Order: 35},
 	{ID: "wp-list", Title: "وردپرس‌های هاست", Description: "همه‌ی وردپرس‌های روی هاست (دامنه‌ها، ساب‌دامین‌ها و پوشه‌ها) را پیدا می‌کند تا وردپرس‌های تستی را از فهرست انتخاب و کامل پاک کنید.", Link: "wordpress", Order: 90},
 }

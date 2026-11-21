@@ -1,0 +1,107 @@
+{{define "apstate"}}{{if eq . "success"}}<span class="ok">انجام شد</span>{{else if eq . "failed"}}<span class="bad">ناموفق</span>{{else if eq . "running"}}<span class="warn">در حال انجام</span>{{else if eq . "skipped"}}<span class="muted">رد شد</span>{{else}}<span class="muted">در انتظار</span>{{end}}{{end}}
+<!doctype html>
+<html lang="fa" dir="rtl">
+<head>{{template "head" .}}<title>AutoPilot · {{.P.Title}} | wpauto</title></head>
+<body>
+{{template "nav" .}}
+<div class="layout">
+{{template "aside" .}}
+<main>
+  {{template "flash" .}}
+  <a class="back" href="{{.BasePath}}autopilot">→ بازگشت به AutoPilot</a>
+  <h2>AutoPilot: {{.P.Title}}</h2>
+  <p class="muted">هاست: {{.P.In.HostName}} · قالب: <span dir="ltr">{{.P.In.Theme}}</span> · شروع: <span dir="ltr">{{.P.Created.Format "2006-01-02 15:04:05"}}</span> · وضعیت: <span id="apstatus">{{if eq .P.Status "running"}}<span class="warn">در حال اجرا</span>{{else if eq .P.Status "success"}}<span class="ok">تمام شد</span>{{else if eq .P.Status "cancelled"}}<span class="muted">متوقف شد</span>{{else}}<span class="bad">ناموفق</span>{{end}}</span></p>
+
+  <div class="ap-clock card">
+    <span class="muted">{{if .P.Done}}زمان کل{{else}}زمان سپری‌شده{{end}}</span>
+    <strong id="apclock" dir="ltr">{{.P.ElapsedText}}</strong>
+  </div>
+
+  {{if .P.SiteURL}}
+  <div class="sitelinks ap-site{{if eq .P.Status "success"}} big{{end}}">
+    <a class="btn" href="{{.P.SiteURL}}?v={{.NowUnix}}" target="_blank" rel="noopener">دیدن سایت ↗</a>
+    <a class="btn" href="{{.P.AdminURL}}" target="_blank" rel="noopener">پیشخوان وردپرس (wp-admin) ↗</a>
+    <span class="small muted" dir="ltr">{{.P.SiteURL}}</span>
+  </div>
+  {{end}}
+
+  {{if .P.Error}}<div class="error">{{.P.Error}}</div>{{end}}
+
+  {{if not .P.Done}}
+  <form method="post" action="{{.BasePath}}autopilot/{{.P.ID}}/cancel" id="cancel">
+    <input type="hidden" name="csrf" value="{{.CSRF}}">
+    <button type="submit" class="ghost danger" onclick="return confirm('AutoPilot متوقف شود؟ کار در جریان برگردانده می‌شود.')">توقف</button>
+  </form>
+  {{end}}
+  {{if .P.Resumable}}
+  <form method="post" action="{{.BasePath}}autopilot/{{.P.ID}}/resume" class="card form">
+    <input type="hidden" name="csrf" value="{{.CSRF}}">
+    {{if .NeedPass}}<label>رمز مدیر وردپرس<input name="admin_pass" type="password" minlength="12" required autocomplete="new-password"></label>
+    <p class="muted small">رمز در حافظه‌ی پنل نیست (پنل دوباره راه‌اندازی شده)؛ برای نصب وردپرس دوباره لازم است.</p>{{end}}
+    <button type="submit">ادامه از همین مرحله</button>
+    <p class="muted small">مرحله‌های موفق تکرار نمی‌شوند؛ از اولین مرحله‌ی ناتمام دوباره شروع می‌شود.</p>
+  </form>
+  {{end}}
+
+  <section class="card">
+    <h4>مرحله‌ها</h4>
+    <ol class="plan steps-run" id="apstages">
+      {{range .P.Stages}}
+      <li data-key="{{.Key}}" class="st-{{.State}}">
+        <span class="dot"></span>
+        <span class="t">{{.Title}}</span>
+        <span class="small" data-role="state">{{template "apstate" .State}}</span>
+        <span class="small muted" dir="ltr" data-role="dur" data-sec="{{.Secs}}" data-started="{{if eq .State "running"}}{{.Started.Unix}}{{end}}">{{.DurText}}</span>
+        {{if eq .Key "customize"}}<a class="small" href="{{$.BasePath}}customize/{{$.P.DraftID}}">پیش‌نویس شخصی‌سازی</a>{{else if .RunID}}<a class="small" href="{{$.BasePath}}runs/{{.RunID}}">جزئیات اجرا</a>{{end}}
+        <span class="pl-note small" data-role="note">{{.Note}}</span>
+        {{if .Error}}<span class="pl-note small bad">{{.Error}}{{if eq .Key "customize"}} — <a href="{{$.BasePath}}customize/{{$.P.DraftID}}">باز کردن پیش‌نویس</a>{{end}}</span>{{end}}
+        {{range .Warnings}}<span class="pl-note small warn">⚠ {{.}}</span>{{end}}
+      </li>
+      {{end}}
+    </ol>
+  </section>
+  <h3>گزارش</h3>
+  <pre class="log" id="aplog">{{range .P.Log}}<span class="lv-{{.Level}}">{{.T.Format "15:04:05"}}  {{.Msg}}</span>
+{{end}}</pre>
+</main>
+</div>
+<script>
+(function(){
+  var done = {{.P.Done}};
+  var skew = Math.floor(Date.now()/1000) - {{.NowUnix}};
+  var started = {{.P.Started.Unix}}, prev = {{.P.PrevSeconds}};
+  function fmt(s){ s=Math.max(0,Math.floor(s)); var h=Math.floor(s/3600), m=Math.floor(s%3600/60), x=s%60;
+    function p(n){return (n<10?"0":"")+n}
+    return h>0 ? h+":"+p(m)+":"+p(x) : p(m)+":"+p(x); }
+  function now(){ return Math.floor(Date.now()/1000) - skew; }
+  if (done) return;
+  function tickClock(){
+    document.getElementById("apclock").textContent = fmt(prev + now() - started);
+    document.querySelectorAll('#apstages [data-role="dur"]').forEach(function(el){
+      var st = parseInt(el.getAttribute("data-started")||"0",10);
+      if (st) el.textContent = fmt(now() - st);
+    });
+  }
+  setInterval(tickClock, 1000);
+  tickClock();
+  var states = {};
+  document.querySelectorAll('#apstages li').forEach(function(li){ states[li.getAttribute("data-key")] = li.className; });
+  var url = "{{.BasePath}}autopilot/{{.P.ID}}/json";
+  function poll(){
+    fetch(url,{credentials:"same-origin"}).then(function(r){return r.json()}).then(function(d){
+      var changed = d.done;
+      d.stages.forEach(function(s){
+        var li = document.querySelector('#apstages li[data-key="'+s.Key+'"]');
+        if (!li) return;
+        if (states[s.Key] !== "st-"+s.State) changed = true;
+        var n = li.querySelector('[data-role="note"]'); if (n) n.textContent = s.Note || "";
+      });
+      if (changed) { location.reload(); return; }
+      setTimeout(poll, 2000);
+    }).catch(function(){ setTimeout(poll, 4000); });
+  }
+  setTimeout(poll, 2000);
+})();
+</script>
+</body>
+</html>

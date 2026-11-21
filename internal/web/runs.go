@@ -2,6 +2,7 @@ package web
 
 import (
 	"encoding/json"
+	"errors"
 	"github.com/traptiterbeats/wpauto/internal/projects"
 	"net/http"
 	"net/url"
@@ -109,28 +110,6 @@ func (s *Server) handleRunStart(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	hostID := r.FormValue("host")
-	fail := func(msg string) {
-		http.Redirect(w, r, bp+"run/"+wfID+"?host="+url.QueryEscape(hostID)+"&err="+url.QueryEscape(msg), http.StatusSeeOther)
-	}
-	h, ok := s.store.Get(hostID)
-	if !ok {
-		fail("یک هاست انتخاب کنید")
-		return
-	}
-	prof, ok := profile.Find(s.profiles(), h.ProfileID)
-	if !ok {
-		fail("پروفایل این هاست پیدا نشد")
-		return
-	}
-	if h.Locked(prof.MaxLoginAttempts) {
-		fail("ورود این هاست قبلاً رد شده؛ اول رمز را در صفحه‌ی هاست اصلاح کنید")
-		return
-	}
-	secret, err := s.box.Open(h.SealedSecret)
-	if err != nil {
-		fail("رمز ذخیره‌شده قابل خواندن نیست؛ دوباره واردش کنید")
-		return
-	}
 	inputs := map[string]string{}
 	for _, in := range wf.Inputs {
 		inputs[in.Name] = r.FormValue("in_" + in.Name)
@@ -141,6 +120,36 @@ func (s *Server) handleRunStart(w http.ResponseWriter, r *http.Request) {
 				inputs[in.Name] = "false"
 			}
 		}
+	}
+	projectID := ""
+	if p, ok := s.projects.Active(); ok {
+		projectID = p.ID
+	}
+	id, err := s.startWorkflow(wf, hostID, projectID, inputs)
+	if err != nil {
+		http.Redirect(w, r, bp+"run/"+wfID+"?host="+url.QueryEscape(hostID)+"&err="+url.QueryEscape(err.Error()), http.StatusSeeOther)
+		return
+	}
+	http.Redirect(w, r, bp+"runs/"+id, http.StatusSeeOther)
+}
+
+// startWorkflow starts wf on a saved host, tied to a project (may be ""), and returns the run id.
+// On success the project remembers the host, the site and the draft the run used.
+func (s *Server) startWorkflow(wf *engine.Workflow, hostID, projectID string, inputs map[string]string) (string, error) {
+	h, ok := s.store.Get(hostID)
+	if !ok {
+		return "", errors.New("یک هاست انتخاب کنید")
+	}
+	prof, ok := profile.Find(s.profiles(), h.ProfileID)
+	if !ok {
+		return "", errors.New("پروفایل این هاست پیدا نشد")
+	}
+	if h.Locked(prof.MaxLoginAttempts) {
+		return "", errors.New("ورود این هاست قبلاً رد شده؛ اول رمز را در صفحه‌ی هاست اصلاح کنید")
+	}
+	secret, err := s.box.Open(h.SealedSecret)
+	if err != nil {
+		return "", errors.New("رمز ذخیره‌شده قابل خواندن نیست؛ دوباره واردش کنید")
 	}
 	t := &engine.Target{
 		HostID: h.ID, HostName: h.Name, Profile: prof,
@@ -159,7 +168,7 @@ func (s *Server) handleRunStart(w http.ResponseWriter, r *http.Request) {
 			})
 		},
 	}
-	if p, ok := s.projects.Active(); ok {
+	if p, ok := s.projects.Get(projectID); ok && projectID != "" {
 		t.ProjectID = p.ID
 		dom, folder := projectSite(wf.ID, inputs)
 		draft := inputs["draft"]
@@ -181,12 +190,7 @@ func (s *Server) handleRunStart(w http.ResponseWriter, r *http.Request) {
 			_ = s.projects.Update(p.ID, func(x *projects.Project) { x.HostID = h.ID })
 		}
 	}
-	id, err := s.runner.Start(wf, t, inputs)
-	if err != nil {
-		fail(err.Error())
-		return
-	}
-	http.Redirect(w, r, bp+"runs/"+id, http.StatusSeeOther)
+	return s.runner.Start(wf, t, inputs)
 }
 
 func (s *Server) handleRunView(w http.ResponseWriter, r *http.Request) {

@@ -51,6 +51,7 @@ type Server struct {
 	workflowDir string
 	ai          *ai.Store
 	projects    *projects.Store
+	ap          *apStore
 }
 
 // New builds a server from the configuration.
@@ -81,7 +82,11 @@ func New(cfg *config.Config, version string) (*Server, error) {
 		return nil, err
 	}
 	resetStuckDrafts()
-	return &Server{cfg: cfg, version: version, tpl: t, limiter: newLimiter(),
+	apStore, err := openAP(filepath.Join(dir, "autopilot"))
+	if err != nil {
+		return nil, err
+	}
+	return &Server{ap: apStore, cfg: cfg, version: version, tpl: t, limiter: newLimiter(),
 		store: st, box: box, profileDir: filepath.Join(dir, "profiles"),
 		runner: runner, workflowDir: filepath.Join(dir, "workflows"), ai: aiStore, projects: projStore}, nil
 }
@@ -107,6 +112,11 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET "+bp+"runs/{id}", s.requireAuth(s.handleRunView))
 	mux.HandleFunc("GET "+bp+"runs/{id}/json", s.requireAuth(s.handleRunJSON))
 	mux.HandleFunc("POST "+bp+"runs/{id}/cancel", s.requireAuth(s.handleRunCancel))
+	mux.HandleFunc("GET "+bp+"autopilot", s.requireAuth(s.handleAutopilot))
+	mux.HandleFunc("POST "+bp+"autopilot/start", s.uploads(s.handleAutopilotStart))
+	mux.HandleFunc("GET "+bp+"autopilot/{id}", s.requireAuth(s.handleAutopilotView))
+	mux.HandleFunc("GET "+bp+"autopilot/{id}/json", s.requireAuth(s.handleAutopilotJSON))
+	mux.HandleFunc("POST "+bp+"autopilot/{id}/{op}", s.requireAuth(s.handleAutopilotOp))
 	mux.HandleFunc("GET "+bp+"wordpress", s.requireAuth(s.handleWordPress))
 	mux.HandleFunc("POST "+bp+"wordpress/{op}", s.requireAuth(s.handleWordPressOp))
 	mux.HandleFunc("GET "+bp+"projects", s.requireAuth(s.handleProjects))

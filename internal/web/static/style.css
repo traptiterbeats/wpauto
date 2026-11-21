@@ -194,3 +194,8 @@ button.small,a.btn.small{padding:4px 10px;font-size:12px}
 .disk-bar span{display:block;height:100%;background:#4ade80}
 .disk.full .disk-bar span{background:#f87171}
 .sitelinks{display:flex;gap:.5rem;flex-wrap:wrap;margin:.5rem 0}
+.ap-clock{display:flex;align-items:baseline;gap:12px;padding:10px 16px}
+.ap-clock strong{font-size:28px;font-variant-numeric:tabular-nums;letter-spacing:.5px}
+.ap-site{align-items:center}
+.ap-site.big .btn{font-size:17px;padding:12px 20px}
+#apstages [data-role="dur"]{font-variant-numeric:tabular-nums}
