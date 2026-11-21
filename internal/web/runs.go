@@ -125,7 +125,7 @@ func (s *Server) handleRunStart(w http.ResponseWriter, r *http.Request) {
 	if p, ok := s.projects.Active(); ok {
 		projectID = p.ID
 	}
-	id, err := s.startWorkflow(wf, hostID, projectID, inputs)
+	id, err := s.startWorkflow(wf, hostID, projectID, inputs, nil)
 	if err != nil {
 		http.Redirect(w, r, bp+"run/"+wfID+"?host="+url.QueryEscape(hostID)+"&err="+url.QueryEscape(err.Error()), http.StatusSeeOther)
 		return
@@ -134,8 +134,9 @@ func (s *Server) handleRunStart(w http.ResponseWriter, r *http.Request) {
 }
 
 // startWorkflow starts wf on a saved host, tied to a project (may be ""), and returns the run id.
-// On success the project remembers the host, the site and the draft the run used.
-func (s *Server) startWorkflow(wf *engine.Workflow, hostID, projectID string, inputs map[string]string) (string, error) {
+// On success the project remembers the host, the site and the draft the run used. after (optional)
+// is called last, once the run and the project are completely saved.
+func (s *Server) startWorkflow(wf *engine.Workflow, hostID, projectID string, inputs map[string]string, after func(status string)) (string, error) {
 	h, ok := s.store.Get(hostID)
 	if !ok {
 		return "", errors.New("یک هاست انتخاب کنید")
@@ -173,22 +174,27 @@ func (s *Server) startWorkflow(wf *engine.Workflow, hostID, projectID string, in
 		dom, folder := projectSite(wf.ID, inputs)
 		draft := inputs["draft"]
 		t.OnDone = func(status string) {
-			if status != engine.StatusSuccess {
-				return
+			if status == engine.StatusSuccess {
+				_ = s.projects.Update(p.ID, func(x *projects.Project) {
+					x.HostID = h.ID
+					if dom != "" {
+						x.Domain, x.Folder = strings.ToLower(dom), folder
+					}
+					if draft != "" {
+						x.DraftID = draft
+					}
+				})
 			}
-			_ = s.projects.Update(p.ID, func(x *projects.Project) {
-				x.HostID = h.ID
-				if dom != "" {
-					x.Domain, x.Folder = strings.ToLower(dom), folder
-				}
-				if draft != "" {
-					x.DraftID = draft
-				}
-			})
+			if after != nil {
+				after(status)
+			}
 		}
 		if p.HostID == "" {
 			_ = s.projects.Update(p.ID, func(x *projects.Project) { x.HostID = h.ID })
 		}
+	}
+	if t.OnDone == nil && after != nil {
+		t.OnDone = after
 	}
 	return s.runner.Start(wf, t, inputs)
 }

@@ -311,37 +311,36 @@ func (st *apStore) logf(id, level, format string, a ...any) {
 
 // ---- pipeline ----
 
-// apRun runs the stages from index `from` on; it is the pipeline's goroutine.
+// apRun runs the stages from index `from` on; it is the pipeline's goroutine. The final status,
+// end time and total are set in one update at the very end, so a pipeline seen as done is
+// completely saved.
 func (s *Server) apRun(ctx context.Context, id string, from int) {
 	st := s.ap
+	final, finalErr := apSuccess, ""
 	defer func() {
 		if r := recover(); r != nil {
-			st.update(id, func(p *autoPilot) {
-				p.Status, p.Error = apFailed, fmt.Sprint("internal error: ", r)
-			})
+			final, finalErr = apFailed, fmt.Sprint("internal error: ", r)
 		}
 		st.mu.Lock()
 		if c := st.cancels[id]; c != nil {
 			c()
 		}
 		delete(st.cancels, id)
+		if final == apSuccess {
+			delete(st.pass, id) // nothing left that needs it
+		}
 		st.mu.Unlock()
 		st.update(id, func(p *autoPilot) {
-			if p.Status == apRunning { // safety net: never leave a pipeline "running"
-				p.Status = apFailed
-			}
+			p.Status, p.Error = final, finalErr
 			p.Ended = time.Now()
 			p.TotalSeconds = p.PrevSeconds + int64(p.Ended.Sub(p.Started).Seconds())
 		})
-		if p, ok := st.get(id); ok && p.Status == apSuccess {
-			st.setPassword(id, "") // nothing left that needs it
-		}
 	}()
 	p, _ := st.get(id)
 	for i := from; i < len(p.Stages); i++ {
 		key := p.Stages[i].Key
 		if ctx.Err() != nil {
-			s.apCancelled(id, i)
+			final, finalErr = s.apCancelled(id, i)
 			return
 		}
 		st.update(id, func(p *autoPilot) {
@@ -371,17 +370,17 @@ func (s *Server) apRun(ctx context.Context, id string, from int) {
 				sg.State, sg.Error = apFailed, "متوقف شد"
 			case err != nil:
 				sg.State, sg.Error = apFailed, err.Error()
-				p.Status, p.Error = apFailed, sg.Title+": "+err.Error()
 			default:
 				sg.State = apSuccess
 			}
 		})
 		if cancelled {
-			s.apCancelled(id, i+1)
+			final, finalErr = s.apCancelled(id, i+1)
 			return
 		}
 		if err != nil {
 			st.logf(id, "error", "✘ %s: %v", p.Stages[i].Title, err)
+			final, finalErr = apFailed, p.Stages[i].Title+": "+err.Error()
 			return
 		}
 		for _, w := range warnings {
@@ -389,21 +388,20 @@ func (s *Server) apRun(ctx context.Context, id string, from int) {
 		}
 		st.logf(id, "info", "✔ %s", p.Stages[i].Title)
 	}
-	st.update(id, func(p *autoPilot) { p.Status, p.Error = apSuccess, "" })
 	st.logf(id, "info", "✔ همه‌ی مرحله‌ها انجام شد")
 }
 
-// apCancelled marks the pipeline stopped by the user and the stages from i on skipped.
-func (s *Server) apCancelled(id string, i int) {
+// apCancelled marks the stages from i on skipped and returns the pipeline's final state.
+func (s *Server) apCancelled(id string, i int) (string, string) {
 	s.ap.update(id, func(p *autoPilot) {
 		for j := i; j < len(p.Stages); j++ {
 			if p.Stages[j].State == apWaiting {
 				p.Stages[j].State = apSkipped
 			}
 		}
-		p.Status, p.Error = "cancelled", "با درخواست شما متوقف شد. با «ادامه از همین مرحله» از همان‌جا ادامه می‌دهید."
 	})
 	s.ap.logf(id, "warn", "متوقف شد")
+	return "cancelled", "با درخواست شما متوقف شد. با «ادامه از همین مرحله» از همان‌جا ادامه می‌دهید."
 }
 
 // apCustomize creates the client texts with the AI: up to len(apRetryWaits)+1 attempts, each
@@ -544,40 +542,42 @@ func (s *Server) apStartRun(ctx context.Context, id string, idx int, wfID string
 	if !ok {
 		return fmt.Errorf("کار %s پیدا نشد", wfID)
 	}
-	runID, err := s.startWorkflow(wf, p.In.HostID, p.ProjectID, inputs)
+	ended := make(chan struct{})
+	runID, err := s.startWorkflow(wf, p.In.HostID, p.ProjectID, inputs, func(string) { close(ended) })
 	if err != nil {
 		return err
 	}
 	s.ap.update(id, func(p *autoPilot) { p.Stages[idx].RunID = runID })
 	s.ap.logf(id, "info", "اجرای %s شروع شد (%s)", wf.Title, runID)
 	cancelled := false
-	for {
-		run, ok := s.runner.Get(runID, 0)
-		if !ok {
-			return errors.New("اجرا پیدا نشد")
-		}
-		if run.Done() {
-			if run.Status == engine.StatusSuccess {
-				return nil
-			}
-			if cancelled {
-				return ctx.Err()
-			}
-			if run.Error != "" {
-				return errors.New(run.Error)
-			}
-			return fmt.Errorf("اجرا با وضعیت %s تمام شد", run.Status)
-		}
+	for done := false; !done; {
 		select {
+		case <-ended: // the run and its project update are saved
+			done = true
 		case <-ctx.Done():
 			if !cancelled {
 				s.runner.Cancel(runID) // the run rolls back what it created
 				cancelled = true
 			}
-			time.Sleep(apPoll)
-		case <-time.After(apPoll):
+			select {
+			case <-ended:
+				done = true
+			case <-time.After(apPoll):
+			}
 		}
 	}
+	run, ok := s.runner.Get(runID, 0)
+	switch {
+	case !ok:
+		return errors.New("اجرا پیدا نشد")
+	case run.Status == engine.StatusSuccess:
+		return nil
+	case cancelled:
+		return ctx.Err()
+	case run.Error != "":
+		return errors.New(run.Error)
+	}
+	return fmt.Errorf("اجرا با وضعیت %s تمام شد", run.Status)
 }
 
 func (s *Server) apInstall(ctx context.Context, id string, idx int) error {
