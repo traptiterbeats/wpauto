@@ -10,33 +10,40 @@
   <h2>شخصی‌سازی دمو برای مشتری</h2>
   <p class="muted">مرحله‌ی ۳ از ساخت سایت، پیش از نصب قالب: درباره‌ی مشتری بنویسید تا بریف و همه‌ی متن‌های دمو با هوش مصنوعی برای او نوشته شود. در مرحله‌ی بعد («نصب قالب و دمو») همین پیش‌نویس نصب می‌شود.</p>
   {{if .Error}}<div class="error">{{.Error}}</div>{{end}}
-  {{if .Drafts}}
-  <table class="list">
-    <tr><th>سایت / مشتری</th><th>قالب</th><th>متن‌های تازه</th><th>وضعیت</th><th>آخرین تغییر</th><th></th></tr>
-    {{range .Drafts}}
-    <tr>
-      <td><a href="{{$.BasePath}}customize/{{.ID}}">{{.Title}}</a></td>
-      <td dir="ltr">{{.Theme}}</td>
-      <td>{{len .Values}}{{if eq .Status "generating"}} <span class="warn">در حال نوشتن…</span>{{end}}</td>
-      <td>{{if .Finished}}<span class="ok">✔ ذخیره‌شده</span>{{else}}<span class="muted">نیمه‌کاره</span>{{end}}</td>
-      <td dir="ltr">{{.Updated.Format "2006-01-02 15:04"}}</td>
-      <td><form method="post" action="{{$.BasePath}}customize/{{.ID}}/delete" onsubmit="return confirm('«{{.Title}}» و تصاویرش حذف شود؟')"><input type="hidden" name="csrf" value="{{$.CSRF}}"><button class="ghost danger small" type="submit">حذف</button></form></td>
-    </tr>
-    {{end}}
-  </table>
-  {{end}}
   {{if .Themes}}
-  <form class="card form" method="post" action="{{.BasePath}}customize/new">
+  <form class="card form" id="newdraft" method="post" action="{{.BasePath}}customize/new">
     <h3>پیش‌نویس تازه</h3>
+    <p class="muted small">نام تازه بنویسید و قالب را انتخاب کنید؛ بعد مستقیم به بریف مشتری و مرحله‌های بعد می‌روید.</p>
     {{with .Project}}<p class="muted small">به پروژه‌ی «{{.Name}}» وصل می‌شود.</p>{{end}}
     <input type="hidden" name="csrf" value="{{.CSRF}}">
-    <label>نام سایت یا مشتری<input name="title" required placeholder="مثلاً کافه نارنج" value="{{with .Project}}{{.Name}}{{end}}"></label>
+    <label>نام سایت یا مشتری<input name="title" required placeholder="مثلاً کافه نارنج" value="{{.Title}}"></label>
     <fieldset><legend>قالب</legend>{{template "themepick" .Pick}}</fieldset>
     <button type="submit">ساختن</button>
   </form>
   {{else}}
   <div class="card hint">قالبی با بسته‌ی دمو در کاتالوگ نیست. <a href="{{.BasePath}}themes">افزودن قالب</a></div>
   {{end}}
+  <section id="drafts">
+  <h3>پیش‌نویس‌های قبلی</h3>
+  {{if .Drafts}}
+  <p class="muted small">برای ادامه یا ویرایش، روی نام یا «ادامه» بزنید.</p>
+  <table class="list">
+    <tr><th>سایت / مشتری</th><th>قالب</th><th>متن‌های تازه</th><th>وضعیت</th><th>آخرین تغییر</th><th></th></tr>
+    {{range .Drafts}}
+    <tr>
+      <td><a href="{{$.BasePath}}customize/{{.ID}}">{{.Title}}</a>{{if and $.ProjectDraft (eq .ID $.ProjectDraft)}} <span class="ftag small">پیش‌نویس این پروژه</span>{{end}}</td>
+      <td dir="ltr">{{.Theme}}</td>
+      <td>{{len .Values}}{{if eq .Status "generating"}} <span class="warn">در حال نوشتن…</span>{{end}}</td>
+      <td>{{if .Finished}}<span class="ok">✔ ذخیره‌شده</span>{{else}}<span class="muted">نیمه‌کاره</span>{{end}}</td>
+      <td dir="ltr">{{.Updated.Format "2006-01-02 15:04"}}</td>
+      <td><a class="small" href="{{$.BasePath}}customize/{{.ID}}">ادامه / ویرایش</a> <form class="rowact" method="post" action="{{$.BasePath}}customize/{{.ID}}/delete" onsubmit="return confirm('«{{.Title}}» و تصاویرش حذف شود؟')"><input type="hidden" name="csrf" value="{{$.CSRF}}"><button class="ghost danger small" type="submit">حذف</button></form></td>
+    </tr>
+    {{end}}
+  </table>
+  {{else}}
+  <p class="muted">هنوز پیش‌نویسی نیست.</p>
+  {{end}}
+  </section>
 </main>
 </div>
 </body>

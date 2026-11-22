@@ -171,8 +171,8 @@ func (s *Server) pipeline(p *projects.Project) []pipeStep {
 		seen[k] = true
 	}
 	if p.DraftID != "" {
+		// the customisation always starts from its entry page; the project's draft is listed there
 		st := &steps[idx["customize"]]
-		st.Link = bp + "customize/" + p.DraftID
 		if d, err := engine.Drafts().Get(p.DraftID); err == nil {
 			switch {
 			case d.Status == "generating":

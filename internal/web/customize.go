@@ -199,40 +199,100 @@ func standards() map[string]stdView {
 	return out
 }
 
+// draftNameKey normalises a draft name for the duplicate check: trimmed, inner spaces collapsed,
+// case folded, Arabic yeh/kaf written as the Persian letters.
+func draftNameKey(name string) string {
+	name = strings.NewReplacer("ي", "ی", "ى", "ی", "ك", "ک", "\u200c", " ").Replace(name)
+	return strings.ToLower(strings.Join(strings.Fields(name), " "))
+}
+
+// draftNameTaken reports whether a draft in the list already has this name (its title, its
+// brief site name or its id).
+func draftNameTaken(drafts []*customize.Draft, name string) bool {
+	k := draftNameKey(name)
+	if k == "" {
+		return false
+	}
+	for _, d := range drafts {
+		if draftNameKey(d.Title) == k || draftNameKey(d.Brief.SiteName) == k || draftNameKey(d.ID) == k {
+			return true
+		}
+	}
+	return false
+}
+
+// errDraftNameTaken is shown on the entry page when a new draft's name is already in the list.
+const errDraftNameTaken = "این نام قبلاً در فهرست پایین هست؛ فهرست را بررسی کنید یا نام دیگری انتخاب کنید."
+
+// handleDrafts is the entry page of «شخصی‌سازی برای مشتری»: the new-draft form on top, the
+// earlier drafts below. Every customisation starts here.
 func (s *Server) handleDrafts(w http.ResponseWriter, r *http.Request) {
+	s.renderDrafts(w, r, "", r.URL.Query().Get("theme"), false, r.URL.Query().Get("err"), http.StatusOK)
+}
+
+// renderDrafts draws the entry page. typed says the title came from the user's form (kept as is,
+// even when empty); otherwise the active project's name is offered when it is not taken yet.
+func (s *Server) renderDrafts(w http.ResponseWriter, r *http.Request, title, theme string, typed bool, errMsg string, status int) {
 	var themes []*catalog.Theme
 	for _, t := range engine.Catalog().List() {
 		if t.HasDemo() {
 			themes = append(themes, t)
 		}
 	}
-	std := standards()
-	s.render(w, "drafts.html", s.page(r, map[string]any{
-		"Drafts": engine.Drafts().List(), "Themes": themes, "Error": r.URL.Query().Get("err"), "Std": std,
-		"Pick": s.themePicker("theme", r.URL.Query().Get("theme"), themes, std),
-	}))
+	drafts := engine.Drafts().List()
+	if !typed {
+		if p, ok := s.projects.Active(); ok && !draftNameTaken(drafts, p.Name) {
+			title = p.Name
+		}
+	}
+	data := map[string]any{
+		"Drafts": drafts, "Themes": themes, "Error": errMsg, "Std": standards(), "Title": title,
+	}
+	if p, ok := s.projects.Active(); ok {
+		data["ProjectDraft"] = p.DraftID
+	}
+	data["Pick"] = s.themePicker("theme", theme, themes, data["Std"].(map[string]stdView))
+	// a refused POST to customize/new is drawn as the entry page (same breadcrumb and Back)
+	if r.URL.Path != s.cfg.BasePath+"customize" {
+		u := *r.URL
+		u.Path, u.RawPath = s.cfg.BasePath+"customize", ""
+		r = r.Clone(r.Context())
+		r.URL = &u
+	}
+	data = s.page(r, data)
+	if status != http.StatusOK {
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		w.WriteHeader(status)
+	}
+	s.render(w, "drafts.html", data)
 }
 
 func (s *Server) handleDraftNew(w http.ResponseWriter, r *http.Request) {
-	t, err := engine.Catalog().Get(r.FormValue("theme"))
+	theme := r.FormValue("theme")
+	t, err := engine.Catalog().Get(theme)
 	title := strings.TrimSpace(r.FormValue("title"))
 	if err != nil || !t.HasDemo() {
-		http.Redirect(w, r, s.cfg.BasePath+"customize?err="+url.QueryEscape("قالبی با دمو انتخاب کنید"), http.StatusSeeOther)
+		s.renderDrafts(w, r, title, theme, true, "قالبی با دمو انتخاب کنید", http.StatusUnprocessableEntity)
 		return
 	}
 	if title == "" {
-		http.Redirect(w, r, s.cfg.BasePath+"customize?err="+url.QueryEscape("نام سایت یا مشتری را بنویسید"), http.StatusSeeOther)
+		s.renderDrafts(w, r, title, theme, true, "نام سایت یا مشتری را بنویسید", http.StatusUnprocessableEntity)
+		return
+	}
+	if draftNameTaken(engine.Drafts().List(), title) {
+		s.renderDrafts(w, r, title, theme, true, errDraftNameTaken, http.StatusConflict)
 		return
 	}
 	d, err := engine.Drafts().New(t.Slug, title)
 	if err != nil {
-		http.Redirect(w, r, s.cfg.BasePath+"customize?err="+url.QueryEscape(err.Error()), http.StatusSeeOther)
+		s.renderDrafts(w, r, title, theme, true, err.Error(), http.StatusInternalServerError)
 		return
 	}
 	if p, ok := s.projects.Active(); ok {
 		_ = s.projects.Update(p.ID, func(x *projects.Project) { x.DraftID = d.ID })
 	}
-	http.Redirect(w, r, s.cfg.BasePath+"customize/"+d.ID, http.StatusSeeOther)
+	// straight on to the next step: the client brief (the other tabs follow from there)
+	http.Redirect(w, r, s.cfg.BasePath+"customize/"+d.ID+"?step=brief", http.StatusSeeOther)
 }
 
 type fieldView struct {
@@ -282,12 +342,16 @@ func (s *Server) draftBack(w http.ResponseWriter, r *http.Request, id, key, msg,
 	http.Redirect(w, r, s.cfg.BasePath+"customize/"+id+q, http.StatusSeeOther)
 }
 
+// errNoDraft is shown on the entry page when a link names a draft that does not exist.
+const errNoDraft = "این پیش‌نویس پیدا نشد؛ شخصی‌سازی از همین صفحه شروع می‌شود: پیش‌نویس تازه بسازید یا یکی از فهرست پایین را باز کنید."
+
 var draftStepIDs = []string{"brief", "images", "texts", "finish"}
 
 func (s *Server) handleDraft(w http.ResponseWriter, r *http.Request) {
 	d, t, demo, err := s.loadDraft(r)
 	if d == nil {
-		http.NotFound(w, r)
+		// no such draft: the flow starts from the entry page
+		http.Redirect(w, r, s.cfg.BasePath+"customize?err="+url.QueryEscape(errNoDraft), http.StatusSeeOther)
 		return
 	}
 	data := map[string]any{"D": d, "Theme": t, "Providers": s.ai.List(), "Socials": customize.Socials, "Crumb": d.Title,
