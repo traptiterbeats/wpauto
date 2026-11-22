@@ -253,19 +253,26 @@ func TestProjectSectionAndWordPressPages(t *testing.T) {
 	sameCSRF(t, "section", sec)
 
 	wp := e.page("p/" + p.ID + "/wordpress")
-	for _, want := range []string{"بررسی هاست", "نصب وردپرس", "شخصی‌سازی برای مشتری (AI)", "نصب قالب و دمو", "AutoPilot",
-		"وردپرس‌های نصب‌شده / حذف", "بررسی سئو", "انجام‌شده برای این پروژه", "هنوز اجرایی برای این پروژه ثبت نشده",
+	for _, want := range []string{"بررسی هاست", "نصب وردپرس", "شخصی‌سازی برای مشتری (AI)", "نصب قالب و دمو", "ساخت خودکار سایت", "همه‌ی مراحل، خودکار و پشت سر هم", `class="ftag">AutoPilot<`, "🚀", `class="tile feature`, "بررسی وردپرس دامنه",
+		"حذف وردپرس", "وردپرس نصب‌شده روی آدرس این پروژه را پاک کنید", "بررسی سئو", "انجام‌شده برای این پروژه", "هنوز اجرایی برای این پروژه ثبت نشده",
 		`action="` + bp + `projects/` + p.ID + `/activate"`,
 		`value="` + bp + `p/` + p.ID + `/host"`, // the host card opens the project's own host page
 		`value="` + bp + `run/wp-check-domain?project=` + p.ID + `&amp;host=` + e.h1 + `"`,
 		`value="` + bp + `run/wp-install?project=`, `value="` + bp + `customize"`, `value="` + bp + `autopilot?project=` + p.ID + `"`,
 		`value="` + bp + `wordpress?project=` + p.ID + `&amp;host=` + e.h1 + `"`,
-		"بررسی افزونه‌ها", "بررسی قالب‌ها", `id="g-setup"`, `id="g-site"`, ">راه‌اندازی<", ">سایت وردپرسی<",
+		"بررسی افزونه‌ها", "بررسی قالب‌ها", `id="g-setup"`, `id="g-site"`, `id="g-auto"`, ">راه‌اندازی<", ">مراحل بیشتر<",
 		`<a href="` + bp + `p/` + p.ID + `">فروشگاه نارنج</a>`, `<strong aria-current="page">وردپرس</strong>`,
 		`href="` + bp + `p/` + p.ID + `" id="backbtn"`} {
 		if !strings.Contains(wp, want) {
 			t.Errorf("wordpress page lacks %q", want)
 		}
+	}
+	// «ساخت خودکار سایت» is the very last card, after the «به‌زودی» ones; old names are gone
+	if a, z := strings.LastIndex(wp, "بررسی سئو"), strings.Index(wp, `class="tile feature`); a < 0 || z < a || z < strings.LastIndex(wp, `class="tile soon"`) {
+		t.Error("the AutoPilot card is not at the end of the page")
+	}
+	if strings.Contains(wp, "سایت وردپرسی") || strings.Contains(wp, "یک دامنه") || strings.Contains(wp, ">AutoPilot</strong>") {
+		t.Error("old card or group name still shown")
 	}
 	if strings.Count(wp, `class="tile soon"`) != 3 || strings.Count(wp, `class="pp-todo"`) != 5 {
 		t.Error("plugins, themes and seo should be the disabled cards; a new project has every stage dark")
@@ -296,10 +303,16 @@ func TestProjectSectionAndWordPressPages(t *testing.T) {
 	if a, _ := e.s.projects.Active(); a.ID != p.ID {
 		t.Fatal("task card did not activate the project")
 	}
-	for _, want := range []string{`<option value="subfolder" selected>`, `value="example.com"`, `value="shop"`, `value="فروشگاه نارنج"`,
-		`<a href="` + bp + `p/` + p.ID + `/wordpress">وردپرس</a>`, `<strong aria-current="page">نصب وردپرس</strong>`} {
+	// the project's address and host are shown read-only instead of asked
+	for _, want := range []string{`id="scope"`, "آدرس نصب:", `<span dir="ltr">example.com/shop</span> (پوشه)`, `value="فروشگاه نارنج"`,
+		`name="project" value="` + p.ID + `"`, `<a href="` + bp + `p/` + p.ID + `/wordpress">وردپرس</a>`, `<strong aria-current="page">نصب وردپرس</strong>`} {
 		if !strings.Contains(form, want) {
 			t.Errorf("wp-install form lacks %q", want)
+		}
+	}
+	for _, bad := range []string{`name="in_mode"`, `name="in_domain"`, `name="in_name"`, `name="host"`} {
+		if strings.Contains(form, bad) {
+			t.Errorf("wp-install form inside a project still asks %q", bad)
 		}
 	}
 	if _, r := e.get("p/nope"); r.StatusCode != 404 {

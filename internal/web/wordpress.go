@@ -10,6 +10,7 @@ import (
 	"github.com/traptiterbeats/wpauto/internal/cpanel"
 	"github.com/traptiterbeats/wpauto/internal/engine"
 	"github.com/traptiterbeats/wpauto/internal/profile"
+	"github.com/traptiterbeats/wpauto/internal/projects"
 	"github.com/traptiterbeats/wpauto/internal/store"
 )
 
@@ -68,19 +69,33 @@ func (s *Server) lastScan(hostID string) (*engine.Run, []engine.FoundWP) {
 }
 
 func (s *Server) handleWordPress(w http.ResponseWriter, r *http.Request) {
-	hosts := s.hostsFor()
+	hosts := s.store.List()
 	hostID := r.URL.Query().Get("host")
-	if hostID == "" {
-		if p, ok := s.projects.Active(); ok && p.HostID != "" {
-			hostID = p.HostID
-		} else if len(hosts) > 0 {
-			hostID = hosts[0].ID
+	var scope *taskScope
+	var needHost *projects.Project
+	if p, ok := s.taskProject(r); ok {
+		// inside a project: only the project's own host, read-only
+		scope, hosts, hostID = s.scopeFor(nil, p), nil, ""
+		scope.ShowAddr, scope.NeedAddr = p.Domain != "", p.Domain == ""
+		scope.AddrLink = s.cfg.BasePath + "p/" + p.ID + "#address"
+		if scope.HasHost {
+			hosts, hostID = []store.Host{scope.Host}, scope.Host.ID
+		} else {
+			needHost = &p
 		}
+	} else if hostID == "" && len(hosts) > 0 {
+		hostID = hosts[0].ID
 	}
 	run, list := s.lastScan(hostID)
+	title := "وردپرس‌های هاست"
+	if scope != nil {
+		// inside a project only the WordPress at the project's own address is listed
+		title = "حذف وردپرس"
+		list = projectSites(scope.P, list)
+	}
 	s.render(w, "wordpress.html", s.page(r, map[string]any{
-		"Crumb": "وردپرس‌های هاست", "Hosts": hosts, "HostID": hostID, "Scan": run, "Sites": list, "RemoveWord": removeWord,
-		"NeedHost": s.needHostPtr(r),
+		"Crumb": title, "Title": title, "Hosts": hosts, "HostID": hostID, "Scan": run, "Sites": list, "RemoveWord": removeWord,
+		"NeedHost": needHost, "Scope": scope,
 	}))
 }
 
@@ -89,6 +104,18 @@ func (s *Server) handleWordPressOp(w http.ResponseWriter, r *http.Request) {
 	hostID := r.FormValue("host")
 	back := bp + "wordpress?host=" + url.QueryEscape(hostID)
 	fail := func(msg string) { http.Redirect(w, r, back+"&err="+url.QueryEscape(msg), http.StatusSeeOther) }
+	var scoped *projects.Project
+	if p, ok := s.taskProject(r); ok {
+		// a project works only on its own host and its own address, whatever was posted
+		back = bp + "wordpress?project=" + url.QueryEscape(p.ID)
+		h, has := s.ownHost(p)
+		if !has {
+			fail("این پروژه هنوز هاست ندارد؛ اول در «بررسی هاست» پروژه اطلاعات هاست را وارد کنید")
+			return
+		}
+		hostID = h.ID
+		scoped = &p
+	}
 	t, err := s.hostTarget(hostID)
 	if err != nil {
 		fail(err.Error())
@@ -102,6 +129,13 @@ func (s *Server) handleWordPressOp(w http.ResponseWriter, r *http.Request) {
 	case "remove":
 		wfID = "wp-remove"
 		_, list := s.lastScan(hostID)
+		if scoped != nil {
+			if scoped.Domain == "" {
+				fail("آدرس سایت این پروژه هنوز ثبت نشده؛ اول در صفحه‌ی پروژه آدرس را وارد کنید")
+				return
+			}
+			list = projectSites(*scoped, list) // never anything outside the project's address
+		}
 		known := map[string]bool{}
 		for _, f := range list {
 			known[f.Dir] = true
@@ -136,4 +170,20 @@ func (s *Server) handleWordPressOp(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	http.Redirect(w, r, bp+"runs/"+id, http.StatusSeeOther)
+}
+
+// projectSites keeps only the scanned installs at the project's own address (domain or
+// domain/folder, exactly as the scan labels them). A project without an address keeps none.
+func projectSites(p projects.Project, list []engine.FoundWP) []engine.FoundWP {
+	want := strings.ToLower(p.Site())
+	var out []engine.FoundWP
+	if want == "" {
+		return out
+	}
+	for _, f := range list {
+		if strings.ToLower(strings.TrimSuffix(f.Label, "/")) == want {
+			out = append(out, f)
+		}
+	}
+	return out
 }

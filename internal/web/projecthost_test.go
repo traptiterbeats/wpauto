@@ -194,8 +194,9 @@ func TestProjectHostSaveCheckAndSeparate(t *testing.T) {
 		t.Error("wordpress page does not use the checked host")
 	}
 	form := e.page("run/wp-check-domain?project=" + p.ID + "&host=" + h.ID)
-	if !strings.Contains(form, `id="runform"`) || !strings.Contains(form, `<option value="`+h.ID+`" selected>`) {
-		t.Error("task form does not preselect the project's host")
+	if !strings.Contains(form, `id="runform"`) || !strings.Contains(form, `id="scope"`) || !strings.Contains(form, "کاربر kfncspot") ||
+		strings.Contains(form, `name="host"`) || strings.Contains(form, `name="in_domain"`) {
+		t.Error("task form does not use the project's host and address read-only")
 	}
 
 	// check again
@@ -359,13 +360,21 @@ func TestWordPressCardGroups(t *testing.T) {
 		return
 	}
 	gs := wpTaskGroups(wpCtx{bp: "/b/", p: projects.Project{ID: "p1"}, by: by}, false)
-	if len(gs) != 2 || gs[0].Title != "راه‌اندازی" || gs[1].Title != "سایت وردپرسی" {
+	if len(gs) != 3 || gs[0].Title != "راه‌اندازی" || gs[1].Title != "مراحل بیشتر" || gs[2].Key != "auto" || gs[2].Title != "" {
 		t.Fatalf("groups: %+v", gs)
 	}
-	if got := strings.Join(keys(gs[0]), ","); got != "host,wpcheck,wpinstall,autopilot" {
+	// «ساخت خودکار سایت» (AutoPilot) is its own last, highlighted card
+	if got := strings.Join(keys(gs[2]), ","); got != "autopilot" || !gs[2].Tasks[0].Feature ||
+		gs[2].Tasks[0].Title != "ساخت خودکار سایت" || gs[2].Tasks[0].Note != "همه‌ی مراحل، خودکار و پشت سر هم" {
+		t.Fatalf("autopilot card: %+v", gs[2])
+	}
+	if gs[0].Tasks[1].Title != "بررسی وردپرس دامنه" {
+		t.Fatalf("wpcheck title: %q", gs[0].Tasks[1].Title)
+	}
+	if got := strings.Join(keys(gs[0]), ","); got != "host,wpcheck,wpinstall,wpremove" {
 		t.Fatalf("setup cards: %s", got)
 	}
-	if got := strings.Join(keys(gs[1]), ","); got != "customize,theme,wplist,plugins,themes,seo" {
+	if got := strings.Join(keys(gs[1]), ","); got != "customize,theme,plugins,themes,seo" {
 		t.Fatalf("site cards: %s", got)
 	}
 	soon := 0
@@ -383,7 +392,7 @@ func TestWordPressCardGroups(t *testing.T) {
 			if c.Key == "customize" && c.NeedsHost {
 				t.Error("customize does not need the host")
 			}
-			if (c.Key == "wpcheck" || c.Key == "theme" || c.Key == "autopilot" || c.Key == "wplist") && !c.NeedsHost {
+			if (c.Key == "wpcheck" || c.Key == "theme" || c.Key == "autopilot" || c.Key == "wpremove") && !c.NeedsHost {
 				t.Errorf("%s should wait for the host", c.Key)
 			}
 		}
@@ -397,7 +406,7 @@ func TestWordPressCardGroups(t *testing.T) {
 			t.Fatal("host notes shown with a host")
 		}
 	}
-	if gs[1].Tasks[2].Link != "/b/wordpress?project=p1&host=h" || gs[0].Tasks[3].Link != "/b/autopilot?project=p1" {
-		t.Fatalf("links: %s %s", gs[1].Tasks[2].Link, gs[0].Tasks[3].Link)
+	if gs[0].Tasks[3].Link != "/b/wordpress?project=p1&host=h" || gs[0].Tasks[3].Title != "حذف وردپرس" || gs[2].Tasks[0].Link != "/b/autopilot?project=p1" {
+		t.Fatalf("links: %s %s", gs[0].Tasks[3].Link, gs[2].Tasks[0].Link)
 	}
 }

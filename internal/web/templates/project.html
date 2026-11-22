@@ -9,6 +9,14 @@
     <h1>{{.P.Name}}</h1>
     <p class="muted">{{if .P.Domain}}<span dir="ltr">{{.P.Site}}</span>{{with .Addr.KindLabel}} · <span class="tag">{{.}}</span>{{end}}{{else}}آدرس هنوز مشخص نشده{{end}}{{with .PHost.Name}} · هاست: {{.}}{{end}}</p>
   </header>
+  {{if not .P.Domain}}
+  <form class="card form" id="address" method="post" action="{{.BasePath}}projects/{{.P.ID}}/address">
+    <input type="hidden" name="csrf" value="{{.CSRF}}"><input type="hidden" name="back" value="{{.BasePath}}p/{{.P.ID}}">
+    <label>آدرس سایت پروژه<input name="domain" dir="ltr" required placeholder="example.com/blog یا shop.example.com"></label>
+    <p class="muted small">یک بار ثبت می‌شود؛ نصب وردپرس، بررسی وردپرس و نصب قالب از همین آدرس استفاده می‌کنند.</p>
+    <button type="submit">ثبت آدرس</button>
+  </form>
+  {{end}}
   <h2 class="step">بخش را انتخاب کنید</h2>
   <div class="cards" id="sections">
     {{range .CMS}}

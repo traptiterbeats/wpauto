@@ -138,3 +138,12 @@
 {{define "disk"}}{{if .}}<span class="disk{{if ge .Pct 90}} full{{end}}" title="به‌روز شده: {{.At.Format "2006-01-02 15:04"}}"><span class="disk-bar"><span style="width:{{.Pct}}%"></span></span> <span class="small" dir="ltr">{{.Text}}</span>{{if ge .Pct 90}} <span class="small bad">پر شده</span>{{end}}</span>{{else}}<span class="muted small">هنوز خوانده نشده</span>{{end}}{{end}}
 
 {{define "nohost"}}<div class="card hint" id="needhost">این کار روی هاست پروژه انجام می‌شود و هاست هنوز وصل نیست. {{with .NeedHost}}اول <a href="{{$.BasePath}}p/{{.ID}}/host">بررسی هاست</a> پروژه‌ی «{{.Name}}» را انجام دهید.{{else}}{{with $.Project}}اول <a href="{{$.BasePath}}p/{{.ID}}/host">بررسی هاست</a> پروژه‌ی «{{.Name}}» را انجام دهید.{{else}}یک <a href="{{$.BasePath}}">پروژه</a> بسازید و در «بررسی هاست» آن، اطلاعات هاست را وارد کنید.{{end}}{{end}}</div>{{end}}
+{{define "scopesummary"}}<div class="scope" id="scope">
+  <p><strong>هاست:</strong> <span dir="ltr">{{.HostText}}</span> <a class="small" href="{{.HostLink}}">ویرایش هاست در «بررسی هاست»</a></p>
+  {{if or .Locked .ShowAddr}}<p><strong>{{.AddrNote}}:</strong> <span dir="ltr">{{.Site}}</span>{{with .Addr.KindLabel}} ({{.}}){{end}}</p>{{end}}
+  <p class="muted small">این‌ها هنگام ساخت پروژه و در «بررسی هاست» آن ثبت شده‌اند و این‌جا تغییر نمی‌کنند.</p>
+</div>{{end}}
+{{define "noaddr"}}<div class="card hint" id="needaddr">این کار روی آدرس سایت پروژه انجام می‌شود و آدرس پروژه‌ی «{{.P.Name}}» هنوز ثبت نشده. اول در <a href="{{.AddrLink}}">صفحه‌ی پروژه</a> آدرس سایت را وارد کنید.</div>{{end}}
+{{define "themepick"}}<div class="theme-pick" role="radiogroup" aria-label="قالب">{{range $i, $t := .Themes}}<label class="theme-card"><input type="radio" name="{{$.Name}}" value="{{$t.Slug}}" {{if eq $t.Slug $.Selected}}checked{{else if and (eq $i 0) (not $.Selected)}}checked{{end}} required>
+  {{if $t.Screenshot}}<img src="{{$.BasePath}}themes/{{$t.Slug}}/screenshot" alt="{{$t.Name}}" loading="lazy">{{else}}<div class="noshot" aria-hidden="true">🖼</div>{{end}}
+  <span>{{$t.Name}} <span class="muted small" dir="ltr">{{$t.Version}}</span>{{if index $.Bad $t.Slug}} <span class="small warn">✘ استاندارد نیست</span>{{end}}</span></label>{{end}}</div>{{end}}

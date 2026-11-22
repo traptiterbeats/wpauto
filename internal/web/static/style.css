@@ -319,3 +319,13 @@ details.quiet form{display:flex;flex-direction:column;gap:8px;align-items:flex-s
 .wpgroup h2.step{margin-top:24px}
 .needhost{margin:8px 0 0}
 .badge.need{color:var(--warnc)}
+.scope{background:var(--accent-soft);border:1px solid var(--line);border-radius:10px;padding:10px 14px;margin-bottom:6px}.scope p{margin:4px 0}.scope a.small{margin-inline-start:8px}
+.cards.full{grid-template-columns:1fr}
+.tile.feature{border:2px solid #e0b84a;background:linear-gradient(135deg,#e0b84a22,#e0b84a0d);position:relative;padding-inline-start:64px;min-height:84px}
+.tile.feature:hover{background:#e0b84a33}
+.tile.feature .ficon{position:absolute;inset-inline-start:18px;top:50%;transform:translateY(-50%);font-size:30px}
+.tile.feature strong{color:#b8901f}
+.ftag{display:inline-block;font-size:11px;font-weight:600;color:#1a1405;background:#e0b84a;border-radius:6px;padding:1px 6px;vertical-align:middle;margin-inline-start:6px}
+.theme-card .noshot{display:grid;place-items:center;font-size:34px;color:var(--muted)}
+.theme-card:has(input:checked)>span{font-weight:700}
+.theme-card:has(input:focus-visible){outline:2px solid #e0b84a;outline-offset:2px}

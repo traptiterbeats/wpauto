@@ -153,17 +153,6 @@ func (s *Server) migrateHosts() error {
 	return nil
 }
 
-// hostsFor is the host list a task page offers: only the active project's own host when it
-// has one, else every saved host (tools used outside a project).
-func (s *Server) hostsFor() []store.Host {
-	if p, ok := s.projects.Active(); ok {
-		if h, ok := s.ownHost(p); ok {
-			return []store.Host{h}
-		}
-	}
-	return s.store.List()
-}
-
 // projectHostURL is the default cPanel address for a project: https://<main domain>:2083.
 func projectHostURL(p projects.Project) string {
 	a := projectAddr(p)
@@ -171,23 +160,6 @@ func projectHostURL(p projects.Project) string {
 		return ""
 	}
 	return "https://" + a.Parent + ":2083"
-}
-
-// needHost is the project a task page was opened for (?project=) when that project has no
-// host yet; the page then shows a link to the project's «بررسی هاست» instead of its form.
-func (s *Server) needHost(r *http.Request) (projects.Project, bool) {
-	id := r.URL.Query().Get("project")
-	if id == "" {
-		return projects.Project{}, false
-	}
-	p, ok := s.projects.Get(id)
-	if !ok {
-		return projects.Project{}, false
-	}
-	if _, linked := s.ownHost(p); linked {
-		return projects.Project{}, false
-	}
-	return p, true
 }
 
 // lastHostCheck returns the run to show on a project's host page: the requested one when it is
@@ -338,12 +310,4 @@ func (s *Server) startHostCheck(w http.ResponseWriter, r *http.Request, projectI
 		return
 	}
 	http.Redirect(w, r, back+"?run="+url.QueryEscape(id)+"&msg="+url.QueryEscape(msg), http.StatusSeeOther)
-}
-
-// needHostPtr is needHost for templates: nil when the page can show its form.
-func (s *Server) needHostPtr(r *http.Request) *projects.Project {
-	if p, ok := s.needHost(r); ok {
-		return &p
-	}
-	return nil
 }

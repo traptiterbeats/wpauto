@@ -31,9 +31,7 @@
     {{with .Project}}<p class="muted small">به پروژه‌ی «{{.Name}}» وصل می‌شود.</p>{{end}}
     <input type="hidden" name="csrf" value="{{.CSRF}}">
     <label>نام سایت یا مشتری<input name="title" required placeholder="مثلاً کافه نارنج" value="{{with .Project}}{{.Name}}{{end}}"></label>
-    <label>قالب
-      <select name="theme">{{range .Themes}}<option value="{{.Slug}}">{{.Name}} {{.Version}}{{with index $.Std .Slug}}{{if not .OK}} — ✘ استاندارد نیست{{end}}{{end}}</option>{{end}}</select>
-    </label>
+    <fieldset><legend>قالب</legend>{{template "themepick" .Pick}}</fieldset>
     <button type="submit">ساختن</button>
   </form>
   {{else}}

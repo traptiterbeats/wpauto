@@ -1,6 +1,7 @@
 package web
 
 import (
+	"errors"
 	"fmt"
 
 	"github.com/traptiterbeats/wpauto/internal/engine"
@@ -59,6 +60,23 @@ func (s *Server) handleProjectOp(w http.ResponseWriter, r *http.Request) {
 		err = s.projects.SetActive(id)
 	case "delete":
 		err, msg = s.deleteProject(id, r.FormValue("purge") != "")
+	case "address":
+		// a project's address is entered once (at creation or here); task forms only read it
+		var addr siteAddr
+		addr, err = parseSite(r.FormValue("domain"))
+		if err == nil && addr.Kind == "" {
+			err = errors.New("آدرس سایت را بنویسید")
+		}
+		if err == nil {
+			err = s.projects.Update(id, func(p *projects.Project) {
+				if p.Domain == "" {
+					p.Domain, p.Folder, p.Mode = addr.Domain, addr.Folder, addr.Kind
+				}
+			})
+		}
+		if err == nil {
+			msg = "آدرس سایت پروژه ثبت شد."
+		}
 	case "mark":
 		stage, on := r.FormValue("stage"), r.FormValue("on") != ""
 		if !slices.Contains(pipelineKeys, stage) {

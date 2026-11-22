@@ -24,6 +24,7 @@ import (
 	"github.com/traptiterbeats/wpauto/internal/config"
 	"github.com/traptiterbeats/wpauto/internal/cpanel/cpaneltest"
 	"github.com/traptiterbeats/wpauto/internal/engine"
+	"github.com/traptiterbeats/wpauto/internal/projects"
 )
 
 const apPass = "a-very-long-pass-123"
@@ -274,7 +275,7 @@ func apLogText(p autoPilot) string {
 func TestAutopilotSuccess(t *testing.T) {
 	e := newAPEnv(t)
 	form := e.get("autopilot")
-	for _, want := range []string{`aria-current="page">🚀 AutoPilot<`, "→ بازگشت", `name="story"`, `name="theme" value="acme"`, "آمادگی پنل", `enctype="multipart/form-data"`} {
+	for _, want := range []string{`aria-current="page">🚀 ساخت خودکار سایت<`, "<title>ساخت خودکار سایت | wpauto</title>", "→ بازگشت", `name="story"`, `name="theme" value="acme"`, "آمادگی پنل", `enctype="multipart/form-data"`} {
 		if !strings.Contains(form, want) {
 			t.Fatalf("form lacks %q", want)
 		}
@@ -366,7 +367,7 @@ func TestAutopilotSuccess(t *testing.T) {
 	if err := json.Unmarshal([]byte(e.get("autopilot/"+id+"/json")), &js); err != nil || js["done"] != true || js["status"] != "success" {
 		t.Fatalf("json: %v %v", err, js)
 	}
-	if !strings.Contains(e.get("autopilot"), "AutoPilotهای قبلی") {
+	if !strings.Contains(e.get("autopilot"), "ساخت‌های خودکار قبلی") {
 		t.Fatal("pipeline list missing")
 	}
 }
@@ -441,5 +442,37 @@ func TestAutopilotInterruptedOnRestart(t *testing.T) {
 	}
 	if fmtDur(65) != "01:05" || fmtDur(3725) != "1:02:05" {
 		t.Fatal("fmtDur")
+	}
+}
+
+// D: inside a project, «ساخت خودکار سایت» asks no host or address; posted ones are ignored.
+func TestAutopilotInProjectUsesProjectValues(t *testing.T) {
+	e := newAPEnv(t)
+	p, err := e.s.projects.Add(projects.Project{Name: "کافه نارنج", Domain: "example.com", Folder: "shop", Mode: kindSubfolder})
+	if err != nil {
+		t.Fatal(err)
+	}
+	own, err := e.s.ensureOwnHost(p.ID, e.hostID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	form := e.get("autopilot?project=" + p.ID)
+	for _, want := range []string{`id="scope"`, "کاربر kfncspot", `<span dir="ltr">example.com/shop</span> (پوشه)`, `name="project" value="` + p.ID + `"`, `name="admin_user"`} {
+		if !strings.Contains(form, want) {
+			t.Errorf("project AutoPilot form lacks %q", want)
+		}
+	}
+	for _, bad := range []string{`<select name="host"`, `name="domain"`, `name="mode"`, `<input name="name"`} {
+		if strings.Contains(form, bad) {
+			t.Errorf("project AutoPilot form still has %q", bad)
+		}
+	}
+	id := e.startWith(map[string]string{"project": p.ID, "host": "nope", "domain": "evil.test", "mode": "root", "name": "x"}, nil)
+	ap := e.wait(id)
+	if ap.ProjectID != p.ID || ap.In.HostID != own || ap.In.Domain != "example.com" || ap.In.Mode != kindSubfolder || ap.In.Name != "shop" {
+		t.Fatalf("AutoPilot used %+v for project %s (host %s)", ap.In, ap.ProjectID, own)
+	}
+	if pp, _ := e.s.projects.Get(p.ID); pp.Site() != "example.com/shop" || len(e.s.projects.List()) != 1 {
+		t.Fatal("project address changed or a second project was made")
 	}
 }

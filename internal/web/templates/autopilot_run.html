@@ -1,14 +1,14 @@
 {{define "apstate"}}{{if eq . "success"}}<span class="ok">انجام شد</span>{{else if eq . "failed"}}<span class="bad">ناموفق</span>{{else if eq . "running"}}<span class="warn">در حال انجام</span>{{else if eq . "skipped"}}<span class="muted">رد شد</span>{{else}}<span class="muted">در انتظار</span>{{end}}{{end}}
 <!doctype html>
 <html lang="fa" dir="rtl">
-<head>{{template "head" .}}<title>AutoPilot · {{.P.Title}} | wpauto</title></head>
+<head>{{template "head" .}}<title>ساخت خودکار سایت · {{.P.Title}} | wpauto</title></head>
 <body>
 {{template "nav" .}}
 <div class="layout">
 {{template "aside" .}}
 <main>
   {{template "flash" .}}
-  <h2>AutoPilot: {{.P.Title}}</h2>
+  <h2>🚀 ساخت خودکار سایت: {{.P.Title}}</h2>
   <p class="muted">هاست: {{.P.In.HostName}} · قالب: <span dir="ltr">{{.P.In.Theme}}</span> · شروع: <span dir="ltr">{{.P.Created.Format "2006-01-02 15:04:05"}}</span> · وضعیت: <span id="apstatus">{{if eq .P.Status "running"}}<span class="warn">در حال اجرا</span>{{else if eq .P.Status "success"}}<span class="ok">تمام شد</span>{{else if eq .P.Status "cancelled"}}<span class="muted">متوقف شد</span>{{else}}<span class="bad">ناموفق</span>{{end}}</span></p>
 
   <div class="ap-clock card">
@@ -29,7 +29,7 @@
   {{if not .P.Done}}
   <form method="post" action="{{.BasePath}}autopilot/{{.P.ID}}/cancel" id="cancel">
     <input type="hidden" name="csrf" value="{{.CSRF}}">
-    <button type="submit" class="ghost danger" onclick="return confirm('AutoPilot متوقف شود؟ کار در جریان برگردانده می‌شود.')">توقف</button>
+    <button type="submit" class="ghost danger" onclick="return confirm('ساخت خودکار متوقف شود؟ کار در جریان برگردانده می‌شود.')">توقف</button>
   </form>
   {{end}}
   {{if .P.Resumable}}

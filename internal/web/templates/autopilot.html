@@ -1,19 +1,21 @@
 <!doctype html>
 <html lang="fa" dir="rtl">
-<head>{{template "head" .}}<title>AutoPilot | wpauto</title></head>
+<head>{{template "head" .}}<title>ساخت خودکار سایت | wpauto</title></head>
 <body>
 {{template "nav" .}}
 <div class="layout">
 {{template "aside" .}}
 <main>
   {{template "flash" .}}
-  <h2>AutoPilot — ساخت خودکار سایت</h2>
+  <h2>🚀 ساخت خودکار سایت <span class="ftag">AutoPilot</span></h2>
   <p class="muted">چند خانه را پر کنید و «شروع» بزنید؛ همه‌ی مرحله‌ها پشت سر هم خودکار انجام می‌شوند:
     ۱. شخصی‌سازی متن‌ها با هوش مصنوعی (هنوز چیزی روی هاست تغییر نمی‌کند) · ۲. نصب وردپرس · ۳. نصب قالب و درون‌ریزی دموی شخصی‌سازی‌شده · ۴. بررسی سایت.
     بررسی هاست و بررسی وردپرس انجام نمی‌شود؛ فرض بر این است که هاست آماده است.</p>
   {{if .Error}}<div class="error">{{.Error}}</div>{{end}}
   {{if or .NeedHost (not .Hosts)}}
   {{template "nohost" .}}
+  {{else if and .Scope .Scope.NeedAddr}}
+  {{template "noaddr" .Scope}}
   {{else if not .Themes}}
   <div class="card hint">قالبی با بسته‌ی دمو در کاتالوگ نیست. <a href="{{.BasePath}}themes">افزودن قالب</a></div>
   {{else if not .Providers}}
@@ -22,9 +24,15 @@
   <form class="card form" id="apform" method="post" action="{{.BasePath}}autopilot/start" enctype="multipart/form-data" autocomplete="off">
     <input type="hidden" name="csrf" value="{{.CSRF}}">
     <h3>هاست و نصب وردپرس</h3>
+    {{with .Scope}}
+    <input type="hidden" name="project" value="{{.P.ID}}">
+    {{template "scopesummary" .}}
+    {{else}}
     <label>هاست
       <select name="host">{{range .Hosts}}<option value="{{.ID}}" {{if eq .ID $.F.Host}}selected{{end}}>{{.Name}} ({{.ProfileID}})</option>{{end}}</select>
     </label>
+    {{end}}
+    {{if not (and .Scope .Scope.Locked)}}
     <label>دامنه‌ی اصلی
       <input name="domain" list="ap_domains" dir="ltr" required placeholder="example.com" value="{{.F.Domain}}">
       <datalist id="ap_domains">{{range .Domains}}<option value="{{.}}">{{end}}</datalist>
@@ -40,6 +48,7 @@
       <label>نام ساب‌دامین یا پوشه<input name="name" value="{{.F.Name}}" dir="ltr" pattern="[a-z0-9]([a-z0-9-]{0,30}[a-z0-9])?" placeholder="test"></label>
     </div>
     <p class="muted small">فقط حروف کوچک انگلیسی، عدد و خط تیره. اگر خالی بماند، وردپرس روی خود دامنه نصب می‌شود. به سایت موجود دست زده نمی‌شود.</p>
+    {{end}}
     <div class="grid2">
       <label>عنوان سایت<input name="title" value="{{.F.Title}}" placeholder="خالی = نام سایت / برند"></label>
       <label>زبان
@@ -124,13 +133,13 @@
       im.hidden=t.dataset.slots==='0';document.getElementById('ap_slots').textContent=t.dataset.slots;}
     apTheme();
     </script>
-    <button type="submit" onclick="if(this.form.checkValidity()){this.textContent='در حال شروع…'}">شروع AutoPilot</button>
+    <button type="submit" onclick="if(this.form.checkValidity()){this.textContent='در حال شروع…'}">شروع ساخت خودکار</button>
   </form>
   {{end}}
 
   {{if .Pipelines}}
   <section class="card">
-    <h4>AutoPilotهای قبلی</h4>
+    <h4>ساخت‌های خودکار قبلی</h4>
     <table class="list">
       <tr><th>سایت</th><th>شروع</th><th>زمان</th><th>وضعیت</th></tr>
       {{range .Pipelines}}

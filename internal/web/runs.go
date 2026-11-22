@@ -61,15 +61,23 @@ func (s *Server) handleRunForm(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	hosts := s.hostsFor()
 	q := r.URL.Query()
-	proj, hasProj := s.projects.Active()
+	proj, hasProj := s.taskProject(r)
+	var scope *taskScope
+	var hosts []store.Host
 	hostID := q.Get("host")
-	if hostID == "" && hasProj {
-		hostID = proj.HostID
-	}
-	if hostID == "" && len(hosts) > 0 {
-		hostID = hosts[0].ID
+	if hasProj {
+		// inside a project: its own host and its address, read-only
+		scope = s.scopeFor(wf, proj)
+		hostID = ""
+		if scope.HasHost {
+			hosts, hostID = []store.Host{scope.Host}, scope.Host.ID
+		}
+	} else {
+		hosts = s.store.List()
+		if hostID == "" && len(hosts) > 0 {
+			hostID = hosts[0].ID
+		}
 	}
 	var domains []string
 	for _, h := range hosts {
@@ -81,17 +89,15 @@ func (s *Server) handleRunForm(w http.ResponseWriter, r *http.Request) {
 	if len(domains) > 0 {
 		pre["domain"] = domains[0]
 	}
+	var needHost *projects.Project
 	if hasProj {
-		if proj.Domain != "" && wf.ID != "wp-install" {
-			pre["domain"], pre["folder"] = proj.Domain, proj.Folder
-			if wf.ID == "wp-check-domain" && proj.Folder != "" {
-				pre["domain"] = proj.Site()
-			}
+		if !scope.HasHost {
+			needHost = &proj
+		}
+		for k, v := range scope.Values {
+			pre[k] = v
 		}
 		if wf.ID == "wp-install" {
-			if mode, dom, name, ok := installInputs(proj); ok {
-				pre["mode"], pre["domain"], pre["name"] = mode, dom, name
-			}
 			pre["title"] = proj.Name
 		}
 		if pre["draft"] == "" && proj.DraftID != "" {
@@ -101,9 +107,14 @@ func (s *Server) handleRunForm(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
+	var planIn map[string]string
+	if scope != nil && len(scope.Values) > 0 {
+		planIn = scope.Values
+	}
 	s.render(w, "run_form.html", s.page(r, map[string]any{
-		"Crumb": wf.Title, "Steps": planSteps(wf, nil), "WF": wf, "Hosts": hosts, "HostID": hostID, "Domains": domains, "Error": q.Get("err"),
-		"Themes": engine.Catalog().List(), "Drafts": engine.Drafts().List(), "Q": pre, "NeedHost": s.needHostPtr(r),
+		"Crumb": wf.Title, "Steps": planSteps(wf, planIn), "WF": wf, "Hosts": hosts, "HostID": hostID, "Domains": domains, "Error": q.Get("err"),
+		"Themes": engine.Catalog().List(), "Drafts": engine.Drafts().List(), "Q": pre, "NeedHost": needHost, "Scope": scope,
+		"Pick": s.themePicker(themeInput(wf), pre["theme"], engine.Catalog().List(), nil),
 	}))
 }
 
@@ -127,13 +138,28 @@ func (s *Server) handleRunStart(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
+	back := bp + "run/" + wfID + "?host=" + url.QueryEscape(hostID)
 	projectID := ""
-	if p, ok := s.projects.Active(); ok {
+	if p, ok := s.taskProject(r); ok {
+		// a project's run always uses the project's own host and address, whatever was posted
 		projectID = p.ID
+		back = bp + "run/" + wfID + "?project=" + url.QueryEscape(p.ID)
+		sc := s.scopeFor(wf, p)
+		if !sc.HasHost {
+			http.Redirect(w, r, back+"&err="+url.QueryEscape("این پروژه هنوز هاست ندارد؛ اول در «بررسی هاست» پروژه اطلاعات هاست را وارد کنید"), http.StatusSeeOther)
+			return
+		}
+		if sc.NeedAddr {
+			http.Redirect(w, r, back+"&err="+url.QueryEscape("آدرس سایت این پروژه هنوز ثبت نشده؛ اول در صفحه‌ی پروژه آدرس را وارد کنید"), http.StatusSeeOther)
+			return
+		}
+		hostID = sc.Host.ID
+		sc.applyLocks(inputs)
+		_ = s.projects.SetActive(p.ID)
 	}
 	id, err := s.startWorkflow(wf, hostID, projectID, inputs, nil)
 	if err != nil {
-		http.Redirect(w, r, bp+"run/"+wfID+"?host="+url.QueryEscape(hostID)+"&err="+url.QueryEscape(err.Error()), http.StatusSeeOther)
+		http.Redirect(w, r, back+"&err="+url.QueryEscape(err.Error()), http.StatusSeeOther)
 		return
 	}
 	http.Redirect(w, r, bp+"runs/"+id, http.StatusSeeOther)
@@ -231,6 +257,7 @@ func (s *Server) handleRunView(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
+	run = s.titled([]engine.Run{run})[0]
 	data := map[string]any{"Run": run, "Crumb": run.Title}
 	if run.WorkflowID == "wp-scan" || run.WorkflowID == "wp-remove" {
 		data["BackLink"] = s.cfg.BasePath + "wordpress?host=" + url.QueryEscape(run.HostID)
@@ -292,6 +319,9 @@ func (s *Server) handleRunPlan(w http.ResponseWriter, r *http.Request) {
 			inputs[in.Name] = "false"
 		}
 	}
+	if p, ok := s.taskProject(r); ok {
+		s.scopeFor(wf, p).applyLocks(inputs)
+	}
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Cache-Control", "no-store")
 	_ = json.NewEncoder(w).Encode(map[string]any{"steps": planSteps(wf, inputs)})
@@ -303,5 +333,5 @@ func (s *Server) handleRunCancel(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleRuns(w http.ResponseWriter, r *http.Request) {
-	s.render(w, "runs.html", s.page(r, map[string]any{"Runs": s.runner.List(100)}))
+	s.render(w, "runs.html", s.page(r, map[string]any{"Runs": s.titled(s.runner.List(100))}))
 }

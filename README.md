@@ -44,7 +44,7 @@ bash <(curl -Ls https://raw.githubusercontent.com/traptiterbeats/wpauto/ui-minim
 
 ```yaml
 id: wp-check-domain
-title: بررسی وردپرس یک دامنه
+title: بررسی وردپرس دامنه
 inputs:
   - {name: domain, label: دامنه, type: domain, required: true}
 steps:

@@ -27,6 +27,7 @@ import (
 	"github.com/traptiterbeats/wpauto/internal/customize"
 	"github.com/traptiterbeats/wpauto/internal/engine"
 	"github.com/traptiterbeats/wpauto/internal/projects"
+	"github.com/traptiterbeats/wpauto/internal/store"
 	"github.com/traptiterbeats/wpauto/internal/wp"
 )
 
@@ -795,7 +796,7 @@ type apForm struct {
 
 func (s *Server) handleAutopilot(w http.ResponseWriter, r *http.Request) {
 	f := apForm{Mode: "subdomain", Locale: "fa_IR"}
-	if pr, ok := s.projects.Active(); ok {
+	if pr, ok := s.taskProject(r); ok {
 		f.Host, f.Domain, f.Brief.SiteName = pr.HostID, pr.Domain, pr.Name
 		if mode, dom, name, ok := installInputs(pr); ok {
 			f.Mode, f.Domain, f.Name = mode, dom, name
@@ -808,7 +809,23 @@ func (s *Server) handleAutopilot(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) renderAutopilot(w http.ResponseWriter, r *http.Request, f apForm, errMsg string) {
-	hosts := s.hostsFor()
+	hosts := s.store.List()
+	var scope *taskScope
+	var needHost *projects.Project
+	if pr, ok := s.taskProject(r); ok {
+		// inside a project: its own host and its address, read-only
+		wf, _ := engine.FindWorkflow(s.workflows(), "wp-install")
+		scope = s.scopeFor(wf, pr)
+		hosts = nil
+		if scope.HasHost {
+			hosts, f.Host = []store.Host{scope.Host}, scope.Host.ID
+		} else {
+			needHost = &pr
+		}
+		if scope.Values["domain"] != "" {
+			f.Mode, f.Domain, f.Name = scope.Values["mode"], scope.Values["domain"], scope.Values["name"]
+		}
+	}
 	if f.Host == "" && len(hosts) > 0 {
 		f.Host = hosts[0].ID
 	}
@@ -830,7 +847,7 @@ func (s *Server) renderAutopilot(w http.ResponseWriter, r *http.Request, f apFor
 	s.render(w, "autopilot.html", s.page(r, map[string]any{
 		"F": f, "Hosts": hosts, "Domains": domains, "Themes": themes, "Providers": s.ai.List(), "Info": standards(),
 		"MaxPhotoMB": customize.MaxPhoto >> 20,
-		"Socials":    customize.Socials, "Pipelines": s.ap.list(), "Error": errMsg, "NeedHost": s.needHostPtr(r),
+		"Socials":    customize.Socials, "Pipelines": s.ap.list(), "Error": errMsg, "NeedHost": needHost, "Scope": scope,
 	}))
 }
 
@@ -844,6 +861,25 @@ func (s *Server) handleAutopilotStart(w http.ResponseWriter, r *http.Request) {
 	f.Brief = tmp.Brief
 	pass := r.FormValue("admin_pass")
 	fail := func(msg string) { s.renderAutopilot(w, r, f, msg) }
+
+	// a project's AutoPilot uses the project's own host and address, whatever was posted
+	scoped, inProject := s.taskProject(r)
+	if inProject {
+		wf, _ := engine.FindWorkflow(s.workflows(), "wp-install")
+		sc := s.scopeFor(wf, scoped)
+		if !sc.HasHost {
+			fail("این پروژه هنوز هاست ندارد؛ اول در «بررسی هاست» پروژه اطلاعات هاست را وارد کنید")
+			return
+		}
+		if sc.NeedAddr {
+			fail("آدرس سایت این پروژه هنوز ثبت نشده؛ اول در صفحه‌ی پروژه آدرس را وارد کنید")
+			return
+		}
+		f.Host = sc.Host.ID
+		if sc.Values["domain"] != "" {
+			f.Mode, f.Domain, f.Name = sc.Values["mode"], sc.Values["domain"], sc.Values["name"]
+		}
+	}
 
 	h, ok := s.store.Get(f.Host)
 	if !ok {
@@ -955,20 +991,24 @@ func (s *Server) handleAutopilotStart(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// the project: the active one when it is this site, else a new one
 	dom, folder := projectSite("wp-install", inputs)
 	dom = strings.ToLower(dom)
-	proj, ok := s.projects.Active()
-	if !ok || !((proj.Domain == dom && proj.Folder == folder) || (proj.Domain == "" && proj.Name == b.SiteName)) {
+	// the project: the one the form was opened for (its address and host are used), else a new one
+	proj := scoped
+	if inProject {
+		_ = s.projects.SetActive(proj.ID)
+		_ = s.projects.Update(proj.ID, func(x *projects.Project) {
+			if x.Domain == "" {
+				x.Domain, x.Folder = dom, folder
+			}
+			x.DraftID = d.ID
+		})
+	} else {
 		proj, err = s.projects.Add(projects.Project{Name: b.SiteName, Domain: dom, Folder: folder, DraftID: d.ID})
 		if err != nil {
 			fail(err.Error())
 			return
 		}
-	} else {
-		_ = s.projects.Update(proj.ID, func(x *projects.Project) {
-			x.Domain, x.Folder, x.DraftID = dom, folder, d.ID
-		})
 	}
 	// the project works on its own host record (a copy when the chosen one is another project's)
 	if own, err := s.ensureOwnHost(proj.ID, h.ID); err != nil {

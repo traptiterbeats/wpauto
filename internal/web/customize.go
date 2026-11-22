@@ -206,8 +206,10 @@ func (s *Server) handleDrafts(w http.ResponseWriter, r *http.Request) {
 			themes = append(themes, t)
 		}
 	}
+	std := standards()
 	s.render(w, "drafts.html", s.page(r, map[string]any{
-		"Drafts": engine.Drafts().List(), "Themes": themes, "Error": r.URL.Query().Get("err"), "Std": standards(),
+		"Drafts": engine.Drafts().List(), "Themes": themes, "Error": r.URL.Query().Get("err"), "Std": std,
+		"Pick": s.themePicker("theme", r.URL.Query().Get("theme"), themes, std),
 	}))
 }
 

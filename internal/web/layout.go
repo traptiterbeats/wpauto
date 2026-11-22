@@ -24,7 +24,7 @@ var sections = []section{
 	{"customize", "شخصی‌سازی", "customize"},
 	{"ai", "هوش مصنوعی", "ai"},
 	{"wordpress", "وردپرس‌ها", "wordpress"},
-	{"autopilot", "🚀 AutoPilot", "autopilot"},
+	{"autopilot", "🚀 ساخت خودکار سایت", "autopilot"},
 }
 
 // sectionFor maps a request path (below the base path) to its menu.
@@ -216,7 +216,7 @@ var tools = []tool{
 	{"شخصی‌سازی", "customize", "پیش‌نویس‌های شخصی‌سازی با هوش مصنوعی"},
 	{"هوش مصنوعی", "ai", "سرویس‌ها، کلیدها و مدل‌ها"},
 	{"وردپرس‌ها", "wordpress", "وردپرس‌های روی هاست و حذف آن‌ها"},
-	{"AutoPilot", "autopilot", "ساخت خودکار سایت"},
+	{"ساخت خودکار سایت", "autopilot", "AutoPilot — همه‌ی مراحل، خودکار و پشت سر هم"},
 	{"آمادگی پنل", "tools", "وضعیت هاست، هوش مصنوعی و قالب‌ها؛ آخرین اجراها"},
 }
 
@@ -301,7 +301,7 @@ func (s *Server) layout(r *http.Request, d map[string]any) {
 	} else {
 		d["Pipeline"] = s.pipeline(nil)
 	}
-	d["Recent"] = s.runner.List(12)
+	d["Recent"] = s.titled(s.runner.List(12))
 	d["Here"] = r.URL.Path
 	d["Now"] = time.Now().Unix()
 	d["TehranNow"] = time.Now().In(tehranZone).Format("15:04:05")

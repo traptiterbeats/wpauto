@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/traptiterbeats/wpauto/internal/config"
+	"github.com/traptiterbeats/wpauto/internal/projects"
 	"github.com/traptiterbeats/wpauto/internal/store"
 )
 
@@ -101,8 +102,13 @@ func TestLayoutAndPlan(t *testing.T) {
 	if _, err := s.store.Add(store.Host{Name: "h", ProfileID: "generic", URL: "https://example.com:2083", Username: "u"}); err != nil {
 		t.Fatal(err)
 	}
-	if f := get("run/theme-install"); !strings.Contains(f, `value="shop"`) || !strings.Contains(f, `value="example.com"`) {
-		t.Fatal("run form does not take the project's folder")
+	// the host is not the project's own, so the project's task form asks for its host check first
+	if f := get("run/theme-install"); !strings.Contains(f, `id="needhost"`) || strings.Contains(f, `id="runform"`) {
+		t.Fatal("project task form without its own host should point to the host check")
+	}
+	_ = s.projects.Update(p.ID, func(x *projects.Project) { x.HostID = hs0(s) })
+	if f := get("run/theme-install"); !strings.Contains(f, `example.com/shop</span> (پوشه)`) || strings.Contains(f, `name="in_domain"`) || strings.Contains(f, `name="in_folder"`) {
+		t.Fatal("theme-install form does not show the project's address read-only")
 	}
 	// the project's WordPress page links to the site and admin once WordPress is there
 	if h := get("p/" + p.ID + "/wordpress"); !strings.Contains(h, `href="https://example.com/shop/wp-admin/"`) {
@@ -143,3 +149,5 @@ func csrfOf(t *testing.T, page string) string {
 	rest := page[i+len(`name="csrf" value="`):]
 	return rest[:strings.Index(rest, `"`)]
 }
+
+func hs0(s *Server) string { return s.store.List()[0].ID }

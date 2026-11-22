@@ -33,17 +33,17 @@
   <p class="small" id="hostline">{{if .HasHost}}هاست پروژه: <a href="{{.HostLink}}"><span dir="ltr">{{.HostLabel}}</span></a>{{else}}<span class="warn">هاست این پروژه هنوز وصل نشده.</span> <a href="{{.HostLink}}">بررسی هاست ←</a>{{end}}</p>
   <div id="wptasks">
   {{range .Groups}}
-  <section class="wpgroup" id="g-{{.Key}}" aria-labelledby="gt-{{.Key}}">
-    <h2 class="step" id="gt-{{.Key}}">{{.Title}}</h2>
-    <div class="cards">
+  <section class="wpgroup" id="g-{{.Key}}"{{if .Title}} aria-labelledby="gt-{{.Key}}"{{else}} aria-label="ساخت خودکار سایت"{{end}}>
+    {{if .Title}}<h2 class="step" id="gt-{{.Key}}">{{.Title}}</h2>{{end}}
+    <div class="cards{{if eq .Key "auto"}} full{{end}}">
       {{range .Tasks}}
       {{if .Soon}}
       <div class="tile soon" aria-disabled="true" data-key="{{.Key}}"><strong>{{.Title}}</strong><span class="badge">به‌زودی</span></div>
       {{else}}
       <form method="post" action="{{$.BasePath}}projects/{{$.P.ID}}/activate" class="tile-form">
         <input type="hidden" name="csrf" value="{{$.CSRF}}"><input type="hidden" name="back" value="{{.Link}}">
-        <button type="submit" class="tile{{with .Stage}} st-{{.State}}{{end}}" data-key="{{.Key}}" data-link="{{.Link}}">
-          <strong>{{.Title}}</strong>
+        <button type="submit" class="tile{{if .Feature}} feature{{end}}{{with .Stage}} st-{{.State}}{{end}}" data-key="{{.Key}}" data-link="{{.Link}}">
+          {{if .Feature}}<span class="ficon" aria-hidden="true">🚀</span><strong>{{.Title}} <span class="ftag">AutoPilot</span></strong>{{else}}<strong>{{.Title}}</strong>{{end}}
           <span class="small muted">{{.Note}}</span>
           {{if .NeedsHost}}<span class="badge need">اول بررسی هاست</span>{{else}}{{with .Stage}}{{if eq .State "done"}}<span class="badge ok">✔ انجام شد</span>{{else if eq .State "running"}}<span class="badge warn">در حال انجام</span>{{else if eq .State "failed"}}<span class="badge bad">ناموفق</span>{{end}}{{end}}{{end}}
           <span class="go">←</span>
@@ -52,7 +52,7 @@
       {{end}}
       {{end}}
     </div>
-    {{if .NeedsHost}}<p class="small muted needhost">کارهای «نیازمند هاست» از هاست پروژه استفاده می‌کنند؛ اول <a href="{{$.HostLink}}">بررسی هاست</a> این پروژه را انجام دهید.</p>{{end}}
+    {{if and .NeedsHost .Title}}<p class="small muted needhost">کارهای «نیازمند هاست» از هاست پروژه استفاده می‌کنند؛ اول <a href="{{$.HostLink}}">بررسی هاست</a> این پروژه را انجام دهید.</p>{{end}}
   </section>
   {{end}}
   </div>

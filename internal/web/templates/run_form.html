@@ -22,23 +22,31 @@
   {{end}}
   {{if or .NeedHost (not .Hosts)}}
   {{template "nohost" .}}
+  {{else if and .Scope .Scope.NeedAddr}}
+  {{template "noaddr" .Scope}}
   {{else}}
   <form class="card form" id="runform" method="post" action="{{.BasePath}}run/{{.WF.ID}}" autocomplete="off">
     <input type="hidden" name="csrf" value="{{.CSRF}}">
+    {{with .Scope}}
+    <input type="hidden" name="project" value="{{.P.ID}}">
+    {{template "scopesummary" .}}
+    {{else}}
     <label>هاست
       <select name="host" onchange="location.href='{{.BasePath}}run/{{.WF.ID}}?theme={{.Q.theme}}&draft={{.Q.draft}}&host='+this.value">
         {{range .Hosts}}<option value="{{.ID}}" {{if eq .ID $.HostID}}selected{{end}}>{{.Name}} ({{.ProfileID}})</option>{{end}}
       </select>
     </label>
+    {{end}}
     {{range .WF.Inputs}}
-      {{if eq .Type "checkbox"}}
+      {{if and $.Scope (index $.Scope.Locked .Name)}}
+      {{else if eq .Type "checkbox"}}
       <label class="check"><input type="checkbox" name="in_{{.Name}}" {{if eq .Default "true"}}checked{{end}}> {{.Label}}</label>
       {{else if eq .Type "select"}}
       <label>{{.Label}}<select name="in_{{.Name}}">{{$d := .Default}}{{with index $.Q .Name}}{{$d = .}}{{end}}{{$l := .Labels}}{{range .Options}}<option value="{{.}}" {{if eq . $d}}selected{{end}}>{{with index $l .}}{{.}}{{else}}{{.}}{{end}}</option>{{end}}</select></label>
       {{else if eq .Type "theme"}}
       <label>{{.Label}}
         {{if $.Themes}}
-        <select name="in_{{.Name}}">{{range $.Themes}}<option value="{{.Slug}}" {{if eq .Slug $.Q.theme}}selected{{end}}>{{.Name}} {{.Version}}{{if .HasDemo}} · با دمو{{end}}</option>{{end}}</select>
+        {{template "themepick" $.Pick}}
         {{else}}
         <span class="muted">کاتالوگ خالی است. <a href="{{$.BasePath}}themes">افزودن قالب</a></span>
         {{end}}
@@ -59,7 +67,7 @@
       {{else}}
       <label>{{.Label}}<input name="in_{{.Name}}" type="{{if eq .Type "password"}}password{{else}}text{{end}}" value="{{if eq .Type "password"}}{{else if eq .Name "folder"}}{{$.Q.folder}}{{else}}{{with index $.Q .Name}}{{.}}{{else}}{{.Default}}{{end}}{{end}}" {{if .Required}}required{{end}} {{if eq .Type "password"}}minlength="12" autocomplete="new-password"{{end}} {{if .Pattern}}pattern="{{.Pattern}}" dir="ltr"{{end}}></label>
       {{end}}
-      {{if .Help}}<p class="muted small">{{.Help}}</p>{{end}}
+      {{if and .Help (not (and $.Scope (index $.Scope.Locked .Name)))}}<p class="muted small">{{.Help}}</p>{{end}}
     {{end}}
     <button type="submit">شروع</button>
   </form>
@@ -69,7 +77,7 @@
 (function(){
   var f=document.getElementById('runform'); if(!f) return;
   function update(){
-    var q=new URLSearchParams();
+    var q=new URLSearchParams();{{with .Scope}} q.set('project','{{.P.ID}}');{{end}}
     f.querySelectorAll('select[name^="in_"],input[type=checkbox][name^="in_"]').forEach(function(el){
       if(el.type==='checkbox'){ q.set(el.name, el.checked?'true':'false'); } else { q.set(el.name, el.value); }
     });

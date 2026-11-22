@@ -24,7 +24,7 @@ type projectRow struct {
 }
 
 func (s *Server) projectRows() []projectRow {
-	runs := s.runner.List(500)
+	runs := s.titled(s.runner.List(500))
 	var out []projectRow
 	for _, p := range s.projects.List() {
 		row := projectRow{Project: p, Addr: projectAddr(p), LastAt: p.Created}
@@ -104,6 +104,7 @@ type wpTask struct {
 	Key, Title, Note, Link string
 	Stage                  *pipeStep // the path stage the task completes (nil for tools)
 	Soon                   bool
+	Feature                bool // full-width highlighted card
 	NeedsHost              bool // the task works on the project's host and none is linked yet
 }
 
@@ -128,13 +129,15 @@ type wpCard struct {
 	Stage                   string
 	Host                    bool
 	Soon                    bool
+	Feature                 bool // drawn as a full-width highlighted card (AutoPilot)
 	Link                    func(c wpCtx) string
 }
 
 // wpGroups are the groups of the WordPress page, in order.
 var wpGroups = []struct{ Key, Title string }{
 	{"setup", "راه‌اندازی"},
-	{"site", "سایت وردپرسی"},
+	{"site", "مراحل بیشتر"},
+	{"auto", ""}, // the full-width «ساخت خودکار سایت» card, always last
 }
 
 func stageLink(key string) func(wpCtx) string {
@@ -145,11 +148,7 @@ var wpCards = []wpCard{
 	{Group: "setup", Key: "host", Title: "بررسی هاست", Note: "اطلاعات cPanel پروژه، PHP، دیتابیس و فضای دیسک", Stage: "host", Link: stageLink("host")},
 	{Group: "setup", Key: "wpcheck", Title: "بررسی وردپرس دامنه", Note: "آیا روی این آدرس وردپرس نصب است؟", Stage: "wpcheck", Host: true, Link: stageLink("wpcheck")},
 	{Group: "setup", Key: "wpinstall", Title: "نصب وردپرس", Note: "روی دامنه، ساب‌دامین یا پوشه‌ی پروژه", Stage: "wpinstall", Host: true, Link: stageLink("wpinstall")},
-	{Group: "setup", Key: "autopilot", Title: "AutoPilot", Note: "همه‌ی مرحله‌ها خودکار و پشت سر هم", Host: true,
-		Link: func(c wpCtx) string { return c.bp + "autopilot?project=" + url.QueryEscape(c.p.ID) }},
-	{Group: "site", Key: "customize", Title: "شخصی‌سازی برای مشتری (AI)", Note: "متن‌ها و تصاویر دمو برای این مشتری", Stage: "customize", Link: stageLink("customize")},
-	{Group: "site", Key: "theme", Title: "نصب قالب و دمو", Note: "قالب از کاتالوگ با دموی شخصی‌شده", Stage: "theme", Host: true, Link: stageLink("theme")},
-	{Group: "site", Key: "wplist", Title: "وردپرس‌های نصب‌شده / حذف", Note: "وردپرس‌های روی هاست را ببینید و پاک کنید", Host: true,
+	{Group: "setup", Key: "wpremove", Title: "حذف وردپرس", Note: "وردپرس نصب‌شده روی آدرس این پروژه را پاک کنید", Host: true,
 		Link: func(c wpCtx) string {
 			l := c.bp + "wordpress?project=" + url.QueryEscape(c.p.ID)
 			if c.p.HostID != "" {
@@ -157,9 +156,13 @@ var wpCards = []wpCard{
 			}
 			return l
 		}},
+	{Group: "site", Key: "customize", Title: "شخصی‌سازی برای مشتری (AI)", Note: "متن‌ها و تصاویر دمو برای این مشتری", Stage: "customize", Link: stageLink("customize")},
+	{Group: "site", Key: "theme", Title: "نصب قالب و دمو", Note: "قالب از کاتالوگ با دموی شخصی‌شده", Stage: "theme", Host: true, Link: stageLink("theme")},
 	{Group: "site", Key: "plugins", Title: "بررسی افزونه‌ها", Soon: true},
 	{Group: "site", Key: "themes", Title: "بررسی قالب‌ها", Soon: true},
 	{Group: "site", Key: "seo", Title: "بررسی سئو", Soon: true},
+	{Group: "auto", Key: "autopilot", Title: "ساخت خودکار سایت", Note: "همه‌ی مراحل، خودکار و پشت سر هم", Host: true, Feature: true,
+		Link: func(c wpCtx) string { return c.bp + "autopilot?project=" + url.QueryEscape(c.p.ID) }},
 }
 
 // wpTaskGroups builds the WordPress page's cards from the registry.
@@ -171,7 +174,7 @@ func wpTaskGroups(c wpCtx, hasHost bool) []wpGroup {
 			if card.Group != g.Key {
 				continue
 			}
-			t := wpTask{Key: card.Key, Title: card.Title, Note: card.Note, Soon: card.Soon}
+			t := wpTask{Key: card.Key, Title: card.Title, Note: card.Note, Soon: card.Soon, Feature: card.Feature}
 			if !card.Soon {
 				if card.Link != nil {
 					t.Link = card.Link(c)
@@ -203,7 +206,7 @@ func (s *Server) handleProjectWP(w http.ResponseWriter, r *http.Request) {
 	}
 	groups := wpTaskGroups(wpCtx{bp: bp, p: p, by: by}, hasHost)
 	var last *engine.Run
-	for _, run := range s.runner.List(500) {
+	for _, run := range s.titled(s.runner.List(500)) {
 		if run.ProjectID == p.ID {
 			run := run
 			last = &run
