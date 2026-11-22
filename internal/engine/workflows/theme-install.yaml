@@ -38,6 +38,13 @@ steps:
     with:
       domain: "{{.Inputs.domain}}"
       folder: "{{.Inputs.folder}}"
+  - id: check
+    title: پیش‌بررسی قالب و دمو
+    uses: theme.check
+    with:
+      theme: "{{.Inputs.theme}}"
+      import: "{{.Inputs.import_demo}}"
+      docroot: "{{.Steps.locate.docroot}}"
   - id: attach
     title: اتصال به وردپرس
     uses: wp.attach
@@ -51,6 +58,7 @@ steps:
     uses: theme.plugins
     with:
       theme: "{{.Inputs.theme}}"
+      import: "{{.Inputs.import_demo}}"
   - id: theme
     title: نصب قالب
     uses: theme.install

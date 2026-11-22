@@ -22,6 +22,7 @@ type fakeWP struct {
 	steps   int
 	failAt  string         // action that fails
 	plugins map[string]any // wp_info plugins (nil: akismet, inactive)
+	backups []string       // backup names (b=) seen
 }
 
 func (f *fakeWP) seen() string {
@@ -52,6 +53,12 @@ func (f *fakeWP) server(t *testing.T, fake *cpaneltest.Fake) *httptest.Server {
 		if q.Get("delete") != "" {
 			rec += ":delete"
 		}
+		if q.Get("active") != "" {
+			rec += ":active"
+		}
+		if b := q.Get("b"); b != "" {
+			f.backups = append(f.backups, b)
+		}
 		f.actions = append(f.actions, rec)
 		f.mu.Unlock()
 		out := map[string]any{"ok": true}
@@ -67,6 +74,12 @@ func (f *fakeWP) server(t *testing.T, fake *cpaneltest.Fake) *httptest.Server {
 			out["created"] = true
 		case "plugin_activate":
 			out["already"] = false
+			if p, ok := f.plugins[q.Get("slug")].(map[string]any); ok && p["active"] == true {
+				out["already"] = true
+			}
+		case "plugin_upgrade":
+			p, _ := f.plugins[q.Get("slug")].(map[string]any)
+			out["backup"], out["was_active"], out["version"] = "wp-content/upgrade/"+q.Get("b"), p["active"] == true, "new"
 		case "theme_activate":
 			out["previous"] = "twentytwentyfive"
 		case "demo_prepare":
@@ -101,6 +114,11 @@ func runThemeInstall(t *testing.T, failAt string, prep ...func(inputs map[string
 // runThemeInstallCat runs theme-install for "mytheme" after setup has filled the catalog
 // (the importer is already in the library).
 func runThemeInstallCat(t *testing.T, failAt string, setup func(cat *catalog.Catalog, src string), prep ...func(inputs map[string]string)) (Run, *fakeWP, *cpaneltest.Fake) {
+	return runThemeInstallWP(t, &fakeWP{failAt: failAt}, setup, nil, prep...)
+}
+
+// runThemeInstallWP is runThemeInstallCat with a prepared fake site and a hook on the fake cPanel.
+func runThemeInstallWP(t *testing.T, wpf *fakeWP, setup func(cat *catalog.Catalog, src string), fakePrep func(*cpaneltest.Fake), prep ...func(inputs map[string]string)) (Run, *fakeWP, *cpaneltest.Fake) {
 	t.Setenv("WPAUTO_DIR", t.TempDir())
 	src := t.TempDir()
 	cat := Catalog()
@@ -111,7 +129,9 @@ func runThemeInstallCat(t *testing.T, failAt string, setup func(cat *catalog.Cat
 	demoPause = 0
 	fake := cpaneltest.New(t, "kfncspot", "secret")
 	t.Cleanup(fake.Close)
-	wpf := &fakeWP{failAt: failAt}
+	if fakePrep != nil {
+		fakePrep(fake)
+	}
 	site := wpf.server(t, fake)
 	t.Cleanup(site.Close)
 	r, _ := NewRunner(t.TempDir())

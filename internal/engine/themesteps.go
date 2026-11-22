@@ -44,11 +44,21 @@ func stepLocate(ctx context.Context, rc *RunContext, a map[string]string) (map[s
 	if err != nil {
 		return nil, err
 	}
+	var root string
 	roots, err := DocRoots(ctx, c)
 	if err != nil {
-		return nil, err
+		// The full domain list is only a way to find this domain's folder: ask for this one
+		// domain instead before giving up.
+		if ctx.Err() != nil {
+			return nil, err
+		}
+		r, ferr := DocRootOf(ctx, c, domain)
+		if ferr != nil || r == "" {
+			return nil, err
+		}
+		rc.Warnf("فهرست دامنه‌های هاست خوانده نشد؛ مسیر سایت از اطلاعات همین دامنه گرفته شد.")
+		root = r
 	}
-	var root string
 	for _, r := range roots {
 		if r.Domain == domain {
 			root = r.Root
@@ -193,6 +203,13 @@ func stepThemePlugins(ctx context.Context, rc *RunContext, a map[string]string) 
 	if err != nil {
 		return nil, err
 	}
+	if a["import"] == "true" {
+		// WordPress' own list is authoritative; theme.check may not have been able to read it.
+		siteVer, _ := rc.installedPlugin(catalog.ImporterSlug)
+		if err := importerCheck(t, siteVer); err != nil {
+			return nil, err
+		}
+	}
 	if len(t.Plugins) == 0 {
 		rc.Logf("این قالب افزونه‌ی وابسته ندارد")
 		return nil, nil
@@ -205,7 +222,16 @@ func stepThemePlugins(ctx context.Context, rc *RunContext, a map[string]string) 
 		}
 		created := false
 		if ver, ok := rc.installedPlugin(slug); ok {
-			rc.Logf("افزونه‌ی %s از قبل نصب است (نسخه‌ی %s)", slug, ver)
+			// A newer zip in the panel library replaces it (never a downgrade; wordpress.org
+			// plugins are left as they are).
+			lib := cat.LibraryPath(slug)
+			if libVer := libraryVersion(lib); lib != "" && newer(libVer, ver) {
+				if err := rc.upgradePlugin(ctx, slug, lib, ver, libVer); err != nil {
+					return nil, err
+				}
+			} else {
+				rc.Logf("افزونه‌ی %s از قبل نصب است (نسخه‌ی %s)", slug, ver)
+			}
 		} else {
 			// The library wins whenever it has the zip, whatever the manifest says: a theme added
 			// before its companion plugin was uploaded is fixed by uploading that zip.

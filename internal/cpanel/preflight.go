@@ -142,6 +142,19 @@ func probeUser(ctx context.Context, c *Client) Check {
 func probeDomains(ctx context.Context, c *Client, rep *Report) Check {
 	data, err := c.Call(ctx, "DomainInfo", "list_domains", nil)
 	if err != nil {
+		// The account's own record also names the main domain: enough for the report.
+		if ctx.Err() == nil {
+			if info, uerr := c.Call(ctx, "Variables", "get_user_information", nil); uerr == nil {
+				var u struct {
+					Domain string `json:"domain"`
+				}
+				if json.Unmarshal(info, &u) == nil && u.Domain != "" {
+					rep.MainDomain = u.Domain
+					rep.Domains = []string{u.Domain}
+					return Check{ID: ProbeDomains, Title: "دامنه‌ها", OK: true, Detail: "⚠ فهرست کامل دامنه‌ها خوانده نشد؛ دامنه‌ی اصلی از اطلاعات حساب: " + u.Domain}
+				}
+			}
+		}
 		return fail(ProbeDomains, "دامنه‌ها", err)
 	}
 	var d struct {

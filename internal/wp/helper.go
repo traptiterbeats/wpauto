@@ -200,7 +200,7 @@ $a = isset($_GET['a']) ? $_GET['a'] : '';
 $pkg = $dir . '/.wpauto-pkg-' . substr($token, 0, 16);
 // Actions on an existing WordPress load it here, in global scope, as the first administrator.
 if (in_array($a, array('wp_info', 'theme_install', 'theme_activate', 'theme_remove', 'plugin_fetch', 'plugin_install',
-    'plugin_activate', 'plugin_remove', 'demo_prepare', 'demo_start', 'demo_step', 'demo_remove', 'demo_cancel'), true)) {
+    'plugin_activate', 'plugin_remove', 'plugin_upgrade', 'plugin_restore', 'plugin_backup_remove', 'demo_prepare', 'demo_start', 'demo_step', 'demo_remove', 'demo_cancel'), true)) {
     if (!is_file($dir . '/wp-load.php') || !is_file($dir . '/wp-config.php')) { wpauto_out(false, array('error' => 'WordPress is not installed in this folder')); }
     ob_start();
     require_once $dir . '/wp-load.php';
@@ -354,6 +354,82 @@ case 'plugin_remove':
     $file = wpauto_plugin_file($slug);
     if ($file !== '') { deactivate_plugins($file, true); }
     if (!empty($_GET['delete'])) { wpauto_rrmdir(WP_PLUGIN_DIR . '/' . $slug); }
+    wpauto_out(true);
+
+case 'plugin_upgrade':
+    // Replaces an installed plugin with a newer zip. The old folder is moved (not copied) to
+    // wp-content/upgrade/<b> so it can be put back exactly; a broken zip changes nothing.
+    $slug = wpauto_arg('slug');
+    $f = wpauto_arg('f');
+    $b = wpauto_arg('b');
+    if (!preg_match('/^wpauto-backup-[A-Za-z0-9._-]+$/', $b)) { wpauto_out(false, array('error' => 'bad backup name')); }
+    $cur = WP_PLUGIN_DIR . '/' . $slug;
+    if (!is_dir($cur)) { @unlink($pkg . '/' . $f); wpauto_out(false, array('error' => 'plugin ' . $slug . ' is not installed')); }
+    $up = WP_CONTENT_DIR . '/upgrade';
+    if (!is_dir($up) && !@mkdir($up, 0755)) { @unlink($pkg . '/' . $f); wpauto_out(false, array('error' => 'cannot create wp-content/upgrade')); }
+    $bak = $up . '/' . $b;
+    if (file_exists($bak)) { @unlink($pkg . '/' . $f); wpauto_out(false, array('error' => 'backup folder already exists')); }
+    $stage = WP_PLUGIN_DIR . '/.wpauto-new-' . $slug;
+    wpauto_rrmdir($stage);
+    if (!@mkdir($stage, 0755)) { @unlink($pkg . '/' . $f); wpauto_out(false, array('error' => 'cannot create staging folder')); }
+    $r = wpauto_unzip_folder($pkg . '/' . $f, $stage, $slug);
+    @unlink($pkg . '/' . $f);
+    if ($r !== true) { wpauto_rrmdir($stage); wpauto_out(false, array('error' => $r)); }
+    $old = wpauto_plugin_file($slug);
+    $active = $old !== '' && is_plugin_active($old);
+    if (!@rename($cur, $bak)) { wpauto_rrmdir($stage); wpauto_out(false, array('error' => 'cannot back up ' . $slug . '; nothing changed')); }
+    if (!@rename($stage . '/' . $slug, $cur)) {
+        @rename($bak, $cur);
+        wpauto_rrmdir($stage);
+        wpauto_out(false, array('error' => 'cannot put the new version in place; old version kept'));
+    }
+    wpauto_rrmdir($stage);
+    wp_clean_plugins_cache();
+    $new = wpauto_plugin_file($slug);
+    if ($active && $new !== '' && $new !== $old) {
+        // the main file was renamed in the new version: keep the plugin active under its new name
+        deactivate_plugins($old, true);
+        $ar = activate_plugin($new, '', false, true);
+        if (is_wp_error($ar)) {
+            wpauto_rrmdir($cur); @rename($bak, $cur); wp_clean_plugins_cache(); activate_plugin($old, '', false, true);
+            wpauto_out(false, array('error' => 'new version could not be activated: ' . $ar->get_error_message() . '; old version restored'));
+        }
+    }
+    $pl = $new !== '' ? get_plugin_data(WP_PLUGIN_DIR . '/' . $new, false, false) : array();
+    wpauto_out(true, array('backup' => 'wp-content/upgrade/' . $b, 'was_active' => $active, 'old_file' => $old, 'file' => $new,
+        'version' => isset($pl['Version']) ? $pl['Version'] : ''));
+
+case 'plugin_restore':
+    // Puts a plugin_upgrade backup back exactly as it was, active again when it was active.
+    $slug = wpauto_arg('slug');
+    $b = wpauto_arg('b');
+    if (!preg_match('/^wpauto-backup-[A-Za-z0-9._-]+$/', $b)) { wpauto_out(false, array('error' => 'bad backup name')); }
+    $bak = WP_CONTENT_DIR . '/upgrade/' . $b;
+    if (!is_dir($bak)) { wpauto_out(false, array('error' => 'backup wp-content/upgrade/' . $b . ' not found')); }
+    $cur = WP_PLUGIN_DIR . '/' . $slug;
+    $newFile = wpauto_plugin_file($slug);
+    $trash = WP_PLUGIN_DIR . '/.wpauto-old-' . $slug;
+    wpauto_rrmdir($trash);
+    if (is_dir($cur) && !@rename($cur, $trash)) { wpauto_out(false, array('error' => 'cannot move the new version away')); }
+    if (!@rename($bak, $cur)) {
+        if (is_dir($trash)) { @rename($trash, $cur); }
+        wpauto_out(false, array('error' => 'cannot move the backup back; it is still in wp-content/upgrade/' . $b));
+    }
+    wpauto_rrmdir($trash);
+    wp_clean_plugins_cache();
+    $file = wpauto_plugin_file($slug);
+    if ($newFile !== '' && $newFile !== $file && is_plugin_active($newFile)) { deactivate_plugins($newFile, true); }
+    if (!empty($_GET['active']) && $file !== '' && !is_plugin_active($file)) {
+        $ar = activate_plugin($file, '', false, true);
+        if (is_wp_error($ar)) { wpauto_out(false, array('error' => 'restored but not re-activated: ' . $ar->get_error_message())); }
+    }
+    $pl = $file !== '' ? get_plugin_data(WP_PLUGIN_DIR . '/' . $file, false, false) : array();
+    wpauto_out(true, array('version' => isset($pl['Version']) ? $pl['Version'] : ''));
+
+case 'plugin_backup_remove':
+    $b = wpauto_arg('b');
+    if (!preg_match('/^wpauto-backup-[A-Za-z0-9._-]+$/', $b)) { wpauto_out(false, array('error' => 'bad backup name')); }
+    wpauto_rrmdir(WP_CONTENT_DIR . '/upgrade/' . $b);
     wpauto_out(true);
 
 case 'theme_activate':

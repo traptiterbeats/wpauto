@@ -107,6 +107,8 @@ type RunContext struct {
 	finally []action
 	siteObj any
 	wpInfo  map[string]any
+	// rolledBack is set when this run's undo actions ran.
+	rolledBack bool
 }
 
 type action struct {
@@ -144,6 +146,7 @@ func (rc *RunContext) CPanel(ctx context.Context) (*cpanel.Client, error) {
 	if err != nil {
 		return nil, err
 	}
+	c.OnRetry(func(msg string) { rc.Warnf("%s", msg) })
 	if err := c.Login(ctx); err != nil {
 		if errors.Is(err, cpanel.ErrInvalidLogin) && rc.target.OnLoginRejected != nil {
 			rc.target.OnLoginRejected()
@@ -268,6 +271,7 @@ func (r *Runner) execute(ctx context.Context, wf *Workflow, t *Target, inputs ma
 		cctx, ccancel := context.WithTimeout(context.Background(), 10*time.Minute)
 		if final != StatusSuccess && wf.Rollback && len(rc.undo) > 0 {
 			rc.step = "rollback"
+			rc.rolledBack = true
 			r.log(run, "warn", "rollback", "برگرداندن تغییرات این اجرا…")
 			for i := len(rc.undo) - 1; i >= 0; i-- {
 				if err := rc.undo[i].fn(cctx); err != nil {

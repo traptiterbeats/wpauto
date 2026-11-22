@@ -41,9 +41,11 @@ type Options struct {
 
 // Client talks to one cPanel account.
 type Client struct {
-	opt   Options
-	http  *http.Client
-	token string // /cpsessNNNN for session auth
+	opt     Options
+	http    *http.Client
+	token   string // /cpsessNNNN for session auth
+	onRetry func(string)
+	delays  []time.Duration // nil = defaultDelays (with jitter)
 }
 
 // New creates a client. Nothing is sent until Login or Call.
@@ -100,28 +102,33 @@ func (c *Client) Login(ctx context.Context) error {
 		_, err := c.Call(ctx, "Variables", "get_user_information", nil)
 		return err
 	}
-	form := url.Values{"user": {c.opt.Username}, "pass": {c.opt.Secret}}
-	req, _ := http.NewRequestWithContext(ctx, "POST", c.opt.BaseURL+"/login/?login_only=1", strings.NewReader(form.Encode()))
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	resp, err := c.http.Do(req)
+	form := url.Values{"user": {c.opt.Username}, "pass": {c.opt.Secret}}.Encode()
+	// The login is never repeated once it reached the host (CSF counts failed logins); only a
+	// connection that never got established is tried again.
+	resp, err := c.do(ctx, c.http, false, 1<<20, func(ctx context.Context) (*http.Request, error) {
+		req, err := http.NewRequestWithContext(ctx, "POST", c.opt.BaseURL+"/login/?login_only=1", strings.NewReader(form))
+		if err == nil {
+			req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		}
+		return req, err
+	})
 	if err != nil {
-		return fmt.Errorf("cannot reach cpanel: %w", err)
+		return err
 	}
-	defer resp.Body.Close()
-	body, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+	body := resp.body
 	var r struct {
 		Status        int    `json:"status"`
 		SecurityToken string `json:"security_token"`
 		Message       string `json:"message"`
 	}
 	if err := json.Unmarshal(body, &r); err != nil {
-		return fmt.Errorf("unexpected login response (HTTP %d)", resp.StatusCode)
+		return fmt.Errorf("unexpected login response (HTTP %d)", resp.status)
 	}
 	if r.Status != 1 || r.SecurityToken == "" {
-		if resp.StatusCode == http.StatusUnauthorized || r.Message == "invalid_login" {
+		if resp.status == http.StatusUnauthorized || r.Message == "invalid_login" {
 			return ErrInvalidLogin
 		}
-		return fmt.Errorf("cpanel login failed: %s (HTTP %d)", r.Message, resp.StatusCode)
+		return fmt.Errorf("cpanel login failed: %s (HTTP %d)", r.Message, resp.status)
 	}
 	c.token = r.SecurityToken
 	return nil
@@ -155,34 +162,40 @@ func (c *Client) Call(ctx context.Context, module, function string, args url.Val
 		prefix = c.token
 	}
 	u := fmt.Sprintf("%s%s/execute/%s/%s", c.opt.BaseURL, prefix, module, function)
-	var body io.Reader
-	method := "GET"
+	method, form := "GET", ""
 	if len(args) > 0 {
-		method = "POST"
-		body = strings.NewReader(args.Encode())
+		method, form = "POST", args.Encode()
 	}
-	req, _ := http.NewRequestWithContext(ctx, method, u, body)
-	if body != nil {
-		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	}
-	if c.opt.Auth == AuthToken {
-		req.Header.Set("Authorization", "cpanel "+c.opt.Username+":"+c.opt.Secret)
-	}
-	resp, err := c.http.Do(req)
+	resp, err := c.do(ctx, c.http, IsReadCall(module, function), 16<<20, func(ctx context.Context) (*http.Request, error) {
+		var body io.Reader
+		if method == "POST" {
+			body = strings.NewReader(form)
+		}
+		req, err := http.NewRequestWithContext(ctx, method, u, body)
+		if err != nil {
+			return nil, err
+		}
+		if body != nil {
+			req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		}
+		if c.opt.Auth == AuthToken {
+			req.Header.Set("Authorization", "cpanel "+c.opt.Username+":"+c.opt.Secret)
+		}
+		return req, nil
+	})
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
-	raw, _ := io.ReadAll(io.LimitReader(resp.Body, 16<<20))
-	if resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden {
+	raw := resp.body
+	if resp.status == http.StatusUnauthorized || resp.status == http.StatusForbidden {
 		if c.opt.Auth == AuthToken {
 			return nil, ErrInvalidLogin
 		}
-		return nil, fmt.Errorf("session expired or access denied (HTTP %d)", resp.StatusCode)
+		return nil, fmt.Errorf("session expired or access denied (HTTP %d)", resp.status)
 	}
 	var r Result
 	if err := json.Unmarshal(raw, &r); err != nil {
-		return nil, fmt.Errorf("%s::%s: unexpected response (HTTP %d)", module, function, resp.StatusCode)
+		return nil, fmt.Errorf("%s::%s: unexpected response (HTTP %d)", module, function, resp.status)
 	}
 	if r.Status != 1 {
 		return nil, &APIError{Module: module, Function: function, Errors: r.Errors}
@@ -195,6 +208,9 @@ func (c *Client) Logout(ctx context.Context) {
 	if c.opt.Auth != AuthSession || c.token == "" {
 		return
 	}
+	// One short attempt: a host that is hard to reach must not hold the end of a run.
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
 	req, _ := http.NewRequestWithContext(ctx, "GET", c.opt.BaseURL+c.token+"/logout/", nil)
 	if resp, err := c.http.Do(req); err == nil {
 		resp.Body.Close()

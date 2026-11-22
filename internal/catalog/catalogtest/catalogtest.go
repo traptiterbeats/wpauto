@@ -50,6 +50,21 @@ func Plugin(t testing.TB, dir, slug, body string) string {
 	})
 }
 
+// PluginVersion returns a plugin zip whose header says version.
+func PluginVersion(t testing.TB, dir, slug, version string) string {
+	return Zip(t, dir, slug+".zip", map[string]string{
+		slug + "/" + slug + ".php": "<?php\n/**\n * Plugin Name: Test " + slug + "\n * Version: " + version + "\n */\n",
+	})
+}
+
+// DemoMinImporter returns a Saayeh demo package for theme that needs importer >= min.
+func DemoMinImporter(t testing.TB, dir, theme, min string) string {
+	return Zip(t, dir, theme+"-demo.zip", map[string]string{
+		"manifest.json": `{"theme":"` + theme + `","version":"1.0.0","schema":1,"demo":"demo.json","min_plugin":"` + min + `"}`,
+		"demo.json":     `{"version":1,"theme":"` + theme + `","requires":[],"pages":[{"slug":"home","title":"Home"}]}`,
+	})
+}
+
 // Demo returns a Saayeh demo package for theme.
 func Demo(t testing.TB, dir, theme string, requires ...string) string {
 	req := "[]"

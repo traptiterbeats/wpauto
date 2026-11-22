@@ -452,6 +452,9 @@ func InspectTheme(p string) (*ThemeInfo, *image, error) {
 type DemoInfo struct {
 	Theme, Version string
 	Requires       []string // wordpress.org slugs
+	// MinImporter is the lowest Saayeh Demo Importer version the package works with
+	// (manifest.json "min_plugin"); empty = any.
+	MinImporter string
 }
 
 // InspectDemo validates a Saayeh demo package (manifest.json optional, demo.json required).
@@ -484,13 +487,17 @@ func InspectDemo(p string) (*DemoInfo, error) {
 			return nil, err
 		}
 		var m struct {
-			Theme   string `json:"theme"`
-			Version string `json:"version"`
+			Theme     string `json:"theme"`
+			Version   string `json:"version"`
+			MinPlugin any    `json:"min_plugin"`
 		}
 		if json.Unmarshal(b, &m) != nil {
 			return nil, errors.New("manifest.json بسته‌ی دمو معتبر نیست")
 		}
 		info.Theme, info.Version = m.Theme, m.Version
+		if m.MinPlugin != nil {
+			info.MinImporter = strings.TrimSpace(fmt.Sprint(m.MinPlugin))
+		}
 	}
 	b, err := readZipFile(demo, 64<<20)
 	if err != nil {
@@ -565,4 +572,73 @@ func copyFile(src, dst string) error {
 		return err
 	}
 	return out.Close()
+}
+
+// CompareVersions compares two plugin/theme versions the way PHP's version_compare does for
+// ordinary releases: numeric parts left to right ("1.10" > "1.9"), missing parts count as 0, and
+// a pre-release suffix ("1.3.0-beta", "1.3.0RC1") sorts before the release. It returns -1, 0, 1.
+func CompareVersions(a, b string) int {
+	pa, sa := splitVersion(a)
+	pb, sb := splitVersion(b)
+	for i := 0; i < max(len(pa), len(pb)); i++ {
+		var x, y int
+		if i < len(pa) {
+			x = pa[i]
+		}
+		if i < len(pb) {
+			y = pb[i]
+		}
+		if x != y {
+			if x < y {
+				return -1
+			}
+			return 1
+		}
+	}
+	switch {
+	case sa == sb:
+		return 0
+	case sa == "": // release > pre-release
+		return 1
+	case sb == "":
+		return -1
+	case sa < sb:
+		return -1
+	}
+	return 1
+}
+
+// ValidVersion reports whether v starts with a number (so it can be compared).
+func ValidVersion(v string) bool {
+	v = strings.TrimPrefix(strings.TrimSpace(v), "v")
+	return v != "" && v[0] >= '0' && v[0] <= '9'
+}
+
+func splitVersion(v string) ([]int, string) {
+	v = strings.TrimPrefix(strings.TrimSpace(v), "v")
+	var nums []int
+	for v != "" {
+		i := 0
+		for i < len(v) && v[i] >= '0' && v[i] <= '9' {
+			i++
+		}
+		if i == 0 {
+			break
+		}
+		n := 0
+		for _, ch := range v[:i] {
+			n = n*10 + int(ch-'0')
+			if n > 1<<30 {
+				n = 1 << 30
+			}
+		}
+		nums = append(nums, n)
+		v = v[i:]
+		if strings.HasPrefix(v, ".") {
+			v = v[1:]
+			continue
+		}
+		break
+	}
+	return nums, strings.ToLower(strings.TrimLeft(v, "-_+."))
 }

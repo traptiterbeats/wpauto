@@ -126,3 +126,29 @@ func TestAddDemoRequiresSource(t *testing.T) {
 		t.Fatal("undo must restore the replaced zip")
 	}
 }
+
+func TestCompareVersions(t *testing.T) {
+	cases := []struct {
+		a, b string
+		want int
+	}{
+		{"1.3.0", "1.2.0", 1}, {"1.2.0", "1.3.0", -1}, {"1.3", "1.3.0", 0}, {"1.10.0", "1.9.9", 1},
+		{"2", "1.99", 1}, {"1.3.0-beta", "1.3.0", -1}, {"1.3.0", "1.3.0-rc1", 1}, {"v1.3.0", "1.3.0", 0},
+		{"1.3.0-beta", "1.3.0-rc", -1},
+	}
+	for _, c := range cases {
+		if got := catalog.CompareVersions(c.a, c.b); got != c.want {
+			t.Errorf("%s vs %s = %d, want %d", c.a, c.b, got, c.want)
+		}
+	}
+	if catalog.ValidVersion("") || catalog.ValidVersion("abc") || !catalog.ValidVersion("1.0") {
+		t.Error("ValidVersion")
+	}
+}
+
+func TestInspectDemoMinImporter(t *testing.T) {
+	di, err := catalog.InspectDemo(catalogtest.DemoMinImporter(t, t.TempDir(), "mytheme", "1.3.0"))
+	if err != nil || di.MinImporter != "1.3.0" {
+		t.Fatalf("%+v %v", di, err)
+	}
+}

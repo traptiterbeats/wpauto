@@ -44,17 +44,30 @@ func (c *Client) api2(ctx context.Context, hc *http.Client, module, function str
 	q.Set("cpanel_jsonapi_apiversion", "2")
 	q.Set("cpanel_jsonapi_module", module)
 	q.Set("cpanel_jsonapi_func", function)
-	req, _ := http.NewRequestWithContext(ctx, "POST", c.opt.BaseURL+prefix+"/json-api/cpanel", strings.NewReader(q.Encode()))
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	if c.opt.Auth == AuthToken {
-		req.Header.Set("Authorization", "cpanel "+c.opt.Username+":"+c.opt.Secret)
-	}
-	resp, err := hc.Do(req)
+	form := q.Encode()
+	// API2 is used here only for writes (Fileman mkdir/fileop, SubDomain): repeat only when the
+	// connection never got established.
+	resp, err := c.do(ctx, hc, false, 16<<20, func(ctx context.Context) (*http.Request, error) {
+		req, err := http.NewRequestWithContext(ctx, "POST", c.opt.BaseURL+prefix+"/json-api/cpanel", strings.NewReader(form))
+		if err != nil {
+			return nil, err
+		}
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		if c.opt.Auth == AuthToken {
+			req.Header.Set("Authorization", "cpanel "+c.opt.Username+":"+c.opt.Secret)
+		}
+		return req, nil
+	})
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
-	raw, _ := io.ReadAll(io.LimitReader(resp.Body, 16<<20))
+	raw := resp.body
+	if resp.status == http.StatusUnauthorized || resp.status == http.StatusForbidden {
+		if c.opt.Auth == AuthToken {
+			return nil, ErrInvalidLogin
+		}
+		return nil, fmt.Errorf("session expired or access denied (HTTP %d)", resp.status)
+	}
 	var r struct {
 		Result struct {
 			Data  json.RawMessage `json:"data"`
@@ -65,7 +78,7 @@ func (c *Client) api2(ctx context.Context, hc *http.Client, module, function str
 		} `json:"cpanelresult"`
 	}
 	if err := json.Unmarshal(raw, &r); err != nil {
-		return nil, fmt.Errorf("%s::%s (api2): unexpected response (HTTP %d)", module, function, resp.StatusCode)
+		return nil, fmt.Errorf("%s::%s (api2): unexpected response (HTTP %d)", module, function, resp.status)
 	}
 	if r.Result.Error != "" || r.Result.Event.Result != 1 {
 		msg := r.Result.Error
@@ -119,20 +132,30 @@ func (c *Client) Upload(ctx context.Context, dir, name string, data io.Reader) e
 	if c.opt.Auth == AuthSession {
 		prefix = c.token
 	}
-	req, _ := http.NewRequestWithContext(ctx, "POST", c.opt.BaseURL+prefix+"/execute/Fileman/upload_files", &buf)
-	req.Header.Set("Content-Type", mw.FormDataContentType())
-	if c.opt.Auth == AuthToken {
-		req.Header.Set("Authorization", "cpanel "+c.opt.Username+":"+c.opt.Secret)
-	}
-	resp, err := c.longHTTP().Do(req) // large file; the run context bounds it
+	payload, ctype := buf.Bytes(), mw.FormDataContentType()
+	// large file; the run context bounds it. The body is rebuilt for each attempt, and an attempt
+	// is repeated only when the connection never got established (nothing was sent).
+	resp, err := c.do(ctx, c.longHTTP(), false, 1<<20, func(ctx context.Context) (*http.Request, error) {
+		req, err := http.NewRequestWithContext(ctx, "POST", c.opt.BaseURL+prefix+"/execute/Fileman/upload_files", bytes.NewReader(payload))
+		if err != nil {
+			return nil, err
+		}
+		req.Header.Set("Content-Type", ctype)
+		if c.opt.Auth == AuthToken {
+			req.Header.Set("Authorization", "cpanel "+c.opt.Username+":"+c.opt.Secret)
+		}
+		return req, nil
+	})
 	if err != nil {
 		return err
 	}
-	defer resp.Body.Close()
-	raw, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+	raw := resp.body
+	if resp.status == http.StatusUnauthorized || resp.status == http.StatusForbidden {
+		return fmt.Errorf("upload: session expired or access denied (HTTP %d)", resp.status)
+	}
 	var r Result
 	if err := json.Unmarshal(raw, &r); err != nil {
-		return fmt.Errorf("upload: unexpected response (HTTP %d)", resp.StatusCode)
+		return fmt.Errorf("upload: unexpected response (HTTP %d)", resp.status)
 	}
 	if r.Status != 1 {
 		return &APIError{Module: "Fileman", Function: "upload_files", Errors: r.Errors}

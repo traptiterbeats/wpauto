@@ -159,6 +159,23 @@ func DocRoots(ctx context.Context, c *cpanel.Client) ([]DocRoot, error) {
 	return out, nil
 }
 
+// DocRootOf returns one domain's document root (DomainInfo::single_domain_data), a fallback for
+// when the full list cannot be read.
+func DocRootOf(ctx context.Context, c *cpanel.Client, domain string) (string, error) {
+	data, err := c.Call(ctx, "DomainInfo", "single_domain_data", url.Values{"domain": {domain}})
+	if err != nil {
+		return "", err
+	}
+	var d struct {
+		Domain       string `json:"domain"`
+		DocumentRoot string `json:"documentroot"`
+	}
+	if err := json.Unmarshal(data, &d); err != nil {
+		return "", fmt.Errorf("unexpected single_domain_data response")
+	}
+	return d.DocumentRoot, nil
+}
+
 // WPInstall describes a WordPress found on the host.
 type WPInstall struct {
 	Domain  string

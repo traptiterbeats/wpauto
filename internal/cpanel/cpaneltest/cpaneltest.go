@@ -246,7 +246,7 @@ func New(t *testing.T, user, pass string) *Fake {
 		}
 		switch name {
 		case "Variables/get_user_information":
-			ok(w, map[string]any{"user": user, "plan": "1GB", "theme": "jupiter"})
+			ok(w, map[string]any{"user": user, "plan": "1GB", "theme": "jupiter", "domain": "example.com"})
 		case "DomainInfo/list_domains":
 			ok(w, map[string]any{"main_domain": "example.com", "addon_domains": []string{}, "sub_domains": []string{"blog.example.com"}})
 		case "LangPHP/php_get_installed_versions":
@@ -267,6 +267,13 @@ func New(t *testing.T, user, pass string) *Fake {
 				"addon_domains": []any{},
 				"sub_domains":   []any{map[string]any{"domain": "blog.example.com", "documentroot": "/home/" + user + "/blog"}},
 			})
+		case "DomainInfo/single_domain_data":
+			roots := map[string]string{"example.com": "/home/" + user + "/public_html", "blog.example.com": "/home/" + user + "/blog"}
+			if root, found := roots[r.FormValue("domain")]; found {
+				ok(w, map[string]any{"domain": r.FormValue("domain"), "documentroot": root})
+				return
+			}
+			_ = json.NewEncoder(w).Encode(map[string]any{"status": 0, "errors": []string{"domain not found"}})
 		case "Fileman/list_files":
 			switch r.FormValue("dir") {
 			case home:
@@ -320,6 +327,13 @@ func New(t *testing.T, user, pass string) *Fake {
 			if r.FormValue("file") == "wp-config.php" {
 				db := path.Base(r.FormValue("dir"))
 				ok(w, map[string]any{"content": "<?php\ndefine( 'DB_NAME', '" + user + "_" + db + "' );\ndefine('DB_USER', \"" + user + "_" + db + "\");\n"})
+				return
+			}
+			f.mu.Lock()
+			c, found := f.Files[path.Join(r.FormValue("dir"), r.FormValue("file"))]
+			f.mu.Unlock()
+			if found && c != "" {
+				ok(w, map[string]any{"content": c})
 				return
 			}
 			ok(w, map[string]any{"content": "<?php\n$wp_version = '6.8.3';\n"})
