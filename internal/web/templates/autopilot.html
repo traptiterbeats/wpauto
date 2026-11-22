@@ -17,7 +17,7 @@
   {{else if and .Scope .Scope.NeedAddr}}
   {{template "noaddr" .Scope}}
   {{else if not .Themes}}
-  <div class="card hint">قالبی با بسته‌ی دمو در کاتالوگ نیست. <a href="{{.BasePath}}themes">افزودن قالب</a></div>
+  <div class="card hint">قالبی با بسته‌ی دمو در کاتالوگ نیست. {{if $.CanAdmin}}<a href="{{$.ThemesLink}}" class="themeadmin-link">افزودن قالب</a>{{end}}</div>
   {{else if not .Providers}}
   <div class="card hint">هوش مصنوعی وصل نیست. <a href="{{.BasePath}}ai">افزودن سرویس هوش مصنوعی</a></div>
   {{else}}

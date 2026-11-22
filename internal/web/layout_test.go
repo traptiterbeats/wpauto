@@ -41,7 +41,7 @@ func TestLayoutAndPlan(t *testing.T) {
 		return string(b)
 	}
 	// every inner page: slim breadcrumb ending in its own title, a Back button, the tools menu
-	for p, want := range map[string]string{"tasks": "همه‌ی کارها", "hosts": "هاست‌ها", "themes": "قالب‌ها", "customize": "شخصی‌سازی", "ai": "هوش مصنوعی", "runs": "اجراها", "projects": "پروژه‌ها", "wordpress": "وردپرس‌های هاست", "tools": "ابزارها"} {
+	for p, want := range map[string]string{"tasks": "همه‌ی کارها", "hosts": "هاست‌ها", "themes": "مدیریت قالب‌ها", "customize": "شخصی‌سازی", "ai": "هوش مصنوعی", "runs": "اجراها", "projects": "پروژه‌ها", "wordpress": "وردپرس‌های هاست", "tools": "ابزارها"} {
 		page := get(p)
 		if !strings.Contains(page, `<strong aria-current="page">`+want+`</strong>`) {
 			t.Errorf("%q: breadcrumb %q missing", p, want)

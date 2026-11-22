@@ -48,7 +48,7 @@
         {{if $.Themes}}
         {{template "themepick" $.Pick}}
         {{else}}
-        <span class="muted">کاتالوگ خالی است. <a href="{{$.BasePath}}themes">افزودن قالب</a></span>
+        <span class="muted">کاتالوگ خالی است. {{if $.CanAdmin}}<a href="{{$.ThemesLink}}" class="themeadmin-link">افزودن قالب</a>{{end}}</span>
         {{end}}
       </label>
       {{else if eq .Type "draft"}}

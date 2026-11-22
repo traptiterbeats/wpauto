@@ -23,7 +23,13 @@ type Config struct {
 	Domain       string `json:"domain,omitempty"`
 	CertFile     string `json:"cert_file,omitempty"`
 	KeyFile      string `json:"key_file,omitempty"`
+	// AdminUI shows the admin pages (theme catalog: add/delete themes, demos, plugin library).
+	// Missing means true; set "admin_ui": false to hide them and answer 403.
+	AdminUI *bool `json:"admin_ui,omitempty"`
 }
+
+// AdminUIEnabled reports whether admin pages are on (default true).
+func (c *Config) AdminUIEnabled() bool { return c == nil || c.AdminUI == nil || *c.AdminUI }
 
 // Dir is the configuration directory. It can be overridden with WPAUTO_DIR (useful for tests).
 func Dir() string {

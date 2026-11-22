@@ -1,14 +1,15 @@
 <!doctype html>
 <html lang="fa" dir="rtl">
-<head>{{template "head" .}}<title>قالب‌ها | wpauto</title></head>
+<head>{{template "head" .}}<title>مدیریت قالب‌ها (ادمین) | wpauto</title></head>
 <body>
 {{template "nav" .}}
 <div class="layout">
 {{template "aside" .}}
 <main>
   {{template "flash" .}}
+  <h1 id="themeadmin">مدیریت قالب‌ها <span class="atag">ادمین</span></h1>
+  <p class="muted">قالب‌ها و کتابخانه‌ی افزونه‌ها بین همه‌ی پروژه‌ها مشترک‌اند؛ قالب‌هایی که اینجا هستند در کار «نصب قالب و دمو» هر پروژه قابل انتخاب‌اند.{{with .FromProject}} هاست و آدرس مال پروژه‌ی «{{.Name}}» است و اینجا تغییری نمی‌کند.{{end}}</p>
   <h2>کاتالوگ قالب‌ها</h2>
-  <p class="muted">قالب‌هایی که اینجا هستند در کار «نصب قالب و دمو» قابل انتخاب‌اند.</p>
   {{if .Error}}<div class="error">{{.Error}}</div>{{end}}
   {{if .Msg}}<div class="card hint ok">{{.Msg}}</div>{{end}}
 
@@ -28,7 +29,7 @@
         </div>
         {{with index $.Std .Slug}}{{if and (not .OK) (not .NoDemo)}}<p class="small bad">با شخصی‌سازی کامل هماهنگ نیست؛ این متن‌ها متن دمو می‌مانند: {{range $i, $m := .Missing}}{{if $i}}، {{end}}{{$m}}{{end}}. نسخه‌ای از قالب را بگذارید که قرارداد wpauto-customize را کامل دارد.</p>{{end}}{{end}}
         <form method="post" action="{{$.BasePath}}themes/{{.Slug}}/delete" onsubmit="return confirm('از کاتالوگ حذف شود؟')">
-          <input type="hidden" name="csrf" value="{{$.CSRF}}">
+          <input type="hidden" name="csrf" value="{{$.CSRF}}"><input type="hidden" name="from" value="{{$.From}}">
           <button class="ghost danger small" type="submit">حذف از کاتالوگ</button>
         </form>
       </div>
@@ -41,7 +42,7 @@
 
   <form class="card form" method="post" action="{{.BasePath}}themes/add" enctype="multipart/form-data">
     <h3>افزودن قالب</h3>
-    <input type="hidden" name="csrf" value="{{.CSRF}}">
+    <input type="hidden" name="csrf" value="{{.CSRF}}"><input type="hidden" name="from" value="{{.From}}">
     <label>فایل zip قالب<input type="file" name="theme_zip" accept=".zip" required></label>
     <label>بسته‌ی دموی سایه (اختیاری)<input type="file" name="demo_zip" accept=".zip"></label>
     {{if not .HasImporter}}<p class="muted small warn">برای دمو، اول zip افزونه‌ی «درون‌ریز دمو سایه» را در کتابخانه‌ی پایین بارگذاری کنید.</p>{{end}}
@@ -63,13 +64,13 @@
     {{range .Library}}
     <tr>
       <td>{{.Name}}</td><td dir="ltr">{{.Slug}}</td><td dir="ltr">{{.Version}}</td>
-      <td><form method="post" action="{{$.BasePath}}plugins/{{.Slug}}/delete" onsubmit="return confirm('حذف شود؟')"><input type="hidden" name="csrf" value="{{$.CSRF}}"><button class="ghost danger" type="submit">حذف</button></form></td>
+      <td><form method="post" action="{{$.BasePath}}plugins/{{.Slug}}/delete" onsubmit="return confirm('حذف شود؟')"><input type="hidden" name="csrf" value="{{$.CSRF}}"><input type="hidden" name="from" value="{{$.From}}"><button class="ghost danger" type="submit">حذف</button></form></td>
     </tr>
     {{end}}
   </table>
   {{end}}
   <form class="card form" method="post" action="{{.BasePath}}plugins/add" enctype="multipart/form-data">
-    <input type="hidden" name="csrf" value="{{.CSRF}}">
+    <input type="hidden" name="csrf" value="{{.CSRF}}"><input type="hidden" name="from" value="{{.From}}">
     <label>فایل(های) zip افزونه<input type="file" name="plugin_zip" accept=".zip" multiple required></label>
     <button type="submit">بارگذاری در کتابخانه</button>
   </form>

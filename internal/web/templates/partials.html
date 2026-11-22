@@ -106,7 +106,7 @@
         {{end}}
       </li>
       <li class="{{if .Themes}}r-ok{{else}}r-bad{{end}}">
-        <span class="dot"></span><a href="{{$.BasePath}}themes">قالب‌ها</a>
+        <span class="dot"></span>{{if $.CanAdmin}}<a href="{{$.ThemesLink}}">قالب‌ها</a>{{else}}قالب‌ها{{end}}
         <span class="small muted">{{if .Themes}}{{.Themes}} قالب در کاتالوگ{{else}}کاتالوگ خالی است{{end}}</span>
       </li>
       {{end}}

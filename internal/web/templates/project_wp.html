@@ -42,8 +42,8 @@
       {{else}}
       <form method="post" action="{{$.BasePath}}projects/{{$.P.ID}}/activate" class="tile-form">
         <input type="hidden" name="csrf" value="{{$.CSRF}}"><input type="hidden" name="back" value="{{.Link}}">
-        <button type="submit" class="tile{{if .Feature}} feature{{end}}{{with .Stage}} st-{{.State}}{{end}}" data-key="{{.Key}}" data-link="{{.Link}}">
-          {{if .Feature}}<span class="ficon" aria-hidden="true">🚀</span><strong>{{.Title}} <span class="ftag">AutoPilot</span></strong>{{else}}<strong>{{.Title}}</strong>{{end}}
+        <button type="submit" class="tile{{if .Feature}} feature{{end}}{{if .Admin}} admin{{end}}{{with .Stage}} st-{{.State}}{{end}}" data-key="{{.Key}}" data-link="{{.Link}}">
+          {{if .Feature}}<span class="ficon" aria-hidden="true">🚀</span><strong>{{.Title}} <span class="ftag">AutoPilot</span></strong>{{else}}<strong>{{with .Icon}}<span class="ticon" aria-hidden="true">{{.}}</span> {{end}}{{.Title}}{{if .Admin}} <span class="atag" title="فقط برای مدیر">ادمین</span>{{end}}</strong>{{end}}
           <span class="small muted">{{.Note}}</span>
           {{if .NeedsHost}}<span class="badge need">اول بررسی هاست</span>{{else}}{{with .Stage}}{{if eq .State "done"}}<span class="badge ok">✔ انجام شد</span>{{else if eq .State "running"}}<span class="badge warn">در حال انجام</span>{{else if eq .State "failed"}}<span class="badge bad">ناموفق</span>{{end}}{{end}}{{end}}
           <span class="go">←</span>

@@ -326,6 +326,9 @@ details.quiet form{display:flex;flex-direction:column;gap:8px;align-items:flex-s
 .tile.feature .ficon{position:absolute;inset-inline-start:18px;top:50%;transform:translateY(-50%);font-size:30px}
 .tile.feature strong{color:#b8901f}
 .ftag{display:inline-block;font-size:11px;font-weight:600;color:#1a1405;background:#e0b84a;border-radius:6px;padding:1px 6px;vertical-align:middle;margin-inline-start:6px}
+.atag{display:inline-block;font-size:11px;font-weight:600;color:#475569;background:#e2e8f0;border:1px solid #cbd5e1;border-radius:6px;padding:1px 6px;vertical-align:middle;margin-inline-start:6px;letter-spacing:0}
+.tile.admin{border-style:dashed}
+.ticon{font-size:1.05em}
 .theme-card .noshot{display:grid;place-items:center;font-size:34px;color:var(--muted)}
 .theme-card:has(input:checked)>span{font-weight:700}
 .theme-card:has(input:focus-visible){outline:2px solid #e0b84a;outline-offset:2px}

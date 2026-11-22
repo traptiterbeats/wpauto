@@ -128,8 +128,10 @@ type wpTask struct {
 	Key, Title, Note, Link string
 	Stage                  *pipeStep // the path stage the task completes (nil for tools)
 	Soon                   bool
-	Feature                bool // full-width highlighted card
-	NeedsHost              bool // the task works on the project's host and none is linked yet
+	Feature                bool   // full-width highlighted card
+	Admin                  bool   // admin-only card (small «ادمین» badge); hidden when canAdmin is false
+	Icon                   string // optional emoji before the title
+	NeedsHost              bool   // the task works on the project's host and none is linked yet
 }
 
 // wpGroup is a titled group of cards on a project's WordPress page.
@@ -153,7 +155,9 @@ type wpCard struct {
 	Stage                   string
 	Host                    bool
 	Soon                    bool
-	Feature                 bool // drawn as a full-width highlighted card (AutoPilot)
+	Feature                 bool   // drawn as a full-width highlighted card (AutoPilot)
+	Admin                   bool   // admin work: shown only when canAdmin (see admin.go), with an «ادمین» badge
+	Icon                    string // optional emoji before the title
 	Link                    func(c wpCtx) string
 }
 
@@ -184,6 +188,8 @@ var wpCards = []wpCard{
 		Link: func(c wpCtx) string { return pluginsLink(c.bp, c.p.ID) }},
 	{Group: "site", Key: "customize", Title: "شخصی‌سازی برای مشتری (AI)", Note: "متن‌ها و تصاویر دمو برای این مشتری", Stage: "customize", Link: stageLink("customize")},
 	{Group: "site", Key: "theme", Title: "نصب قالب و دمو", Note: "قالب از کاتالوگ با دموی شخصی‌شده", Stage: "theme", Host: true, Link: stageLink("theme")},
+	{Group: "site", Key: "themeadmin", Title: "مدیریت قالب‌ها", Note: "افزودن قالب جدید، دمو و پیش‌نمایش؛ مشترک بین همه‌ی پروژه‌ها",
+		Admin: true, Icon: "🛠", Link: func(c wpCtx) string { return themesLink(c.bp, c.p.ID) }},
 	{Group: "site", Key: "plugins", Title: "بررسی افزونه‌ها", Soon: true},
 	{Group: "site", Key: "themes", Title: "بررسی قالب‌ها", Soon: true},
 	{Group: "site", Key: "seo", Title: "بررسی سئو", Soon: true},
@@ -191,16 +197,17 @@ var wpCards = []wpCard{
 		Link: func(c wpCtx) string { return c.bp + "autopilot?project=" + url.QueryEscape(c.p.ID) }},
 }
 
-// wpTaskGroups builds the WordPress page's cards from the registry.
-func wpTaskGroups(c wpCtx, hasHost bool) []wpGroup {
+// wpTaskGroups builds the WordPress page's cards from the registry. admin says whether admin
+// cards are shown (canAdmin).
+func wpTaskGroups(c wpCtx, hasHost, admin bool) []wpGroup {
 	var out []wpGroup
 	for _, g := range wpGroups {
 		grp := wpGroup{Key: g.Key, Title: g.Title}
 		for _, card := range wpCards {
-			if card.Group != g.Key {
+			if card.Group != g.Key || (card.Admin && !admin) {
 				continue
 			}
-			t := wpTask{Key: card.Key, Title: card.Title, Note: card.Note, Soon: card.Soon, Feature: card.Feature}
+			t := wpTask{Key: card.Key, Title: card.Title, Note: card.Note, Soon: card.Soon, Feature: card.Feature, Admin: card.Admin, Icon: card.Icon}
 			if !card.Soon {
 				if card.Link != nil {
 					t.Link = card.Link(c)
@@ -230,7 +237,7 @@ func (s *Server) handleProjectWP(w http.ResponseWriter, r *http.Request) {
 	for i := range stages {
 		by[stages[i].Key] = &stages[i]
 	}
-	groups := wpTaskGroups(wpCtx{bp: bp, p: p, by: by}, hasHost)
+	groups := wpTaskGroups(wpCtx{bp: bp, p: p, by: by}, hasHost, s.canAdmin(r))
 	var last *engine.Run
 	for _, run := range s.titled(s.runner.List(500)) {
 		if run.ProjectID == p.ID {

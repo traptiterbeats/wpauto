@@ -359,7 +359,7 @@ func TestWordPressCardGroups(t *testing.T) {
 		}
 		return
 	}
-	gs := wpTaskGroups(wpCtx{bp: "/b/", p: projects.Project{ID: "p1"}, by: by}, false)
+	gs := wpTaskGroups(wpCtx{bp: "/b/", p: projects.Project{ID: "p1"}, by: by}, false, true)
 	if len(gs) != 3 || gs[0].Title != "راه‌اندازی" || gs[1].Title != "مراحل بیشتر" || gs[2].Key != "auto" || gs[2].Title != "" {
 		t.Fatalf("groups: %+v", gs)
 	}
@@ -374,7 +374,7 @@ func TestWordPressCardGroups(t *testing.T) {
 	if got := strings.Join(keys(gs[0]), ","); got != "host,wpcheck,wpinstall,wpremove" {
 		t.Fatalf("setup cards: %s", got)
 	}
-	if got := strings.Join(keys(gs[1]), ","); got != "recplugins,customize,theme,plugins,themes,seo" {
+	if got := strings.Join(keys(gs[1]), ","); got != "recplugins,customize,theme,themeadmin,plugins,themes,seo" {
 		t.Fatalf("site cards: %s", got)
 	}
 	soon := 0
@@ -400,7 +400,7 @@ func TestWordPressCardGroups(t *testing.T) {
 	if soon != 3 || !gs[0].NeedsHost || !gs[1].NeedsHost {
 		t.Fatal("soon cards or group host notes")
 	}
-	gs = wpTaskGroups(wpCtx{bp: "/b/", p: projects.Project{ID: "p1", HostID: "h"}, by: by}, true)
+	gs = wpTaskGroups(wpCtx{bp: "/b/", p: projects.Project{ID: "p1", HostID: "h"}, by: by}, true, true)
 	for _, g := range gs {
 		if g.NeedsHost {
 			t.Fatal("host notes shown with a host")

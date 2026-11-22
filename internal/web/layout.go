@@ -212,7 +212,7 @@ var tools = []tool{
 	{"همه‌ی کارها", "tasks", "فهرست کامل کارها و پروژه‌ها به شکل قبلی"},
 	{"اجراها", "runs", "تاریخچه‌ی همه‌ی اجراها"},
 	{"فهرست پروژه‌ها", "projects", "ساختن، فعال کردن و حذف پروژه‌ها"},
-	{"قالب‌ها و افزونه‌ها", "themes", "کاتالوگ قالب‌ها و کتابخانه‌ی افزونه‌ها"},
+	{"مدیریت قالب‌ها (ادمین)", "themes", "افزودن قالب و دمو، کتابخانه‌ی افزونه‌ها؛ مشترک بین همه‌ی پروژه‌ها"},
 	{"شخصی‌سازی", "customize", "پیش‌نویس‌های شخصی‌سازی با هوش مصنوعی"},
 	{"هوش مصنوعی", "ai", "سرویس‌ها، کلیدها و مدل‌ها"},
 	{"وردپرس‌ها", "wordpress", "وردپرس‌های روی هاست و حذف آن‌ها"},
@@ -290,9 +290,14 @@ func backOf(cs []crumb) string {
 func (s *Server) layout(r *http.Request, d map[string]any) {
 	rel := strings.TrimPrefix(r.URL.Path, s.cfg.BasePath)
 	sec := sectionFor(rel)
-	d["Sections"] = sections
+	admin := s.canAdmin(r)
+	d["CanAdmin"] = admin
+	d["ThemesLink"] = s.themesLinkFor(r)
+	d["Sections"], d["Tools"] = sections, tools
+	if !admin { // admin pages are hidden from the menus too
+		d["Sections"], d["Tools"] = withoutAdmin(sections), withoutAdminTools(tools)
+	}
 	d["Section"] = sec
-	d["Tools"] = tools
 	d["Ready"] = s.readiness()
 	d["Projects"] = s.projects.List()
 	if p, ok := s.projects.Active(); ok {
@@ -342,4 +347,25 @@ func foundWP(run engine.Run) bool {
 		}
 	}
 	return false
+}
+
+// adminPaths are the menu paths that need canAdmin.
+var adminPaths = map[string]bool{"themes": true}
+
+func withoutAdmin(in []section) (out []section) {
+	for _, x := range in {
+		if !adminPaths[x.Path] {
+			out = append(out, x)
+		}
+	}
+	return
+}
+
+func withoutAdminTools(in []tool) (out []tool) {
+	for _, x := range in {
+		if !adminPaths[x.Path] {
+			out = append(out, x)
+		}
+	}
+	return
 }

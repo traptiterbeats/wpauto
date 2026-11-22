@@ -34,17 +34,39 @@ func (s *Server) uploads(h http.HandlerFunc) http.HandlerFunc {
 	}
 }
 
+// handleThemes draws «مدیریت قالب‌ها (ادمین)»: the global theme catalog (shared by every
+// project) and the plugin library. Opened from a project (p/{id}/wordpress/themes or
+// themes?from=<id>) it keeps that project's breadcrumb and Back, and its forms post `from`.
 func (s *Server) handleThemes(w http.ResponseWriter, r *http.Request) {
+	bp := s.cfg.BasePath
 	cat := engine.Catalog()
-	s.render(w, "themes.html", s.page(r, map[string]any{
+	data := map[string]any{
 		"Themes": cat.List(), "Library": cat.Library(), "Importer": catalog.ImporterSlug,
 		"HasImporter": cat.LibraryPath(catalog.ImporterSlug) != "", "Std": standards(),
-		"Error": r.URL.Query().Get("err"), "Msg": r.URL.Query().Get("msg"),
-	}))
+		"Error": r.URL.Query().Get("err"), "Msg": r.URL.Query().Get("msg"), "From": "",
+		"Crumbs": []crumb{{"پروژه‌ها", bp}, {"ابزارها", bp + "tools"}, {"مدیریت قالب‌ها", ""}},
+	}
+	if r.PathValue("id") != "" {
+		if _, ok := s.projectOr404(w, r); !ok {
+			return
+		}
+	}
+	if p, ok := s.themeProject(r); ok {
+		data["From"] = p.ID
+		data["FromProject"] = p
+		data["Crumbs"] = []crumb{{"پروژه‌ها", bp}, {p.Name, bp + "p/" + p.ID}, {"وردپرس", bp + "p/" + p.ID + "/wordpress"}, {"مدیریت قالب‌ها", ""}}
+	}
+	s.render(w, "themes.html", s.page(r, data))
 }
 
+// back redirects to the theme catalog page with a message, inside the project the form was
+// posted from (`from`) when there is one.
 func (s *Server) back(w http.ResponseWriter, r *http.Request, key, msg string) {
-	http.Redirect(w, r, s.cfg.BasePath+"themes?"+key+"="+url.QueryEscape(msg), http.StatusSeeOther)
+	id := ""
+	if p, ok := s.themeProject(r); ok {
+		id = p.ID
+	}
+	http.Redirect(w, r, themesLink(s.cfg.BasePath, id)+"?"+key+"="+url.QueryEscape(msg), http.StatusSeeOther)
 }
 
 // formFile saves an uploaded file to a temp file; "" when the field is empty.

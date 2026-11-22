@@ -21,7 +21,7 @@
     <button type="submit">ساختن</button>
   </form>
   {{else}}
-  <div class="card hint">قالبی با بسته‌ی دمو در کاتالوگ نیست. <a href="{{.BasePath}}themes">افزودن قالب</a></div>
+  <div class="card hint">قالبی با بسته‌ی دمو در کاتالوگ نیست. {{if $.CanAdmin}}<a href="{{$.ThemesLink}}" class="themeadmin-link">افزودن قالب</a>{{end}}</div>
   {{end}}
   <section id="drafts">
   <h3>پیش‌نویس‌های قبلی</h3>
