@@ -173,7 +173,7 @@ func TestProjectHostSaveCheckAndSeparate(t *testing.T) {
 
 	page = e.page("p/" + p.ID + "/host?run=" + runID)
 	for _, want := range []string{`id="hostsummary"`, `id="hostrun"`, `id="log"`, "نتیجه‌ی بررسی", "آماده برای وردپرس", fake.URL,
-		"kfncspot", "بررسی دوباره", "ویرایش اطلاعات اتصال", `action="` + bp + `p/` + p.ID + `/host/check"`,
+		"kfncspot", "بررسی دوباره", "به‌روزرسانی رمز/توکن", `id="hostsecret"`, `action="` + bp + `p/` + p.ID + `/host/check"`,
 		`href="` + bp + `runs/` + runID + `"`, "ادامه: کارهای وردپرس"} {
 		if !strings.Contains(page, want) {
 			t.Errorf("host page after check lacks %q", want)
@@ -209,13 +209,13 @@ func TestProjectHostSaveCheckAndSeparate(t *testing.T) {
 		t.Fatalf("re-check: %s", st)
 	}
 
-	// editing with an empty password keeps the saved one
-	r, _ = e.post("p/"+p.ID+"/host/save", url.Values{"csrf": {csrf}, "profile": {"fake"}, "url": {fake.URL}, "username": {"kfncspot"}})
-	if hh, _ := e.s.store.Get(h.ID); hh.SealedSecret != h.SealedSecret || len(e.s.store.List()) != 1 {
-		t.Fatal("edit without a password changed or duplicated the host")
+	// the host is fixed: no URL/user inputs, and a save without a new password changes nothing
+	if strings.Contains(page, "ویرایش اطلاعات اتصال") || strings.Contains(page, `name="url"`) || strings.Contains(page, `name="username"`) {
+		t.Error("URL/user still editable")
 	}
-	if st := e.waitRun(r.Request.URL.Query().Get("run")); st != "success" {
-		t.Fatalf("check after edit: %s", st)
+	r, _ = e.post("p/"+p.ID+"/host/save", url.Values{"csrf": {csrf}, "profile": {"fake"}, "url": {fake.URL}, "username": {"kfncspot"}})
+	if hh, _ := e.s.store.Get(h.ID); hh.SealedSecret != h.SealedSecret || len(e.s.store.List()) != 1 || !strings.Contains(r.Request.URL.RawQuery, "err=") {
+		t.Fatal("save without a password changed or duplicated the host")
 	}
 
 	// a second project on the same main domain does not get the first one's host
@@ -241,16 +241,16 @@ func TestProjectHostSaveCheckAndSeparate(t *testing.T) {
 	if h1, _ := e.s.store.Get(h.ID); h1.ProjectID != p.ID {
 		t.Fatal("first record changed owner")
 	}
-	// editing one project's connection leaves the other alone
+	// rotating one project's password leaves the other alone; its posted user is ignored
 	r, _ = e.post("p/"+p2.ID+"/host/save", url.Values{"csrf": {csrf}, "profile": {"fake"}, "url": {fake.URL}, "username": {"someoneelse"}, "secret": {"other"}})
 	if st := e.waitRun(r.Request.URL.Query().Get("run")); st != "failed" {
-		t.Fatalf("check with a wrong login: %s", st)
+		t.Fatalf("check with a wrong password: %s", st)
 	}
 	if h1, _ := e.s.store.Get(h.ID); h1.Username != "kfncspot" || h1.SealedSecret != h.SealedSecret || h1.LastReport == nil {
-		t.Fatal("editing the second project's host changed the first one's")
+		t.Fatal("changing the second project's password changed the first one's")
 	}
-	if h2, _ = e.s.store.Get(p2.HostID); h2.Username != "someoneelse" {
-		t.Fatal("edit not saved")
+	if nh2, _ := e.s.store.Get(p2.HostID); nh2.Username != "kfncspot" || nh2.URL != h2.URL || nh2.SealedSecret == h2.SealedSecret {
+		t.Fatal("password not updated, or user/URL changed")
 	}
 	// deleting a project deletes its host record, and only that one
 	r, _ = e.post("projects/"+p2.ID+"/delete", url.Values{"csrf": {csrf}, "back": {bp}})

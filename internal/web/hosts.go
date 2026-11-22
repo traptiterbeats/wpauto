@@ -171,6 +171,10 @@ func (s *Server) handleHostEdit(w http.ResponseWriter, r *http.Request) {
 	}
 	_, profOK := profile.Find(s.profiles(), pid)
 	_ = s.store.Update(id, func(h *store.Host) {
+		if h.ProjectID != "" {
+			// a project's host is fixed at creation: only the password/API token changes
+			user, profOK = "", false
+		}
 		if user != "" {
 			h.Username = user
 		}

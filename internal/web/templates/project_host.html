@@ -22,9 +22,9 @@
       <dt>آخرین بررسی</dt><dd>{{with .Host.LastReport}}<span class="{{if .ReadyForWP}}ok{{else if .LoginOK}}warn{{else}}bad{{end}}">{{if .ReadyForWP}}آماده برای وردپرس{{else if .LoginOK}}نیاز به بررسی{{else}}ورود ناموفق{{end}}</span> · <span dir="ltr">{{.At.Format "2006-01-02 15:04"}}</span>{{else}}<span class="muted">هنوز بررسی نشده</span>{{end}}</dd>
       {{if .Host.Disk}}<dt>فضای هاست</dt><dd>{{template "disk" .Host.Disk}}</dd>{{end}}
     </dl>
-    <p class="small muted">این اطلاعات اتصال فقط مال همین پروژه است؛ ویرایش یا حذفش روی پروژه‌های دیگر اثری ندارد.</p>
+    <p class="small muted">این هاست فقط مال همین پروژه است و ثابت می‌ماند (آدرس cPanel و نام کاربری فقط خواندنی)؛ تغییر رمز/توکن آن روی پروژه‌های دیگر اثری ندارد.</p>
     {{if .Locked}}
-    <div class="error">ورود قبلی رد شد. برای جلوگیری از بلاک شدن IP، تلاش خودکار متوقف شده؛ اطلاعات اتصال را اصلاح کنید.</div>
+    <div class="error">ورود قبلی رد شد. برای جلوگیری از بلاک شدن IP، تلاش خودکار متوقف شده؛ رمز/توکن را به‌روزرسانی کنید.</div>
     {{else}}
     <form method="post" action="{{.BasePath}}p/{{.P.ID}}/host/check" class="inline" id="recheck">
       <input type="hidden" name="csrf" value="{{.CSRF}}">
@@ -32,16 +32,12 @@
       <span class="muted small">فقط خواندنی است و چیزی روی هاست تغییر نمی‌کند.</span>
     </form>
     {{end}}
-    <details class="hostedit" id="hostedit" {{if or .Locked .Error}}open{{end}}>
-      <summary class="btn ghost small">ویرایش اطلاعات اتصال</summary>
+    <details class="hostedit" id="hostsecret" {{if or .Locked .Error}}open{{end}}>
+      <summary class="btn ghost small">به‌روزرسانی رمز/توکن</summary>
       <form class="form" method="post" action="{{.BasePath}}p/{{.P.ID}}/host/save" autocomplete="off">
         <input type="hidden" name="csrf" value="{{.CSRF}}">
-        <label>آدرس cPanel<input name="url" required dir="ltr" value="{{.Host.URL}}"></label>
-        <label>نام کاربری cPanel<input name="username" required dir="ltr" value="{{.Host.Username}}"></label>
-        <label>رمز عبور یا API Token جدید (خالی = بدون تغییر)<input name="secret" type="password" dir="ltr" autocomplete="new-password"></label>
-        <label>پروفایل هاست
-          <select name="profile">{{range .Profiles}}<option value="{{.ID}}" {{if eq .ID $.Host.ProfileID}}selected{{end}}>{{.Name}}</option>{{end}}</select>
-        </label>
+        <p class="small muted">آدرس cPanel و نام کاربری این پروژه ثابت است؛ فقط رمز عبور یا API Token را (مثلاً بعد از عوض شدنش) تازه کنید.</p>
+        <label>رمز عبور یا API Token تازه<input name="secret" type="password" required dir="ltr" autocomplete="new-password"></label>
         <button type="submit">ذخیره و بررسی</button>
       </form>
     </details>
@@ -99,7 +95,7 @@
   {{else}}
   <section class="card" id="hostform" aria-labelledby="hf-title">
     <h2 id="hf-title" class="step">هاست این پروژه هنوز وصل نشده</h2>
-    <p class="muted small">اطلاعات cPanel دامنه‌ی اصلی پروژه را وارد کنید؛ فقط برای همین پروژه ذخیره می‌شود و بلافاصله بررسی هاست (فقط خواندنی) اجرا می‌شود.</p>
+    <p class="muted small">این پروژه پیش از تعریف هاست هنگام ساختن پروژه ساخته شده. اطلاعات cPanel دامنه‌ی اصلی پروژه را یک بار وارد کنید؛ فقط برای همین پروژه ذخیره می‌شود، بلافاصله بررسی هاست (فقط خواندنی) اجرا می‌شود و بعد از آن آدرس cPanel و نام کاربری ثابت می‌مانند.</p>
     <form class="form" method="post" action="{{.BasePath}}p/{{.P.ID}}/host/save" autocomplete="off">
       <input type="hidden" name="csrf" value="{{.CSRF}}">
       <label>آدرس cPanel<input name="url" required dir="ltr" value="{{.DefaultURL}}" placeholder="https://example.com:2083"></label>

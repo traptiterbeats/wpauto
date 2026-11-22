@@ -165,7 +165,8 @@ func TestHomePage(t *testing.T) {
 	for _, want := range []string{
 		`wpauto 9.9.9-test`, `id="tehran-clock"`, `timeZone:'Asia/Tehran'`, // version + live Tehran clock
 		`action="` + e.s.cfg.BasePath + `projects/new"`, `name="name"`, `name="domain"`, `id="np-domain"`,
-		`id="np-hostnote"`, // no host selector: the host belongs to the project
+		`id="np-hostfields"`, `name="host_url"`, `id="np-hosturl"`, `name="host_user"`, `name="host_secret" type="password"`, `name="host_profile"`,
+		`name="with_host" value="1"`, // the project's own host is defined at creation (no selector of saved hosts)
 		`id="psearch"`, `type="search"`, "هنوز پروژه‌ای نساخته‌اید", `class="toolmenu"`,
 		`"co.ir"`, // the script's suffix list
 	} {

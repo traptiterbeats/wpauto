@@ -24,26 +24,66 @@ func (s *Server) handleProjectNew(w http.ResponseWriter, r *http.Request) {
 	if back == "" {
 		back = s.cfg.BasePath + "projects"
 	}
+	// the Home form defines the project's host at creation (with_host); other create forms
+	// (projects list, legacy pages) make a project whose host is entered once in «بررسی هاست»
+	withHost := r.FormValue("with_host") != ""
+	var nf newProjectForm
 	fail := func(msg string) {
+		if withHost {
+			nf.Error = msg
+			s.renderHome(w, r, &nf, http.StatusUnprocessableEntity)
+			return
+		}
 		sep := "?"
 		if strings.Contains(back, "?") {
 			sep = "&"
 		}
 		http.Redirect(w, r, back+sep+"err="+url.QueryEscape(msg), http.StatusSeeOther)
 	}
-	addr, err := parseSite(r.FormValue("domain"))
+	nf = newProjectForm{Name: strings.TrimSpace(r.FormValue("name")), Domain: strings.TrimSpace(r.FormValue("domain")),
+		HostURL: strings.TrimSpace(r.FormValue("host_url")), HostUser: strings.TrimSpace(r.FormValue("host_user")),
+		Profile: r.FormValue("host_profile")}
+	addr, err := parseSite(nf.Domain)
 	if err != nil {
 		fail(err.Error())
 		return
 	}
-	// no host at creation: each project enters and checks its own host in «بررسی هاست»
-	p := projects.Project{Name: r.FormValue("name"), Domain: addr.Domain, Folder: addr.Folder, Mode: addr.Kind}
+	var hc hostInput
+	if withHost {
+		if nf.Name == "" {
+			fail("نام پروژه را بنویسید")
+			return
+		}
+		if addr.Kind == "" {
+			fail("آدرس سایت را بنویسید؛ هاست پروژه روی همین آدرس بررسی می‌شود")
+			return
+		}
+		if nf.HostURL == "" {
+			nf.HostURL = "https://" + addr.Parent + ":2083"
+		}
+		if hc, err = s.parseHostInput(nf.HostURL, nf.HostUser, r.FormValue("host_secret"), nf.Profile, true); err != nil {
+			fail(err.Error())
+			return
+		}
+	}
+	p := projects.Project{Name: nf.Name, Domain: addr.Domain, Folder: addr.Folder, Mode: addr.Kind}
 	np, err := s.projects.Add(p)
 	if err != nil {
 		fail(err.Error())
 		return
 	}
 	msg := "پروژه‌ی «" + np.Name + "» ساخته شد."
+	if withHost {
+		// the project's own host record (encrypted, never shared), checked right away
+		h, err := s.addProjectHost(np, hc)
+		if err != nil {
+			_, _ = s.deleteProject(np.ID, false)
+			fail(err.Error())
+			return
+		}
+		s.startHostCheck(w, r, np.ID, h.ID, msg+" هاست پروژه ذخیره شد و بررسی هاست شروع شد.")
+		return
+	}
 	// step 2: choose the section (WordPress, ...)
 	http.Redirect(w, r, s.cfg.BasePath+"p/"+np.ID+"?msg="+url.QueryEscape(msg), http.StatusSeeOther)
 }

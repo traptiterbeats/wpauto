@@ -8,11 +8,21 @@
   <section class="newproj" aria-labelledby="np-title">
     <h1 id="np-title">پروژه‌ی تازه</h1>
     <form method="post" action="{{.BasePath}}projects/new" id="newproj" class="np-form" autocomplete="off">
-      <input type="hidden" name="csrf" value="{{.CSRF}}"><input type="hidden" name="back" value="{{.BasePath}}">
-      <label>نام پروژه<input name="name" required placeholder="مثلاً کارگاه نجاری سیس"></label>
-      <label>دامنه<input name="domain" id="np-domain" dir="ltr" placeholder="example.com/blog یا shop.example.com"></label>
+      <input type="hidden" name="csrf" value="{{.CSRF}}"><input type="hidden" name="back" value="{{.BasePath}}"><input type="hidden" name="with_host" value="1">
+      {{with .NP}}{{if .Error}}<div class="error" id="np-error" role="alert">{{.Error}}</div>{{end}}{{end}}
+      <label>نام پروژه<input name="name" required placeholder="مثلاً کارگاه نجاری سیس" value="{{.NP.Name}}"></label>
+      <label>دامنه<input name="domain" id="np-domain" dir="ltr" required placeholder="example.com/blog یا shop.example.com" value="{{.NP.Domain}}"></label>
       <p class="np-kind small" id="np-kind" aria-live="polite">دامنه‌ی اصلی، ساب‌دامین یا پوشه — نوعش خودکار تشخیص داده می‌شود.</p>
-      <p class="small muted" id="np-hostnote">هاست لازم نیست: اطلاعات هاست هر پروژه بعداً در «بررسی هاست» همان پروژه وارد و بررسی می‌شود.</p>
+      <fieldset class="np-host" id="np-hostfields">
+        <legend>هاست این پروژه (cPanel)</legend>
+        <label>آدرس cPanel<input name="host_url" id="np-hosturl" dir="ltr" required placeholder="https://example.com:2083" value="{{.NP.HostURL}}"></label>
+        <label>نام کاربری cPanel<input name="host_user" dir="ltr" required value="{{.NP.HostUser}}"></label>
+        <label>رمز عبور یا API Token<input name="host_secret" type="password" dir="ltr" required autocomplete="new-password"></label>
+        <label>پروفایل هاست
+          <select name="host_profile">{{range .Profiles}}<option value="{{.ID}}" {{if eq .ID $.NP.Profile}}selected{{end}}>{{.Name}}</option>{{end}}</select>
+        </label>
+        <p class="small muted">هاست فقط مال همین پروژه است و رمزنگاری‌شده ذخیره می‌شود؛ بعد از ساختن، آدرس cPanel و نام کاربری ثابت می‌مانند و فقط رمز/توکن قابل به‌روزرسانی است. بلافاصله بررسی هاست (فقط خواندنی) اجرا می‌شود.</p>
+      </fieldset>
       <button type="submit">ساختن پروژه ←</button>
     </form>
   </section>
@@ -78,6 +88,13 @@
     else { k.innerHTML=''; var b=document.createElement('strong'); b.textContent=KIND[a.kind]; k.append('نوع: ', b, a.kind==='root'?'':' روی '+a.parent); k.setAttribute('data-kind',a.kind); }
   }
   d.addEventListener('input', update); update();
+  // cPanel address follows the typed address (https://<main domain>:2083) until edited by hand
+  var hu=document.getElementById('np-hosturl');
+  if(hu){
+    var auto=!hu.value;
+    hu.addEventListener('input', function(){ auto=!hu.value; });
+    d.addEventListener('input', function(){ if(!auto) return; var a=parse(d.value); hu.value=(a&&!a.err)?'https://'+a.parent+':2083':''; });
+  }
 })();
 </script>
 </body>

@@ -205,8 +205,62 @@ func (s *Server) handleProjectHost(w http.ResponseWriter, r *http.Request) {
 	s.render(w, "project_host.html", s.page(r, data))
 }
 
-// handleProjectHostSave saves the connection typed on the project's host page (a new host, or
-// the linked one edited), links it to the project and starts the host check right away.
+// hostInput is a checked cPanel connection typed by the user (the secret already sealed).
+type hostInput struct {
+	URL, User, Sealed string
+	Profile           string
+}
+
+// parseHostInput checks a typed connection: profile (generic when unknown), cPanel address,
+// user name and, when needSecret, the password/API token, which it seals.
+func (s *Server) parseHostInput(addr, user, secret, profID string, needSecret bool) (hostInput, error) {
+	prof, ok := profile.Find(s.profiles(), profID)
+	if !ok {
+		if prof, ok = profile.Find(s.profiles(), "generic"); !ok {
+			return hostInput{}, errors.New("پروفایل هاست پیدا نشد")
+		}
+	}
+	addr, user = strings.TrimSpace(addr), strings.TrimSpace(user)
+	if addr == "" || user == "" {
+		return hostInput{}, errors.New("آدرس cPanel و نام کاربری لازم است")
+	}
+	base, err := cpanel.NormalizeURL(addr, prof.Port)
+	if err != nil {
+		return hostInput{}, errors.New("آدرس cPanel نامعتبر است")
+	}
+	if secret == "" && needSecret {
+		return hostInput{}, errors.New("رمز عبور یا API Token لازم است")
+	}
+	in := hostInput{URL: base, User: user, Profile: prof.ID}
+	if secret != "" {
+		if in.Sealed, err = s.box.Seal(secret); err != nil {
+			return hostInput{}, errors.New("رمز عبور رمزنگاری نشد")
+		}
+	}
+	return in, nil
+}
+
+// addProjectHost saves a new host record owned by p and links it to p.
+func (s *Server) addProjectHost(p projects.Project, in hostInput) (store.Host, error) {
+	name := projectAddr(p).Parent
+	if name == "" {
+		name = strings.TrimPrefix(strings.SplitN(in.URL, "://", 2)[1], "www.")
+	}
+	h, err := s.store.Add(store.Host{Name: name, ProfileID: in.Profile, URL: in.URL, Username: in.User, SealedSecret: in.Sealed, ProjectID: p.ID})
+	if err != nil {
+		return h, err
+	}
+	if err := s.projects.Update(p.ID, func(x *projects.Project) { x.HostID = h.ID }); err != nil {
+		_ = s.store.Delete(h.ID)
+		return h, err
+	}
+	return h, nil
+}
+
+// handleProjectHostSave has two jobs. A project without a host (made before hosts were set at
+// creation) enters its connection here once: it is saved as the project's own record, linked
+// and checked. Once a project has its host, the cPanel address, user name and profile are fixed:
+// only a new password/API token is taken (credential rotation); posted url/username are ignored.
 func (s *Server) handleProjectHostSave(w http.ResponseWriter, r *http.Request) {
 	p, ok := s.projectOr404(w, r)
 	if !ok {
@@ -214,73 +268,35 @@ func (s *Server) handleProjectHostSave(w http.ResponseWriter, r *http.Request) {
 	}
 	back := s.cfg.BasePath + "p/" + p.ID + "/host"
 	fail := func(msg string) { http.Redirect(w, r, back+"?err="+url.QueryEscape(msg), http.StatusSeeOther) }
-	prof, ok := profile.Find(s.profiles(), r.FormValue("profile"))
-	if !ok {
-		prof, ok = profile.Find(s.profiles(), "generic")
-		if !ok {
-			fail("پروفایل هاست پیدا نشد")
+	if cur, linked := s.ownHost(p); linked {
+		secret := r.FormValue("secret")
+		if secret == "" {
+			fail("رمز عبور یا API Token تازه را بنویسید")
 			return
 		}
-	}
-	addr := strings.TrimSpace(r.FormValue("url"))
-	user := strings.TrimSpace(r.FormValue("username"))
-	secret := r.FormValue("secret")
-	if addr == "" || user == "" {
-		fail("آدرس cPanel و نام کاربری لازم است")
-		return
-	}
-	base, err := cpanel.NormalizeURL(addr, prof.Port)
-	if err != nil {
-		fail("آدرس cPanel نامعتبر است")
-		return
-	}
-	sealed := ""
-	if secret != "" {
-		if sealed, err = s.box.Seal(secret); err != nil {
+		sealed, err := s.box.Seal(secret)
+		if err != nil {
 			http.Error(w, "cannot encrypt the password", 500)
 			return
 		}
-	}
-	hostID := ""
-	if cur, linked := s.ownHost(p); linked {
-		hostID = cur.ID // edit this project's own record; other projects are not touched
-	}
-	if hostID != "" {
-		err = s.store.Update(hostID, func(h *store.Host) {
-			if h.URL != base || !strings.EqualFold(h.Username, user) {
-				h.LastReport, h.Disk = nil, nil // another account: the old report is not about it
-			}
-			h.URL, h.Username, h.ProfileID = base, user, prof.ID
-			if sealed != "" {
-				h.SealedSecret = sealed
-			}
-			h.FailedLogins = 0
-		})
-		if err != nil {
+		if err := s.store.Update(cur.ID, func(h *store.Host) { h.SealedSecret, h.FailedLogins = sealed, 0 }); err != nil {
 			fail(err.Error())
 			return
 		}
-	} else {
-		if sealed == "" {
-			fail("رمز عبور یا API Token لازم است")
-			return
-		}
-		name := projectAddr(p).Parent
-		if name == "" {
-			name = strings.TrimPrefix(strings.SplitN(base, "://", 2)[1], "www.")
-		}
-		h, err := s.store.Add(store.Host{Name: name, ProfileID: prof.ID, URL: base, Username: user, SealedSecret: sealed, ProjectID: p.ID})
-		if err != nil {
-			fail(err.Error())
-			return
-		}
-		hostID = h.ID
+		s.startHostCheck(w, r, p.ID, cur.ID, "رمز/توکن به‌روزرسانی شد و بررسی هاست شروع شد.")
+		return
 	}
-	if err := s.projects.Update(p.ID, func(x *projects.Project) { x.HostID = hostID }); err != nil {
+	in, err := s.parseHostInput(r.FormValue("url"), r.FormValue("username"), r.FormValue("secret"), r.FormValue("profile"), true)
+	if err != nil {
 		fail(err.Error())
 		return
 	}
-	s.startHostCheck(w, r, p.ID, hostID, "اطلاعات اتصال ذخیره شد و بررسی هاست شروع شد.")
+	h, err := s.addProjectHost(p, in)
+	if err != nil {
+		fail(err.Error())
+		return
+	}
+	s.startHostCheck(w, r, p.ID, h.ID, "اطلاعات اتصال ذخیره شد و بررسی هاست شروع شد.")
 }
 
 // handleProjectHostCheck runs the host check again on the project's host.

@@ -47,12 +47,36 @@ func (s *Server) projectRows() []projectRow {
 	return out
 }
 
+// newProjectForm is what the user typed in the Home «پروژه‌ی تازه» form, shown again with an
+// error when creation is refused. The password is never kept or shown.
+type newProjectForm struct {
+	Name, Domain, HostURL, HostUser, Profile, Error string
+}
+
 func (s *Server) handleHome(w http.ResponseWriter, r *http.Request) {
+	s.renderHome(w, r, &newProjectForm{}, http.StatusOK)
+}
+
+func (s *Server) renderHome(w http.ResponseWriter, r *http.Request, f *newProjectForm, status int) {
 	suffixes, _ := json.Marshal(multiSuffixes)
-	s.render(w, "home.html", s.page(r, map[string]any{
-		"IsHome": true, "Rows": s.projectRows(),
+	if r.URL.Path != s.cfg.BasePath {
+		u := *r.URL
+		u.Path, u.RawPath = s.cfg.BasePath, ""
+		r = r.Clone(r.Context())
+		r.URL = &u
+	}
+	if f.Profile == "" {
+		f.Profile = "generic"
+	}
+	data := s.page(r, map[string]any{
+		"IsHome": true, "Rows": s.projectRows(), "NP": f, "Profiles": s.profiles(),
 		"Suffixes": template.JS(suffixes), "Crumbs": []crumb{{"پروژه‌ها", ""}},
-	}))
+	})
+	if status != http.StatusOK {
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		w.WriteHeader(status)
+	}
+	s.render(w, "home.html", data)
 }
 
 // handleTasks is the earlier home page (every task and the project ribbons), kept as a tool.
