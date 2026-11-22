@@ -5,6 +5,7 @@ import (
 	"archive/zip"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -53,7 +54,7 @@ func Plugin(t testing.TB, dir, slug, body string) string {
 func Demo(t testing.TB, dir, theme string, requires ...string) string {
 	req := "[]"
 	if len(requires) > 0 {
-		req = `["` + requires[0] + `"]`
+		req = `["` + strings.Join(requires, `","`) + `"]`
 	}
 	return Zip(t, dir, theme+"-demo.zip", map[string]string{
 		"manifest.json": `{"theme":"` + theme + `","version":"1.0.0","schema":1,"demo":"demo.json"}`,

@@ -161,6 +161,28 @@ func (rc *RunContext) installedPlugin(slug string) (version string, ok bool) {
 	return fmt.Sprint(p["version"]), true
 }
 
+// httpStatusError is a download that answered with a non-200 status.
+type httpStatusError struct {
+	URL  string
+	Code int
+}
+
+func (e *httpStatusError) Error() string {
+	return fmt.Sprintf("panel could not download %s: HTTP %d", e.URL, e.Code)
+}
+
+// notFound reports whether err is a download that answered 404 / 410.
+func notFound(err error) bool {
+	var he *httpStatusError
+	return errors.As(err, &he) && (he.Code == http.StatusNotFound || he.Code == http.StatusGone)
+}
+
+// errNotOnWPOrg is the message for a theme plugin that wordpress.org does not have
+// (a theme's own companion plugin whose zip was never uploaded).
+func errNotOnWPOrg(slug string) error {
+	return fmt.Errorf("افزونه‌ی %s در wordpress.org پیدا نشد؛ zip آن را در «مدیریت قالب‌ها» به‌عنوان افزونه‌ی همراه قالب بارگذاری کنید و قالب را دوباره اضافه کنید.", slug)
+}
+
 // wporgZipURL is replaced in tests.
 var wporgZipURL = func(slug string) string {
 	return "https://downloads.wordpress.org/plugin/" + slug + ".latest-stable.zip"
@@ -185,9 +207,11 @@ func stepThemePlugins(ctx context.Context, rc *RunContext, a map[string]string) 
 		if ver, ok := rc.installedPlugin(slug); ok {
 			rc.Logf("افزونه‌ی %s از قبل نصب است (نسخه‌ی %s)", slug, ver)
 		} else {
+			// The library wins whenever it has the zip, whatever the manifest says: a theme added
+			// before its companion plugin was uploaded is fixed by uploading that zip.
 			lib := cat.LibraryPath(slug)
 			switch {
-			case p.Source != "wporg" && lib != "":
+			case lib != "":
 				if err := rc.upload(ctx, lib, slug+".zip"); err != nil {
 					return nil, err
 				}
@@ -198,6 +222,9 @@ func stepThemePlugins(ctx context.Context, rc *RunContext, a map[string]string) 
 				if _, err := rc.helperCall(ctx, "plugin_fetch", url.Values{"slug": {slug}}); err != nil {
 					rc.Warnf("دانلود %s روی هاست نشد (%v)؛ پنل خودش دانلود و آپلود می‌کند", slug, err)
 					local, err := fetchToCache(ctx, wporgZipURL(slug), slug+".zip")
+					if notFound(err) {
+						return nil, errNotOnWPOrg(slug)
+					}
 					if err != nil {
 						return nil, err
 					}
@@ -427,7 +454,7 @@ func fetchToCacheTTL(ctx context.Context, u, name string, ttl time.Duration) (st
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != 200 {
-		return "", fmt.Errorf("panel could not download %s: HTTP %d", u, resp.StatusCode)
+		return "", &httpStatusError{URL: u, Code: resp.StatusCode}
 	}
 	f, err := os.Create(p + ".part")
 	if err != nil {

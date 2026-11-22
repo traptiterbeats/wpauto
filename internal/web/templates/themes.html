@@ -25,7 +25,7 @@
           {{if .HasDemo}}<span class="badge">دمو {{.DemoVersion}}</span>{{else}}<span class="badge">بدون دمو</span>{{end}}
           {{with index $.Std .Slug}}{{if .OK}}<span class="badge ok">✔ استاندارد شخصی‌سازی</span>{{else if not .NoDemo}}<span class="badge bad" title="جاافتاده: {{range $i, $m := .Missing}}{{if $i}}، {{end}}{{$m}}{{end}}">✘ استاندارد نیست</span>{{end}}{{end}}
           {{with index $.Std .Slug}}{{if not .NoDemo}}<span class="badge" title="{{if .V2}}قرارداد نسخه‌ی ۲: عکس‌ها برش و تغییر اندازه می‌خورند{{else}}قرارداد نسخه‌ی ۱{{end}}">🖼 {{.Slots}} جای تصویر{{if .V2}} · v2{{end}}</span>{{if .Products}}<span class="badge" title="پیش‌فرض: {{if eq .ProductDefault "ai"}}هوش مصنوعی محصولات نمونه بسازد{{else}}محصولات دمو بمانند{{end}}">🛒 محصولات</span>{{else}}<span class="badge muted">بدون محصول</span>{{end}}{{end}}{{end}}
-          {{range .Plugins}}<span class="badge" dir="ltr">{{.Slug}}{{if eq .Source "wporg"}} · wp.org{{end}}</span>{{end}}
+          {{range .Plugins}}{{if index $.InLib .Slug}}<span class="badge plug" title="از کتابخانه‌ی افزونه‌های پنل نصب می‌شود"><span dir="ltr">{{.Slug}}</span> · کتابخانه</span>{{else if eq .Source "library"}}<span class="badge bad plug" title="zip این افزونه در کتابخانه نیست و نصب قالب شکست می‌خورد؛ آن را در «کتابخانه‌ی افزونه‌ها» پایین همین صفحه بارگذاری کنید."><span dir="ltr">{{.Slug}}</span> · ⚠ zip ندارد</span>{{else}}<span class="badge plug" title="هنگام نصب از wordpress.org دانلود می‌شود؛ اگر افزونه‌ی اختصاصی قالب است، zip آن را در کتابخانه بارگذاری کنید."><span dir="ltr">{{.Slug}}</span> · wp.org</span>{{end}}{{end}}
         </div>
         {{with index $.Std .Slug}}{{if and (not .OK) (not .NoDemo)}}<p class="small bad">با شخصی‌سازی کامل هماهنگ نیست؛ این متن‌ها متن دمو می‌مانند: {{range $i, $m := .Missing}}{{if $i}}، {{end}}{{$m}}{{end}}. نسخه‌ای از قالب را بگذارید که قرارداد wpauto-customize را کامل دارد.</p>{{end}}{{end}}
         <form method="post" action="{{$.BasePath}}themes/{{.Slug}}/delete" onsubmit="return confirm('از کاتالوگ حذف شود؟')">
@@ -45,7 +45,9 @@
     <input type="hidden" name="csrf" value="{{.CSRF}}"><input type="hidden" name="from" value="{{.From}}">
     <label>فایل zip قالب<input type="file" name="theme_zip" accept=".zip" required></label>
     <label>بسته‌ی دموی سایه (اختیاری)<input type="file" name="demo_zip" accept=".zip"></label>
-    {{if not .HasImporter}}<p class="muted small warn">برای دمو، اول zip افزونه‌ی «درون‌ریز دمو سایه» را در کتابخانه‌ی پایین بارگذاری کنید.</p>{{end}}
+    <label id="companions">افزونه‌های همراه قالب (zip، اختیاری)<input type="file" name="companion_zip" accept=".zip" multiple></label>
+    <p class="muted small">مثل electromart-core؛ افزونه‌های اختصاصی که در wordpress.org نیستند. در کتابخانه هم ذخیره می‌شوند.</p>
+    {{if not .HasImporter}}<p class="muted small warn">برای دمو، zip افزونه‌ی «درون‌ریز دمو سایه» هم لازم است؛ آن را همین‌جا در «افزونه‌های همراه قالب» (یا در کتابخانه‌ی پایین) بارگذاری کنید.</p>{{end}}
     {{if .Library}}
     <fieldset class="card"><legend class="small">افزونه‌های کتابخانه که با این قالب نصب شوند</legend>
       {{range .Library}}{{if ne .Slug $.Importer}}<label class="check"><input type="checkbox" name="library" value="{{.Slug}}"> {{.Name}} <span class="muted small" dir="ltr">{{.Version}}</span></label>{{end}}{{end}}

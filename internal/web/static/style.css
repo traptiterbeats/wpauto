@@ -345,3 +345,4 @@ details.quiet form{display:flex;flex-direction:column;gap:8px;align-items:flex-s
 .plugfoot{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:auto;padding-top:6px}
 .plugbulk{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin:8px 0 12px}
 .badge.muted{color:var(--muted)}
+.badge.bad.plug{border-color:#fecaca;background:#fef2f2;font-weight:600}

@@ -42,7 +42,7 @@ func (s *Server) handleThemes(w http.ResponseWriter, r *http.Request) {
 	cat := engine.Catalog()
 	data := map[string]any{
 		"Themes": cat.List(), "Library": cat.Library(), "Importer": catalog.ImporterSlug,
-		"HasImporter": cat.LibraryPath(catalog.ImporterSlug) != "", "Std": standards(),
+		"HasImporter": cat.LibraryPath(catalog.ImporterSlug) != "", "Std": standards(), "InLib": inLibrary(cat),
 		"Error": r.URL.Query().Get("err"), "Msg": r.URL.Query().Get("msg"), "From": "",
 		"Crumbs": []crumb{{"پروژه‌ها", bp}, {"ابزارها", bp + "tools"}, {"مدیریت قالب‌ها", ""}},
 	}
@@ -57,6 +57,16 @@ func (s *Server) handleThemes(w http.ResponseWriter, r *http.Request) {
 		data["Crumbs"] = []crumb{{"پروژه‌ها", bp}, {p.Name, bp + "p/" + p.ID}, {"وردپرس", bp + "p/" + p.ID + "/wordpress"}, {"مدیریت قالب‌ها", ""}}
 	}
 	s.render(w, "themes.html", s.page(r, data))
+}
+
+// inLibrary is the set of plugin slugs whose zip is in the library (theme cards mark each
+// plugin «کتابخانه», «wp.org» or «⚠ zip ندارد» from it).
+func inLibrary(cat *catalog.Catalog) map[string]bool {
+	out := map[string]bool{}
+	for _, p := range cat.Library() {
+		out[p.Slug] = true
+	}
+	return out
 }
 
 // back redirects to the theme catalog page with a message, inside the project the form was
@@ -119,18 +129,54 @@ func (s *Server) handleThemeAdd(w http.ResponseWriter, r *http.Request) {
 	if demoZip != "" {
 		defer os.Remove(demoZip)
 	}
+	// Companion plugins (a theme's own core plugin, the Saayeh importer…) go to the library
+	// first, so the demo's requires resolve to them; if adding the theme fails they are rolled back.
+	var companions []string
+	if r.MultipartForm != nil {
+		for i := range r.MultipartForm.File["companion_zip"] {
+			p, err := formFile(r, "companion_zip", i)
+			if err != nil {
+				s.back(w, r, "err", "افزونه‌ی همراه: "+err.Error())
+				return
+			}
+			if p != "" {
+				defer os.Remove(p)
+				companions = append(companions, p)
+			}
+		}
+	}
+	cat := engine.Catalog()
+	infos, undo, err := cat.AddPlugins(companions)
+	if err != nil {
+		s.back(w, r, "err", "افزونه‌ی همراه: "+err.Error()+" (چیزی اضافه نشد)")
+		return
+	}
+	var slugs, names []string
+	for _, in := range infos {
+		slugs = append(slugs, in.Slug)
+		names = append(names, strings.TrimSpace(in.Name+" "+in.Version))
+	}
 	split := func(v string) []string {
 		return strings.FieldsFunc(v, func(c rune) bool { return c == ',' || c == '،' || c == ' ' || c == '\n' })
 	}
-	t, err := engine.Catalog().Add(catalog.AddInput{
+	t, err := cat.Add(catalog.AddInput{
 		ThemeZip: themeZip, DemoZip: demoZip, WPOrg: split(r.FormValue("wporg")),
-		Library: r.MultipartForm.Value["library"], DemoGroups: r.MultipartForm.Value["groups"],
+		Library: r.MultipartForm.Value["library"], Companions: slugs, DemoGroups: r.MultipartForm.Value["groups"],
 	})
 	if err != nil {
-		s.back(w, r, "err", err.Error())
+		undo()
+		msg := err.Error()
+		if len(infos) > 0 {
+			msg += " (افزونه‌های همراه هم به کتابخانه اضافه نشدند)"
+		}
+		s.back(w, r, "err", msg)
 		return
 	}
-	s.back(w, r, "msg", "قالب «"+t.Name+"» به کاتالوگ اضافه شد")
+	msg := "قالب «" + t.Name + "» به کاتالوگ اضافه شد"
+	if len(names) > 0 {
+		msg += "؛ افزونه‌های همراه در کتابخانه: " + strings.Join(names, "، ")
+	}
+	s.back(w, r, "msg", msg)
 }
 
 func (s *Server) handleThemeDelete(w http.ResponseWriter, r *http.Request) {

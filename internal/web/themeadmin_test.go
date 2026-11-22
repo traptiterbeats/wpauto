@@ -7,9 +7,11 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
+	"github.com/traptiterbeats/wpauto/internal/catalog"
 	"github.com/traptiterbeats/wpauto/internal/catalog/catalogtest"
 	"github.com/traptiterbeats/wpauto/internal/engine"
 	"github.com/traptiterbeats/wpauto/internal/projects"
@@ -226,4 +228,102 @@ func TestThemeAdminDisabled(t *testing.T) {
 func httptestReq() *http.Request {
 	r, _ := http.NewRequest("GET", "/", nil)
 	return r
+}
+
+// postFiles posts a multipart form with several files (field → paths).
+func (e *homeEnv) postFiles(path string, fields map[string]string, files map[string][]string) *http.Response {
+	e.t.Helper()
+	var buf bytes.Buffer
+	mw := multipart.NewWriter(&buf)
+	for k, v := range fields {
+		_ = mw.WriteField(k, v)
+	}
+	for field, paths := range files {
+		for _, p := range paths {
+			fw, _ := mw.CreateFormFile(field, filepath.Base(p))
+			b, err := os.ReadFile(p)
+			if err != nil {
+				e.t.Fatal(err)
+			}
+			_, _ = fw.Write(b)
+		}
+	}
+	_ = mw.Close()
+	r, err := e.cl.Post(e.base+path, mw.FormDataContentType(), &buf)
+	if err != nil {
+		e.t.Fatal(err)
+	}
+	_, _ = io.ReadAll(r.Body)
+	r.Body.Close()
+	return r
+}
+
+// Theme + demo + companion core + Saayeh importer in one submit: companions land in the library,
+// the demo's require on the core resolves to the library, the importer is library-only.
+func TestThemeAddCompanions(t *testing.T) {
+	e := newBareEnv(t)
+	bp := e.s.cfg.BasePath
+	pg := e.page("themes")
+	if !strings.Contains(pg, `name="companion_zip" accept=".zip" multiple`) || !strings.Contains(pg, "افزونه‌های همراه قالب (zip، اختیاری)") {
+		t.Fatal("companion field missing (it must show even with an empty library)")
+	}
+	if strings.Index(pg, `name="demo_zip"`) > strings.Index(pg, `name="companion_zip"`) {
+		t.Error("companion field must come right after the demo field")
+	}
+	if !strings.Contains(pg, "در «افزونه‌های همراه قالب»") {
+		t.Error("importer warning must point at the companion field")
+	}
+	csrf := csrfOf(t, pg)
+	src := t.TempDir()
+	theme := catalogtest.Theme(t, src, "emart")
+	demo := catalogtest.Demo(t, src, "emart", "woocommerce", "emart-core")
+	core := catalogtest.Plugin(t, src, "emart-core", "")
+	imp := catalogtest.Plugin(t, src, catalog.ImporterSlug, "")
+
+	// a bad companion zip: nothing added anywhere
+	bad := catalogtest.Zip(t, src, "bad.zip", map[string]string{"x/readme.txt": "no header"})
+	r := e.postFiles("themes/add", map[string]string{"csrf": csrf}, map[string][]string{
+		"theme_zip": {theme}, "demo_zip": {demo}, "companion_zip": {core, bad}})
+	if r.Request.URL.Path != bp+"themes" || !strings.Contains(r.Request.URL.RawQuery, "err=") {
+		t.Fatalf("bad companion: %s", r.Request.URL)
+	}
+	if len(engine.Catalog().Library()) != 0 || len(engine.Catalog().List()) != 0 {
+		t.Fatal("bad companion must add nothing")
+	}
+	// theme add fails (demo for another theme): the companions are rolled back
+	r = e.postFiles("themes/add", map[string]string{"csrf": csrf}, map[string][]string{
+		"theme_zip": {theme}, "demo_zip": {catalogtest.Demo(t, t.TempDir(), "other")}, "companion_zip": {core, imp}})
+	if !strings.Contains(r.Request.URL.RawQuery, "err=") || len(engine.Catalog().Library()) != 0 {
+		t.Fatalf("failed add must roll back companions: %s %v", r.Request.URL, engine.Catalog().Library())
+	}
+
+	r = e.postFiles("themes/add", map[string]string{"csrf": csrf}, map[string][]string{
+		"theme_zip": {theme}, "demo_zip": {demo}, "companion_zip": {core, imp}})
+	if !strings.Contains(r.Request.URL.RawQuery, "msg=") {
+		t.Fatalf("add: %s", r.Request.URL)
+	}
+	th, err := engine.Catalog().Get("emart")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got []string
+	for _, p := range th.Plugins {
+		got = append(got, p.Slug+":"+p.Source)
+	}
+	if strings.Join(got, ",") != "woocommerce:wporg,emart-core:library,saayeh-demo-importer:library" {
+		t.Fatalf("plugins: %v", got)
+	}
+	if engine.Catalog().LibraryPath("emart-core") == "" || engine.Catalog().LibraryPath(catalog.ImporterSlug) == "" {
+		t.Fatal("companions not in the library")
+	}
+	pg = e.page("themes")
+	if !strings.Contains(pg, `<span dir="ltr">emart-core</span> · کتابخانه`) || !strings.Contains(pg, `<span dir="ltr">woocommerce</span> · wp.org`) {
+		t.Error("plugin source badges")
+	}
+	// core removed from the library → red badge on the card
+	_ = engine.Catalog().DeletePlugin("emart-core")
+	pg = e.page("themes")
+	if !strings.Contains(pg, `<span dir="ltr">emart-core</span> · ⚠ zip ندارد`) {
+		t.Error("missing-zip badge")
+	}
 }

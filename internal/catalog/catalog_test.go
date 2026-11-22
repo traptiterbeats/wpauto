@@ -1,6 +1,7 @@
 package catalog_test
 
 import (
+	"os"
 	"strings"
 	"testing"
 
@@ -31,7 +32,7 @@ func TestAddTheme(t *testing.T) {
 	for _, p := range got.Plugins {
 		slugs = append(slugs, p.Slug+":"+p.Source)
 	}
-	if strings.Join(slugs, ",") != "woocommerce:,saayeh-demo-importer:library,contact-form-7:wporg" {
+	if strings.Join(slugs, ",") != "woocommerce:wporg,saayeh-demo-importer:library,contact-form-7:wporg" {
 		t.Fatalf("plugins: %v", slugs)
 	}
 	again, err := c.Get("mytheme")
@@ -54,5 +55,74 @@ func TestAddTheme(t *testing.T) {
 	}
 	if err := c.Delete("mytheme"); err != nil || len(c.List()) != 0 {
 		t.Fatal("delete")
+	}
+}
+
+// A demo require whose zip is in the library (a companion plugin like a theme's core) is
+// installed from the library; others come from wordpress.org. The demo's order is kept.
+func TestAddDemoRequiresSource(t *testing.T) {
+	src := t.TempDir()
+	c := catalog.Open(t.TempDir())
+	theme := catalogtest.Theme(t, src, "shop")
+	demo := catalogtest.Demo(t, src, "shop", "woocommerce", "shop-core")
+	core := catalogtest.Plugin(t, src, "shop-core", "")
+	imp := catalogtest.Plugin(t, src, catalog.ImporterSlug, "")
+
+	// invalid zip in the batch: nothing is stored
+	bad := catalogtest.Zip(t, src, "bad.zip", map[string]string{"x/readme.txt": "no header"})
+	if _, _, err := c.AddPlugins([]string{core, bad}); err == nil || len(c.Library()) != 0 {
+		t.Fatalf("invalid batch must store nothing: %v %v", err, c.Library())
+	}
+
+	plugins := func(th *catalog.Theme) string {
+		var out []string
+		for _, p := range th.Plugins {
+			out = append(out, p.Slug+":"+p.Source)
+		}
+		return strings.Join(out, ",")
+	}
+	if _, _, err := c.AddPlugins([]string{imp}); err != nil {
+		t.Fatal(err)
+	}
+	got, err := c.Add(catalog.AddInput{ThemeZip: theme, DemoZip: demo})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if p := plugins(got); p != "woocommerce:wporg,shop-core:wporg,saayeh-demo-importer:library" {
+		t.Fatalf("without core in the library: %s", p)
+	}
+
+	infos, undo, err := c.AddPlugins([]string{core})
+	if err != nil || len(infos) != 1 || infos[0].Slug != "shop-core" {
+		t.Fatalf("add core: %v %v", infos, err)
+	}
+	got, err = c.Add(catalog.AddInput{ThemeZip: theme, DemoZip: demo, Companions: []string{"shop-core", catalog.ImporterSlug}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if p := plugins(got); p != "woocommerce:wporg,shop-core:library,saayeh-demo-importer:library" {
+		t.Fatalf("with core in the library: %s", p)
+	}
+	// undo removes a zip that was not in the library before, keeps one that was
+	undo()
+	if c.LibraryPath("shop-core") != "" || c.LibraryPath(catalog.ImporterSlug) == "" {
+		t.Fatal("undo")
+	}
+	// a companion without a demo is still listed (from the library)
+	_, _, _ = c.AddPlugins([]string{core})
+	got, err = c.Add(catalog.AddInput{ThemeZip: theme, Companions: []string{"shop-core", catalog.ImporterSlug}})
+	if err != nil || plugins(got) != "shop-core:library" {
+		t.Fatalf("companion without demo: %v %v", got, err)
+	}
+	// undo of a replaced zip puts the old one back
+	old, _ := os.ReadFile(c.LibraryPath("shop-core"))
+	core2 := catalogtest.Plugin(t, t.TempDir(), "shop-core", "// v2")
+	_, undo, err = c.AddPlugins([]string{core2})
+	if err != nil {
+		t.Fatal(err)
+	}
+	undo()
+	if now, _ := os.ReadFile(c.LibraryPath("shop-core")); string(now) != string(old) {
+		t.Fatal("undo must restore the replaced zip")
 	}
 }

@@ -168,13 +168,74 @@ func (c *Catalog) AddPlugin(src string) (*LibPlugin, error) {
 	return info, nil
 }
 
+// AddPlugins validates every zip first, then stores them all in the library. undo restores the
+// library as it was (new zips removed, replaced zips put back); call it when the step that
+// needed them fails. Nothing is stored when one zip is invalid.
+func (c *Catalog) AddPlugins(srcs []string) (infos []*LibPlugin, undo func(), err error) {
+	undo = func() {}
+	for _, src := range srcs {
+		info, err := InspectPlugin(src)
+		if err != nil {
+			return nil, undo, err
+		}
+		infos = append(infos, info)
+	}
+	if len(infos) == 0 {
+		return nil, undo, nil
+	}
+	if err := os.MkdirAll(c.pluginsDir(), 0o700); err != nil {
+		return nil, undo, err
+	}
+	type saved struct {
+		path string
+		old  []byte // nil: the zip was not in the library before
+	}
+	var done []saved
+	seen := map[string]bool{}
+	undo = func() {
+		for i := len(done) - 1; i >= 0; i-- {
+			if done[i].old == nil {
+				_ = os.Remove(done[i].path)
+			} else {
+				_ = os.WriteFile(done[i].path, done[i].old, 0o600)
+			}
+		}
+	}
+	for i, info := range infos {
+		dst := filepath.Join(c.pluginsDir(), info.Slug+".zip")
+		if !seen[info.Slug] {
+			seen[info.Slug] = true
+			sv := saved{path: dst}
+			if b, err := os.ReadFile(dst); err == nil {
+				sv.old = b
+			}
+			done = append(done, sv)
+		}
+		if err := copyFile(srcs[i], dst); err != nil {
+			undo()
+			return nil, func() {}, err
+		}
+	}
+	return infos, undo, nil
+}
+
 // AddInput is what the upload form provides for a new theme.
 type AddInput struct {
 	ThemeZip   string   // path to the uploaded theme zip (required)
 	DemoZip    string   // optional Saayeh demo package
 	WPOrg      []string // extra wordpress.org plugin slugs
 	Library    []string // extra library plugin slugs
+	Companions []string // slugs of companion plugin zips uploaded with the theme (already in the library)
 	DemoGroups []string
+}
+
+// pluginSource is where a plugin the theme needs comes from: the library when its zip is
+// there, else wordpress.org.
+func (c *Catalog) pluginSource(slug string) string {
+	if c.LibraryPath(slug) != "" {
+		return "library"
+	}
+	return "wporg"
 }
 
 // Add inspects the uploads and creates (or replaces) a catalogue entry.
@@ -202,14 +263,26 @@ func (c *Catalog) Add(in AddInput) (*Theme, error) {
 			return nil, fmt.Errorf("بسته‌ی دمو برای پوسته‌ی %s است، نه %s", di.Theme, t.Slug)
 		}
 		t.DemoZip, t.DemoVersion = "demo.zip", di.Version
-		// Plugins the demo requires come first (e.g. WooCommerce before products are imported).
+		// Plugins the demo requires come first, in the demo's order (e.g. WooCommerce before
+		// products are imported, then the theme's own core plugin). A require whose zip is in
+		// the library (a companion plugin like electromart-core) is installed from there.
 		for _, r := range di.Requires {
-			add(Plugin{Slug: r})
+			add(Plugin{Slug: r, Source: c.pluginSource(r)})
 		}
 		add(Plugin{Slug: ImporterSlug, Source: "library"})
 		if c.LibraryPath(ImporterSlug) == "" {
-			return nil, errors.New("برای درون‌ریزی دمو، اول zip افزونه‌ی «درون‌ریز دمو سایه» را در کتابخانه‌ی افزونه‌ها بارگذاری کنید")
+			return nil, errors.New("برای درون‌ریزی دمو، zip افزونه‌ی «درون‌ریز دمو سایه» (" + ImporterSlug + ") لازم است؛ آن را در «افزونه‌های همراه قالب» همین فرم یا در کتابخانه‌ی افزونه‌ها بارگذاری کنید")
 		}
+	}
+	for _, s := range in.Companions {
+		s = strings.TrimSpace(s)
+		if s == "" || s == ImporterSlug {
+			continue // the importer is only needed with a demo, which adds it above
+		}
+		if c.LibraryPath(s) == "" {
+			return nil, fmt.Errorf("افزونه‌ی همراه %s در کتابخانه نیست", s)
+		}
+		add(Plugin{Slug: s, Source: "library"})
 	}
 	for _, s := range in.Library {
 		s = strings.TrimSpace(s)

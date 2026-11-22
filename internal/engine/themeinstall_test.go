@@ -91,15 +91,23 @@ func (f *fakeWP) server(t *testing.T, fake *cpaneltest.Fake) *httptest.Server {
 }
 
 func runThemeInstall(t *testing.T, failAt string, prep ...func(inputs map[string]string)) (Run, *fakeWP, *cpaneltest.Fake) {
+	return runThemeInstallCat(t, failAt, func(cat *catalog.Catalog, src string) {
+		if _, err := cat.Add(catalog.AddInput{ThemeZip: catalogtest.Theme(t, src, "mytheme"), DemoZip: catalogtest.Demo(t, src, "mytheme")}); err != nil {
+			t.Fatal(err)
+		}
+	}, prep...)
+}
+
+// runThemeInstallCat runs theme-install for "mytheme" after setup has filled the catalog
+// (the importer is already in the library).
+func runThemeInstallCat(t *testing.T, failAt string, setup func(cat *catalog.Catalog, src string), prep ...func(inputs map[string]string)) (Run, *fakeWP, *cpaneltest.Fake) {
 	t.Setenv("WPAUTO_DIR", t.TempDir())
 	src := t.TempDir()
 	cat := Catalog()
 	if _, err := cat.AddPlugin(catalogtest.Plugin(t, src, catalog.ImporterSlug, "")); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := cat.Add(catalog.AddInput{ThemeZip: catalogtest.Theme(t, src, "mytheme"), DemoZip: catalogtest.Demo(t, src, "mytheme")}); err != nil {
-		t.Fatal(err)
-	}
+	setup(cat, src)
 	demoPause = 0
 	fake := cpaneltest.New(t, "kfncspot", "secret")
 	t.Cleanup(fake.Close)
@@ -197,4 +205,50 @@ func TestThemeInstallWithDraft(t *testing.T) {
 		}
 	}
 	t.Fatal("demo.json missing")
+}
+
+// A theme added while its companion plugin (here "mytheme-core", required by the demo) was not
+// in the library lists it as wporg; uploading the zip to the library later is enough: the
+// install takes it from the library.
+func TestThemeInstallLibraryFallback(t *testing.T) {
+	run, wpf, fake := runThemeInstallCat(t, "", func(cat *catalog.Catalog, src string) {
+		th, err := cat.Add(catalog.AddInput{ThemeZip: catalogtest.Theme(t, src, "mytheme"), DemoZip: catalogtest.Demo(t, src, "mytheme", "mytheme-core")})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if th.Plugins[0].Slug != "mytheme-core" || th.Plugins[0].Source != "wporg" {
+			t.Fatalf("manifest: %+v", th.Plugins)
+		}
+		if _, err := cat.AddPlugin(catalogtest.Plugin(t, src, "mytheme-core", "")); err != nil {
+			t.Fatal(err)
+		}
+	})
+	if run.Status != StatusSuccess {
+		t.Fatalf("status %s: %s", run.Status, run.Error)
+	}
+	got := wpf.seen()
+	if !strings.Contains(got, "plugin_install:mytheme-core plugin_activate:mytheme-core plugin_install:saayeh-demo-importer") || strings.Contains(got, "plugin_fetch") {
+		t.Fatalf("actions: %s", got)
+	}
+	if !fake.Find("/mytheme-core.zip", "") {
+		t.Error("mytheme-core.zip not uploaded from the library")
+	}
+}
+
+// A plugin that wordpress.org does not have (404) fails with a message that says what to do.
+func TestThemeInstallNotOnWPOrg(t *testing.T) {
+	gone := httptest.NewServer(http.NotFoundHandler())
+	defer gone.Close()
+	defer SetWPOrgZipURL(func(slug string) string { return gone.URL + "/" + slug + ".zip" })()
+	run, _, _ := runThemeInstallCat(t, "plugin_fetch", func(cat *catalog.Catalog, src string) {
+		if _, err := cat.Add(catalog.AddInput{ThemeZip: catalogtest.Theme(t, src, "mytheme"), DemoZip: catalogtest.Demo(t, src, "mytheme", "mytheme-core")}); err != nil {
+			t.Fatal(err)
+		}
+	})
+	if run.Status != StatusFailed {
+		t.Fatalf("status %s", run.Status)
+	}
+	if !strings.Contains(run.Error, "افزونه‌ی mytheme-core در wordpress.org پیدا نشد") || !strings.Contains(run.Error, "افزونه‌ی همراه قالب") {
+		t.Fatalf("error: %s", run.Error)
+	}
 }
