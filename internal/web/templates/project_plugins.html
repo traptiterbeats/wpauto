@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="fa" dir="rtl">
+<head>{{template "head" .}}<title>افزونه‌های لازم · {{.P.Name}} | wpauto</title></head>
+<body>
+{{template "nav" .}}
+<main class="narrow">
+  {{template "flash" .}}
+  <header class="phead">
+    <h1>افزونه‌های لازم <span class="muted">· {{.P.Name}}</span></h1>
+    <p class="muted">افزونه‌های پرکاربرد را با یک کلیک روی وردپرس همین پروژه نصب و فعال کنید.</p>
+  </header>
+  {{if .Msg}}<div class="card hint ok" id="plugmsg">{{.Msg}}</div>{{end}}
+  {{if .Error}}<div class="error" id="plugerr">{{.Error}}</div>{{end}}
+
+  {{if .Scope.HasHost}}{{template "scopesummary" .Scope}}{{else}}{{template "nohost" .}}{{end}}
+  {{if .Scope.NeedAddr}}{{template "noaddr" .Scope}}{{end}}
+
+  <section class="card" id="plugstatus" aria-labelledby="ps-title">
+    <h2 id="ps-title" class="step">وضعیت روی سایت</h2>
+    <p class="small">{{with .Checked}}آخرین بررسی: <span dir="ltr">{{.StartedAt.Format "2006-01-02 15:04"}}</span> ({{.Title}}){{else}}<span class="muted">وضعیت افزونه‌ها هنوز از سایت خوانده نشده؛ «بررسی وضعیت» را بزنید.</span>{{end}}</p>
+    {{if .CanRun}}
+    <form method="post" action="{{.Action}}/check" class="inline" id="plugcheck">
+      <input type="hidden" name="csrf" value="{{.CSRF}}">
+      <button type="submit" class="ghost">بررسی وضعیت</button>
+      <span class="muted small">فقط خواندنی است و چیزی روی سایت تغییر نمی‌کند.</span>
+    </form>
+    {{else if .Busy}}<p class="small warn">یک کار افزونه در حال اجراست؛ بعد از پایانش این صفحه خودش تازه می‌شود.</p>{{end}}
+  </section>
+
+  <form method="post" action="{{.Action}}/install" id="plugform">
+    <input type="hidden" name="csrf" value="{{.CSRF}}">
+    <div class="plugcards">
+      {{range .Plugins}}
+      <div class="plugcard pl-{{if .State}}{{.State}}{{else}}unknown{{end}}" data-slug="{{.Slug}}">
+        <div class="plughead">
+          {{if and $.CanRun (ne .State "active")}}<input type="checkbox" name="sel" value="{{.Slug}}" aria-label="انتخاب {{.Name}}">{{end}}
+          <span class="plugicon" aria-hidden="true">{{.Icon}}</span>
+          <strong dir="auto">{{.Name}}</strong>
+        </div>
+        <p class="small">{{.Desc}}</p>
+        <p class="small muted" dir="ltr">{{.Slug}}</p>
+        <div class="plugfoot">
+          {{if eq .State "active"}}<span class="badge ok">✓ نصب و فعال</span>
+          {{else if eq .State "inactive"}}<span class="badge warn">نصب‌شده، غیرفعال</span>
+          {{else if eq .State "missing"}}<span class="badge">نصب نیست</span>
+          {{else}}<span class="badge muted">وضعیت نامشخص</span>{{end}}
+          {{if and $.CanRun (ne .State "active")}}<button type="submit" name="plugin" value="{{.Slug}}" class="small">{{if eq .State "inactive"}}فعال‌سازی{{else}}نصب{{end}}</button>{{end}}
+        </div>
+      </div>
+      {{end}}
+    </div>
+    {{if and .CanRun .Selectable}}
+    <div class="plugbulk">
+      <label class="check small"><input type="checkbox" id="selall"> انتخاب همه</label>
+      <button type="submit" id="bulkinstall">نصب همه‌ی انتخاب‌شده‌ها</button>
+    </div>
+    {{end}}
+  </form>
+  <p class="small muted">«نصب» افزونه را نصب و فعال هم می‌کند. zip هر افزونه را سرور پنل از wordpress.org دانلود می‌کند (هاست لازم نیست به wordpress.org دسترسی داشته باشد) و با cPanel روی هاست می‌گذارد. پوشه‌ی افزونه‌ای که از قبل روی سایت هست هیچ‌وقت بازنویسی نمی‌شود؛ فقط فعال می‌شود. اگر وسط کار خطایی پیش بیاید، افزونه‌های تازه حذف و فعال‌سازی‌های همین اجرا برگردانده می‌شوند.</p>
+
+  {{with .Run}}
+  <section class="card" id="plugrun" aria-labelledby="pr-title">
+    <h2 id="pr-title" class="step">{{.Title}} <span class="small muted">· <span id="status">{{template "status" .Status}}</span> · <span dir="ltr">{{.StartedAt.Format "2006-01-02 15:04"}}</span></span></h2>
+    {{if .Error}}<div class="error">{{.Error}}</div>{{end}}
+    <ol class="plan steps-run" id="steps">
+      {{range .Steps}}<li data-id="{{.ID}}" class="st-{{.Status}}"><span class="dot"></span><span class="t">{{.Title}}</span>{{if .Error}} <span class="bad small">{{.Error}}</span>{{end}}</li>{{end}}
+    </ol>
+    <details {{if not .Done}}open{{end}}>
+      <summary>لاگ اجرا</summary>
+      <pre class="log" id="log">{{range .Log}}<span class="lv-{{.Level}}">{{.T.Format "15:04:05"}}  {{.Msg}}</span>
+{{end}}</pre>
+    </details>
+    <p class="small"><a href="{{$.BasePath}}runs/{{.ID}}">صفحه‌ی کامل این اجرا</a></p>
+  </section>
+  <script>
+  (function(){
+    var done = {{.Done}}, after = {{len .Log}};
+    if (done) return;
+    var url = "{{$.BasePath}}runs/{{.ID}}/json";
+    var labels = {success:"موفق",failed:"ناموفق",running:"در حال اجرا",cancelled:"متوقف شد",skipped:"رد شد",pending:"در صف",interrupted:"قطع شد"};
+    function tick(){
+      fetch(url+"?after="+after,{credentials:"same-origin"}).then(function(r){return r.json()}).then(function(d){
+        var log = document.getElementById("log");
+        d.log.forEach(function(l){
+          var s = document.createElement("span");
+          s.className = "lv-"+l.level;
+          s.textContent = new Date(l.t).toTimeString().slice(0,8)+"  "+l.msg+"\n";
+          log.appendChild(s); after = l.n;
+        });
+        d.steps.forEach(function(st){
+          var li = document.querySelector('#steps li[data-id="'+st.id+'"]');
+          if (li) li.className = "st-"+st.status;
+        });
+        document.getElementById("status").textContent = labels[d.status]||d.status;
+        if (d.done) { location.reload(); return; }
+        setTimeout(tick, 1200);
+      }).catch(function(){ setTimeout(tick, 3000); });
+    }
+    tick();
+  })();
+  </script>
+  {{end}}
+  <script>
+  (function(){
+    var all = document.getElementById("selall"); if (!all) return;
+    all.addEventListener("change", function(){
+      document.querySelectorAll('#plugform input[name="sel"]').forEach(function(c){ c.checked = all.checked; });
+    });
+    document.getElementById("bulkinstall").addEventListener("click", function(e){
+      if (!document.querySelector('#plugform input[name="sel"]:checked')) { e.preventDefault(); alert("اول افزونه‌ها را تیک بزنید."); }
+    });
+  })();
+  </script>
+</main>
+</body>
+</html>

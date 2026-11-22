@@ -409,10 +409,15 @@ func stepThemeDemo(ctx context.Context, rc *RunContext, a map[string]string) (ma
 
 // fetchToCache downloads u into <config>/cache/name (refreshed daily) and returns the path.
 func fetchToCache(ctx context.Context, u, name string) (string, error) {
+	return fetchToCacheTTL(ctx, u, name, 24*time.Hour)
+}
+
+// fetchToCacheTTL is fetchToCache with its own reuse time.
+func fetchToCacheTTL(ctx context.Context, u, name string, ttl time.Duration) (string, error) {
 	dir := filepath.Join(config.Dir(), "cache")
 	_ = os.MkdirAll(dir, 0o700)
 	p := filepath.Join(dir, filepath.Base(name))
-	if st, err := os.Stat(p); err == nil && time.Since(st.ModTime()) < 24*time.Hour && st.Size() > 0 {
+	if st, err := os.Stat(p); err == nil && time.Since(st.ModTime()) < ttl && st.Size() > 0 {
 		return p, nil
 	}
 	req, _ := http.NewRequestWithContext(ctx, "GET", u, nil)

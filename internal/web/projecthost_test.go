@@ -374,7 +374,7 @@ func TestWordPressCardGroups(t *testing.T) {
 	if got := strings.Join(keys(gs[0]), ","); got != "host,wpcheck,wpinstall,wpremove" {
 		t.Fatalf("setup cards: %s", got)
 	}
-	if got := strings.Join(keys(gs[1]), ","); got != "customize,theme,plugins,themes,seo" {
+	if got := strings.Join(keys(gs[1]), ","); got != "recplugins,customize,theme,plugins,themes,seo" {
 		t.Fatalf("site cards: %s", got)
 	}
 	soon := 0
@@ -392,7 +392,7 @@ func TestWordPressCardGroups(t *testing.T) {
 			if c.Key == "customize" && c.NeedsHost {
 				t.Error("customize does not need the host")
 			}
-			if (c.Key == "wpcheck" || c.Key == "theme" || c.Key == "autopilot" || c.Key == "wpremove") && !c.NeedsHost {
+			if (c.Key == "wpcheck" || c.Key == "recplugins" || c.Key == "theme" || c.Key == "autopilot" || c.Key == "wpremove") && !c.NeedsHost {
 				t.Errorf("%s should wait for the host", c.Key)
 			}
 		}

@@ -265,6 +265,9 @@ func (s *Server) handleRunView(w http.ResponseWriter, r *http.Request) {
 	p, hasProject := s.projects.Get(run.ProjectID)
 	if hasProject {
 		data["RunProject"] = p
+		if isPluginsRun(run.WorkflowID) {
+			data["BackLink"] = pluginsLink(s.cfg.BasePath, p.ID) + "?run=" + url.QueryEscape(run.ID)
+		}
 	}
 	if run.Status == engine.StatusSuccess && (run.WorkflowID == "wp-install" || run.WorkflowID == "theme-install") {
 		site := p.URL()

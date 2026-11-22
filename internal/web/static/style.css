@@ -332,3 +332,13 @@ details.quiet form{display:flex;flex-direction:column;gap:8px;align-items:flex-s
 .rowact{display:inline-block;margin:0 8px 0 0}
 .np-host{border:1px solid var(--line);border-radius:10px;padding:12px 14px;display:flex;flex-direction:column;gap:12px;margin:0}
 .np-host legend{padding:0 6px;font-weight:600}
+/* «افزونه‌های لازم» */
+.plugcards{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px;margin:12px 0}
+.plugcard{display:flex;flex-direction:column;gap:6px;padding:14px;background:var(--card);border:1px solid var(--line);border-radius:14px}
+.plugcard p{margin:0}
+.plugcard.pl-active{border-color:#bbf7d0}
+.plughead{display:flex;align-items:center;gap:8px}
+.plugicon{font-size:24px;line-height:1}
+.plugfoot{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:auto;padding-top:6px}
+.plugbulk{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin:8px 0 12px}
+.badge.muted{color:var(--muted)}

@@ -180,6 +180,8 @@ var wpCards = []wpCard{
 			}
 			return l
 		}},
+	{Group: "site", Key: "recplugins", Title: "افزونه‌های لازم", Note: "نصب و فعال‌سازی افزونه‌های پرکاربرد با یک کلیک", Host: true,
+		Link: func(c wpCtx) string { return pluginsLink(c.bp, c.p.ID) }},
 	{Group: "site", Key: "customize", Title: "شخصی‌سازی برای مشتری (AI)", Note: "متن‌ها و تصاویر دمو برای این مشتری", Stage: "customize", Link: stageLink("customize")},
 	{Group: "site", Key: "theme", Title: "نصب قالب و دمو", Note: "قالب از کاتالوگ با دموی شخصی‌شده", Stage: "theme", Host: true, Link: stageLink("theme")},
 	{Group: "site", Key: "plugins", Title: "بررسی افزونه‌ها", Soon: true},

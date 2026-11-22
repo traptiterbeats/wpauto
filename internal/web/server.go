@@ -126,6 +126,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET "+bp+"projects", s.requireAuth(s.handleProjects))
 	mux.HandleFunc("GET "+bp+"p/{id}", s.requireAuth(s.handleProjectView))
 	mux.HandleFunc("GET "+bp+"p/{id}/wordpress", s.requireAuth(s.handleProjectWP))
+	mux.HandleFunc("GET "+bp+"p/{id}/wordpress/plugins", s.requireAuth(s.handleProjectPlugins))
+	mux.HandleFunc("POST "+bp+"p/{id}/wordpress/plugins/{op}", s.requireAuth(s.handleProjectPluginsOp))
 	mux.HandleFunc("GET "+bp+"p/{id}/host", s.requireAuth(s.handleProjectHost))
 	mux.HandleFunc("POST "+bp+"p/{id}/host/save", s.requireAuth(s.handleProjectHostSave))
 	mux.HandleFunc("POST "+bp+"p/{id}/host/check", s.requireAuth(s.handleProjectHostCheck))

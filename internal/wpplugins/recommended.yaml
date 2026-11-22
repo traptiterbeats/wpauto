@@ -1,0 +1,46 @@
+# Recommended plugins shown on a project's «افزونه‌های لازم» page.
+# slug = the plugin's wordpress.org slug (its zip is downloaded by the panel from
+# https://downloads.wordpress.org/plugin/<slug>.latest-stable.zip).
+# More plugins can be added without a new build in <config dir>/recommended-plugins.yaml
+# (same format; an entry with an existing slug replaces it, `hidden: true` removes it).
+plugins:
+  - slug: woocommerce
+    name: WooCommerce
+    icon: "🛒"
+    desc: فروشگاه‌ساز؛ محصول، سبد خرید و پرداخت برای سایت
+  - slug: persian-woocommerce
+    name: ووکامرس فارسی
+    icon: "🇮🇷"
+    desc: فارسی‌سازی ووکامرس با واحد تومان و استان‌ها و شهرهای ایران (ووکامرس هم لازم است)
+  - slug: contact-form-7
+    name: Contact Form 7
+    icon: "✉️"
+    desc: ساخت فرم تماس و فرم‌های ساده برای سایت
+  - slug: wp-parsidate
+    name: پارسی‌دیت
+    icon: "📅"
+    desc: تاریخ شمسی و فارسی‌سازی وردپرس
+  - slug: wordpress-seo
+    name: Yoast SEO
+    icon: "🔎"
+    desc: سئو؛ عنوان و توضیحات صفحه‌ها، نقشه‌ی سایت و پیشنهادهای بهینه‌سازی
+  - slug: litespeed-cache
+    name: LiteSpeed Cache
+    icon: "⚡"
+    desc: کش و افزایش سرعت سایت؛ فقط روی سرورهای لایت‌اسپید (LiteSpeed) کاربرد دارد
+  - slug: updraftplus
+    name: UpdraftPlus
+    icon: "💾"
+    desc: پشتیبان‌گیری خودکار از فایل‌ها و دیتابیس سایت و بازگردانی آن
+  - slug: wordfence
+    name: Wordfence
+    icon: "🛡️"
+    desc: امنیت؛ فایروال، اسکن بدافزار و محافظت از صفحه‌ی ورود
+  - slug: wp-mail-smtp
+    name: WP Mail SMTP
+    icon: "📨"
+    desc: ارسال مطمئن ایمیل‌های سایت از طریق SMTP تا ایمیل‌ها به اسپم نروند
+  - slug: classic-editor
+    name: Classic Editor
+    icon: "📝"
+    desc: بازگرداندن ویرایشگر کلاسیک وردپرس به‌جای گوتنبرگ

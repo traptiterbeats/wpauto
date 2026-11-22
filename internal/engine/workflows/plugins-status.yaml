@@ -1,0 +1,34 @@
+id: plugins-status
+title: بررسی وضعیت افزونه‌ها
+description: می‌خواند کدام افزونه‌های لازم روی وردپرس پروژه نصب و فعال‌اند. فقط خواندنی (فایل موقت اتصال در پایان حذف می‌شود).
+order: 46
+hidden: true
+inputs:
+  - name: domain
+    label: دامنه یا ساب‌دامین سایت
+    type: domain
+    required: true
+  - name: folder
+    label: پوشه (اگر وردپرس داخل پوشه است)
+    pattern: "[a-z0-9][a-z0-9._-]{0,62}"
+steps:
+  - id: login
+    title: ورود به cPanel
+    uses: cpanel.login
+  - id: locate
+    title: پیدا کردن وردپرس
+    uses: wp.locate
+    with:
+      domain: "{{.Inputs.domain}}"
+      folder: "{{.Inputs.folder}}"
+  - id: attach
+    title: اتصال به وردپرس
+    uses: wp.attach
+    with:
+      host: "{{.Steps.locate.host}}"
+      path: "{{.Steps.locate.path}}"
+      addr: "{{.Steps.locate.site_addr}}"
+      docroot: "{{.Steps.locate.docroot}}"
+  - id: status
+    title: خواندن وضعیت افزونه‌ها
+    uses: plugins.status

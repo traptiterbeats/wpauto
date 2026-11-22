@@ -1,0 +1,41 @@
+id: plugins-install
+title: نصب افزونه‌های لازم
+description: افزونه‌های انتخاب‌شده از فهرست «افزونه‌های لازم» را روی وردپرس پروژه نصب و فعال می‌کند. zip هر افزونه را سرور پنل از wordpress.org می‌گیرد و با cPanel آپلود می‌کند. پوشه‌ی افزونه‌ای که از قبل هست بازنویسی نمی‌شود (فقط فعال می‌شود). اگر وسط کار خطایی پیش بیاید، افزونه‌های تازه حذف و فعال‌سازی‌ها برگردانده می‌شوند.
+order: 45
+hidden: true
+rollback: true
+inputs:
+  - name: domain
+    label: دامنه یا ساب‌دامین سایت
+    type: domain
+    required: true
+  - name: folder
+    label: پوشه (اگر وردپرس داخل پوشه است)
+    pattern: "[a-z0-9][a-z0-9._-]{0,62}"
+  - name: plugins
+    label: افزونه‌ها (نامک wordpress.org، با ویرگول)
+    required: true
+    pattern: "[a-z0-9][a-z0-9,-]*"
+steps:
+  - id: login
+    title: ورود به cPanel
+    uses: cpanel.login
+  - id: locate
+    title: پیدا کردن وردپرس
+    uses: wp.locate
+    with:
+      domain: "{{.Inputs.domain}}"
+      folder: "{{.Inputs.folder}}"
+  - id: attach
+    title: اتصال به وردپرس
+    uses: wp.attach
+    with:
+      host: "{{.Steps.locate.host}}"
+      path: "{{.Steps.locate.path}}"
+      addr: "{{.Steps.locate.site_addr}}"
+      docroot: "{{.Steps.locate.docroot}}"
+  - id: ensure
+    title: نصب و فعال‌سازی افزونه‌ها
+    uses: plugins.ensure
+    with:
+      plugins: "{{.Inputs.plugins}}"

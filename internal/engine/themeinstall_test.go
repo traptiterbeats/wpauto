@@ -20,7 +20,8 @@ type fakeWP struct {
 	mu      sync.Mutex
 	actions []string
 	steps   int
-	failAt  string // action that fails
+	failAt  string         // action that fails
+	plugins map[string]any // wp_info plugins (nil: akismet, inactive)
 }
 
 func (f *fakeWP) seen() string {
@@ -59,6 +60,9 @@ func (f *fakeWP) server(t *testing.T, fake *cpaneltest.Fake) *httptest.Server {
 			out = map[string]any{"ok": true, "version": "6.8.3", "url": "http://example.com/", "stylesheet": "twentytwentyfive",
 				"themes": map[string]any{"twentytwentyfive": "1.0"}, "php": "8.3",
 				"plugins": map[string]any{"akismet": map[string]any{"version": "5", "active": false}}}
+			if f.plugins != nil {
+				out["plugins"] = f.plugins
+			}
 		case "plugin_install", "theme_install":
 			out["created"] = true
 		case "plugin_activate":
