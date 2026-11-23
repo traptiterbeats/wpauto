@@ -18,7 +18,7 @@
     <dl class="kv">
       <dt>آدرس cPanel</dt><dd dir="ltr">{{.Host.URL}}</dd>
       <dt>نام کاربری</dt><dd dir="ltr">{{.Host.Username}}</dd>
-      <dt>پروفایل</dt><dd>{{if .HostProfile}}{{.HostProfile.Name}}{{else}}{{.Host.ProfileID}}{{end}}</dd>
+      <dt>پروفایل</dt><dd id="hostprofile" title="خودکار از روی آدرس cPanel">{{if .HostProfile}}{{.HostProfile.Name}}{{else}}{{.Host.ProfileID}}{{end}}</dd>
       <dt>آخرین بررسی</dt><dd>{{with .Host.LastReport}}<span class="{{if .ReadyForWP}}ok{{else if .LoginOK}}warn{{else}}bad{{end}}">{{if .ReadyForWP}}آماده برای وردپرس{{else if .LoginOK}}نیاز به بررسی{{else}}ورود ناموفق{{end}}</span> · <span dir="ltr">{{.At.Format "2006-01-02 15:04"}}</span>{{else}}<span class="muted">هنوز بررسی نشده</span>{{end}}</dd>
       {{if .Host.Disk}}<dt>فضای هاست</dt><dd>{{template "disk" .Host.Disk}}</dd>{{end}}
     </dl>
@@ -101,10 +101,7 @@
       <label>آدرس cPanel<input name="url" required dir="ltr" value="{{.DefaultURL}}" placeholder="https://example.com:2083"></label>
       <label>نام کاربری cPanel<input name="username" required dir="ltr"></label>
       <label>رمز عبور یا API Token<input name="secret" type="password" required dir="ltr" autocomplete="new-password"></label>
-      <label>پروفایل هاست
-        <select name="profile">{{range .Profiles}}<option value="{{.ID}}">{{.Name}} — {{.Description}}</option>{{end}}</select>
-      </label>
-      <p class="muted small">رمز به‌صورت رمزنگاری‌شده (AES-256) روی سرور خودتان ذخیره می‌شود و دیگر نمایش داده نمی‌شود.</p>
+      <p class="muted small">پروفایل هاست از روی آدرس cPanel خودکار انتخاب می‌شود. رمز به‌صورت رمزنگاری‌شده (AES-256) روی سرور خودتان ذخیره می‌شود و دیگر نمایش داده نمی‌شود.</p>
       <button type="submit">ذخیره و بررسی</button>
     </form>
   </section>

@@ -269,6 +269,9 @@ func (s *Server) handleRunView(w http.ResponseWriter, r *http.Request) {
 			data["BackLink"] = pluginsLink(s.cfg.BasePath, p.ID) + "?run=" + url.QueryEscape(run.ID)
 		}
 	}
+	if isWipeRun(run) && s.wipeRunView(w, r, run, data) {
+		return
+	}
 	if run.Status == engine.StatusSuccess && (run.WorkflowID == "wp-install" || run.WorkflowID == "theme-install") {
 		site := p.URL()
 		if dom, folder := projectSite(run.WorkflowID, run.Inputs); dom != "" {

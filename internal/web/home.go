@@ -21,6 +21,7 @@ type projectRow struct {
 	LastTitle   string
 	LastStatus  string
 	Search      string // lower-case name and address, for the live filter
+	Del         delView
 }
 
 func (s *Server) projectRows() []projectRow {
@@ -50,7 +51,7 @@ func (s *Server) projectRows() []projectRow {
 // newProjectForm is what the user typed in the Home «پروژه‌ی تازه» form, shown again with an
 // error when creation is refused. The password is never kept or shown.
 type newProjectForm struct {
-	Name, Domain, HostURL, HostUser, Profile, Error string
+	Name, Domain, HostURL, HostUser, Error string
 }
 
 func (s *Server) handleHome(w http.ResponseWriter, r *http.Request) {
@@ -65,11 +66,18 @@ func (s *Server) renderHome(w http.ResponseWriter, r *http.Request, f *newProjec
 		r = r.Clone(r.Context())
 		r.URL = &u
 	}
-	if f.Profile == "" {
-		f.Profile = "generic"
+	rows := s.projectRows()
+	for i := range rows {
+		rows[i].Del = s.delViewFor(r, rows[i].Project, s.cfg.BasePath, s.cfg.BasePath)
+	}
+	wipeRun := ""
+	if id := r.URL.Query().Get("wiperun"); id != "" {
+		if run, ok := s.runner.Get(id, -1); ok && isWipeRun(run) {
+			wipeRun = run.ID
+		}
 	}
 	data := s.page(r, map[string]any{
-		"IsHome": true, "Rows": s.projectRows(), "NP": f, "Profiles": s.profiles(),
+		"IsHome": true, "Rows": rows, "NP": f, "WipeRun": wipeRun,
 		"Suffixes": template.JS(suffixes), "Crumbs": []crumb{{"پروژه‌ها", ""}},
 	})
 	if status != http.StatusOK {
@@ -119,6 +127,7 @@ func (s *Server) handleProjectView(w http.ResponseWriter, r *http.Request) {
 	h, _ := s.store.Get(p.HostID)
 	s.render(w, "project.html", s.page(r, map[string]any{
 		"P": p, "Addr": projectAddr(p), "PHost": h, "CMS": cmsSections,
+		"Del":    s.delViewFor(r, p, bp+"p/"+p.ID, bp+"p/"+p.ID),
 		"Crumbs": []crumb{{"پروژه‌ها", bp}, {p.Name, ""}},
 	}))
 }

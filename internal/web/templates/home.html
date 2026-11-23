@@ -5,6 +5,7 @@
 {{template "nav" .}}
 <main class="home">
   {{template "flash" .}}
+  {{with .WipeRun}}<p class="small" id="wipereport"><a href="{{$.BasePath}}runs/{{.}}">گزارش کامل حذف سایت از هاست ←</a></p>{{end}}
   <section class="newproj" aria-labelledby="np-title">
     <h1 id="np-title">پروژه‌ی تازه</h1>
     <form method="post" action="{{.BasePath}}projects/new" id="newproj" class="np-form" autocomplete="off">
@@ -18,10 +19,7 @@
         <label>آدرس cPanel<input name="host_url" id="np-hosturl" dir="ltr" required placeholder="https://example.com:2083" value="{{.NP.HostURL}}"></label>
         <label>نام کاربری cPanel<input name="host_user" dir="ltr" required value="{{.NP.HostUser}}"></label>
         <label>رمز عبور یا API Token<input name="host_secret" type="password" dir="ltr" required autocomplete="new-password"></label>
-        <label>پروفایل هاست
-          <select name="host_profile">{{range .Profiles}}<option value="{{.ID}}" {{if eq .ID $.NP.Profile}}selected{{end}}>{{.Name}}</option>{{end}}</select>
-        </label>
-        <p class="small muted">هاست فقط مال همین پروژه است و رمزنگاری‌شده ذخیره می‌شود؛ بعد از ساختن، آدرس cPanel و نام کاربری ثابت می‌مانند و فقط رمز/توکن قابل به‌روزرسانی است. بلافاصله بررسی هاست (فقط خواندنی) اجرا می‌شود.</p>
+        <p class="small muted">هاست فقط مال همین پروژه است و رمزنگاری‌شده ذخیره می‌شود؛ بعد از ساختن، آدرس cPanel و نام کاربری ثابت می‌مانند و فقط رمز/توکن قابل به‌روزرسانی است. بلافاصله بررسی هاست (فقط خواندنی) اجرا می‌شود. تنظیمات مخصوص هاست (پروفایل) از روی آدرس cPanel خودکار انتخاب می‌شود.</p>
       </fieldset>
       <button type="submit">ساختن پروژه ←</button>
     </form>
@@ -43,6 +41,8 @@
           <span class="pr-last small muted">{{if .LastTitle}}{{.LastTitle}} · {{template "status" .LastStatus}}{{else}}ساخته شد{{end}} · <span dir="ltr">{{.LastAt.Format "2006-01-02 15:04"}}</span></span>
           <span class="pr-prog small muted" title="{{.Done}} از {{.Total}} مرحله">{{.Done}}/{{.Total}}</span>
         </a>
+        <a class="btn ghost danger small pr-del" href="{{$.BasePath}}p/{{.ID}}/delete" data-dialog="del-{{.ID}}" aria-label="حذف پروژه‌ی {{.Name}}">حذف</a>
+        <dialog id="del-{{.ID}}" class="deldialog" aria-label="حذف پروژه">{{template "delproject" .Del}}</dialog>
       </li>
       {{end}}
     </ul>
@@ -52,6 +52,7 @@
     {{end}}
   </section>
 </main>
+{{template "delscript"}}
 <script>
 (function(){
   // live project filter (client side)

@@ -12,6 +12,7 @@
   <p class="muted">{{with .RunProject}}پروژه: <strong>{{.Name}}</strong> · {{end}}هاست: {{.Run.HostName}} · شروع: <span dir="ltr">{{.Run.StartedAt.Format "2006-01-02 15:04:05"}}</span> · وضعیت: <span id="status">{{template "status" .Run.Status}}</span></p>
   {{with .SiteURL}}<div class="sitelinks"><a class="btn" href="{{.}}?v={{$.Bust}}" target="_blank" rel="noopener">دیدن سایت ↗</a><a class="btn ghost" style="color:inherit" href="{{.}}wp-admin/" target="_blank" rel="noopener">پیشخوان وردپرس ↗</a></div>{{end}}
   <div id="err" class="error" {{if not .Run.Error}}hidden{{end}}>{{.Run.Error}}</div>
+  {{with .Wipe}}<div class="card hint{{if eq $.Run.Status "success"}} ok{{end}}" id="wipeinfo">{{if not $.Run.Done}}حذف پروژه‌ی «{{.Name}}»: اول وردپرس <span dir="ltr">{{.Site}}</span> از هاست پاک می‌شود؛ پروژه فقط بعد از موفقیت این اجرا حذف می‌شود.{{else if eq $.Run.Status "success"}}{{.Summary}}{{else}}سایت روی هاست کامل پاک نشد؛ پروژه‌ی «{{.Name}}» و همه‌ی اطلاعاتش نگه داشته شد. خطا را بالا ببینید؛ می‌توانید دوباره امتحان کنید یا پروژه را بدون تیک «سایت روی هاست» حذف کنید.{{if .Exists}} <a href="{{$.BackLink}}">بازگشت به پروژه</a>{{end}}{{end}}</div>{{end}}
 
   {{if not .Run.Done}}
   <form method="post" action="{{.BasePath}}runs/{{.Run.ID}}/cancel" id="cancel">
@@ -53,7 +54,7 @@
         if (li) li.className = "st-"+st.status;
       });
       document.getElementById("status").textContent = labels[d.status]||d.status;
-      if (d.done) { location.reload(); return; }
+      if (d.done) { {{if .Wipe}}location.href = "{{.BasePath}}runs/{{.Run.ID}}?finish=1";{{else}}location.reload();{{end}} return; }
       setTimeout(tick, 1200);
     }).catch(function(){ setTimeout(tick, 3000); });
   }

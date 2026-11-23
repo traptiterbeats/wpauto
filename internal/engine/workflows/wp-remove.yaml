@@ -4,9 +4,19 @@ description: وردپرس‌های انتخاب‌شده را بدون بکاپ 
 order: 91
 hidden: true
 inputs:
+  # sites: folders picked from the last scan (page «حذف وردپرس»)
   - name: sites
     label: مسیر وردپرس‌ها
-    required: true
+  # site: one project's address (domain or domain/folder) when the project is deleted with its site;
+  # own_subs: subdomains wpauto created for it (only these are deleted); project/project_name: who asked
+  - name: site
+    label: آدرس سایت پروژه
+  - name: own_subs
+    label: ساب‌دامین‌های ساخت wpauto
+  - name: project
+    label: پروژه
+  - name: project_name
+    label: نام پروژه
 steps:
   - id: login
     title: ورود به cPanel
@@ -16,3 +26,5 @@ steps:
     uses: wp.remove
     with:
       sites: "{{.Inputs.sites}}"
+      site: "{{.Inputs.site}}"
+      own_subs: "{{.Inputs.own_subs}}"

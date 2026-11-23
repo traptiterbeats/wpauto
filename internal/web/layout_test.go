@@ -121,7 +121,7 @@ func TestLayoutAndPlan(t *testing.T) {
 		t.Fatal("disk usage missing on hosts page")
 	}
 	// deleting a project with purge removes it and reports the count
-	r, err := cl.PostForm(base+"projects/"+p.ID+"/delete", url.Values{"purge": {"on"}, "csrf": {csrfOf(t, home)}})
+	r, err := cl.PostForm(base+"projects/"+p.ID+"/delete", url.Values{"purge": {"on"}, "sure": {"1"}, "csrf": {csrfOf(t, home)}})
 	if err != nil {
 		t.Fatal(err)
 	}

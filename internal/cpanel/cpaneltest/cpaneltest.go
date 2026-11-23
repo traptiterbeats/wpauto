@@ -30,6 +30,9 @@ type Fake struct {
 	// Extracted lists the archive entries Fileman::fileop extract writes (relative to the
 	// destination). Nil means a tiny WordPress tree under "wordpress/".
 	Extracted []string
+	// QuotaMB is the disk usage Quota::get_quota_info reports, one value per call; the last one
+	// repeats. Empty means 235.13 MB.
+	QuotaMB []float64
 }
 
 // DefaultExtracted is what extract writes when Extracted is nil.
@@ -168,6 +171,13 @@ func (f *Fake) FindFile(suffix string) (string, bool) {
 	return "", false
 }
 
+// CallList returns a copy of the calls made so far (safe while a run is still going).
+func (f *Fake) CallList() []string {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return append([]string(nil), f.Calls...)
+}
+
 // CallCount returns how many Module/function calls were made so far.
 func (f *Fake) CallCount() int {
 	f.mu.Lock()
@@ -258,7 +268,16 @@ func New(t *testing.T, user, pass string) *Fake {
 		case "Mysql/list_databases":
 			ok(w, []any{map[string]any{"database": "kfncspot_a"}})
 		case "Quota/get_quota_info":
-			ok(w, map[string]any{"megabytes_used": 235.13, "megabyte_limit": 1024})
+			used := 235.13
+			f.mu.Lock()
+			if len(f.QuotaMB) > 0 {
+				used = f.QuotaMB[0]
+				if len(f.QuotaMB) > 1 {
+					f.QuotaMB = f.QuotaMB[1:]
+				}
+			}
+			f.mu.Unlock()
+			ok(w, map[string]any{"megabytes_used": used, "megabyte_limit": 1024})
 		case "Tokens/list":
 			_ = json.NewEncoder(w).Encode(map[string]any{"status": 0, "errors": []string{"feature not enabled"}})
 		case "DomainInfo/domains_data":
@@ -287,6 +306,11 @@ func New(t *testing.T, user, pass string) *Fake {
 			case home + "/public_html/shop":
 				ok(w, []map[string]any{{"file": "wp-config.php", "type": "file"}, {"file": "wp-includes", "type": "dir"}})
 			case home + "/blog":
+				// empty unless a test wrote files there (then those are listed, e.g. a WordPress)
+				if list := f.children(home + "/blog"); len(list) > 0 {
+					ok(w, list)
+					return
+				}
 				ok(w, []map[string]any{{"file": "index.html", "type": "file"}})
 			default:
 				// a folder the tests wrote into lists what was written there

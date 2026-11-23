@@ -27,15 +27,9 @@
     {{end}}
     {{end}}
   </div>
-  <details class="quiet">
-    <summary class="small muted">حذف پروژه</summary>
-    <form method="post" action="{{.BasePath}}projects/{{.P.ID}}/delete" onsubmit="return confirm(this.purge.checked?'پروژه همراه اجراها و پیش‌نویسش حذف شود؟':'پروژه حذف شود؟ اجراها و پیش‌نویس می‌مانند.')">
-      <input type="hidden" name="csrf" value="{{.CSRF}}"><input type="hidden" name="back" value="{{.BasePath}}">
-      <label class="check small"><input type="checkbox" name="purge" checked> با اجراها و پیش‌نویس</label>
-      <p class="small muted">فقط از wpauto حذف می‌شود؛ سایت روی هاست دست نمی‌خورد.</p>
-      <button class="ghost danger small" type="submit">حذف پروژه</button>
-    </form>
-  </details>
+  <p class="pdel"><a class="btn ghost danger small" id="pdel" href="{{.BasePath}}p/{{.P.ID}}/delete" data-dialog="del-{{.P.ID}}">حذف پروژه…</a></p>
+  <dialog id="del-{{.P.ID}}" class="deldialog" aria-label="حذف پروژه">{{template "delproject" .Del}}</dialog>
 </main>
+{{template "delscript"}}
 </body>
 </html>

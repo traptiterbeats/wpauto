@@ -190,7 +190,7 @@ func (s *Server) handleProjectHost(w http.ResponseWriter, r *http.Request) {
 	bp := s.cfg.BasePath
 	msg := r.URL.Query().Get("msg")
 	data := map[string]any{
-		"P": p, "Addr": projectAddr(p), "Profiles": s.profiles(), "DefaultURL": projectHostURL(p),
+		"P": p, "Addr": projectAddr(p), "DefaultURL": projectHostURL(p),
 		"Msg": msg, "Error": r.URL.Query().Get("err"),
 		"Crumbs": []crumb{{"پروژه‌ها", bp}, {p.Name, bp + "p/" + p.ID}, {"وردپرس", bp + "p/" + p.ID + "/wordpress"}, {"بررسی هاست", ""}},
 	}
@@ -211,12 +211,14 @@ type hostInput struct {
 	Profile           string
 }
 
-// parseHostInput checks a typed connection: profile (generic when unknown), cPanel address,
-// user name and, when needSecret, the password/API token, which it seals.
+// parseHostInput checks a typed connection: profile, cPanel address, user name and, when
+// needSecret, the password/API token, which it seals. An empty profID picks the profile from the
+// cPanel address (profile match: list, else generic); projects always pass "". A named profID
+// (admin hosts pages) falls back to the same automatic choice when unknown.
 func (s *Server) parseHostInput(addr, user, secret, profID string, needSecret bool) (hostInput, error) {
 	prof, ok := profile.Find(s.profiles(), profID)
-	if !ok {
-		if prof, ok = profile.Find(s.profiles(), "generic"); !ok {
+	if !ok || profID == "" {
+		if prof = profile.ForAddr(s.profiles(), addr); prof == nil {
 			return hostInput{}, errors.New("پروفایل هاست پیدا نشد")
 		}
 	}
@@ -286,7 +288,8 @@ func (s *Server) handleProjectHostSave(w http.ResponseWriter, r *http.Request) {
 		s.startHostCheck(w, r, p.ID, cur.ID, "رمز/توکن به‌روزرسانی شد و بررسی هاست شروع شد.")
 		return
 	}
-	in, err := s.parseHostInput(r.FormValue("url"), r.FormValue("username"), r.FormValue("secret"), r.FormValue("profile"), true)
+	// the profile is picked from the cPanel address; a posted profile is ignored
+	in, err := s.parseHostInput(r.FormValue("url"), r.FormValue("username"), r.FormValue("secret"), "", true)
 	if err != nil {
 		fail(err.Error())
 		return

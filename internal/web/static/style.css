@@ -346,3 +346,14 @@ details.quiet form{display:flex;flex-direction:column;gap:8px;align-items:flex-s
 .plugbulk{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin:8px 0 12px}
 .badge.muted{color:var(--muted)}
 .badge.bad.plug{border-color:#fecaca;background:#fef2f2;font-weight:600}
+
+/* project delete: row button + dialog */
+.prow{display:flex;align-items:center;gap:8px}
+.prow>a:first-child{flex:1;min-width:0}
+.prow>a.pr-del{flex:none;display:inline-flex;padding:4px 12px;color:var(--err);border-color:var(--err)}
+.deldialog{border:1px solid var(--line);border-radius:14px;background:var(--card);color:var(--text);padding:20px;max-width:min(520px,92vw)}
+.deldialog::backdrop{background:rgba(0,0,0,.35)}
+.delform h3{margin:0 0 8px}
+.del-actions{display:flex;gap:8px;align-items:center;margin-top:8px}
+.del-go:disabled{opacity:.45;cursor:not-allowed}
+.pdel{margin-top:28px}

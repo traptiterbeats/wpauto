@@ -147,3 +147,34 @@
 {{define "themepick"}}<div class="theme-pick" role="radiogroup" aria-label="قالب">{{range $i, $t := .Themes}}<label class="theme-card"><input type="radio" name="{{$.Name}}" value="{{$t.Slug}}" {{if eq $t.Slug $.Selected}}checked{{else if and (eq $i 0) (not $.Selected)}}checked{{end}} required>
   {{if $t.Screenshot}}<img src="{{$.BasePath}}themes/{{$t.Slug}}/screenshot" alt="{{$t.Name}}" loading="lazy">{{else}}<div class="noshot" aria-hidden="true">🖼</div>{{end}}
   <span>{{$t.Name}} <span class="muted small" dir="ltr">{{$t.Version}}</span>{{if index $.Bad $t.Slug}} <span class="small warn">✘ استاندارد نیست</span>{{end}}</span></label>{{end}}</div>{{end}}
+
+{{define "delproject"}}<form method="post" action="{{.BasePath}}projects/{{.P.ID}}/delete" class="form delform" data-delform>
+  <input type="hidden" name="csrf" value="{{.CSRF}}"><input type="hidden" name="back" value="{{.BasePath}}"><input type="hidden" name="errback" value="{{.ErrBack}}"><input type="hidden" name="purge" value="1">
+  <h3 class="del-title">همه‌چیز این پروژه پاک شود؟</h3>
+  <p>پروژه‌ی <strong>{{.P.Name}}</strong>{{if .P.Domain}} · آدرس سایت: <span dir="ltr" class="del-site">{{.P.Site}}</span>{{end}}</p>
+  <p class="small muted">از wpauto پاک می‌شود: خود پروژه، اطلاعات اتصال هاستش، همه‌ی اجراها و پیش‌نویس اختصاصی‌اش.</p>
+  <label class="check del-wipebox"><input type="checkbox" name="wipe_site" value="1" class="del-wipe"{{if not .CanWipe}} disabled{{end}}> سایت وردپرس روی هاست هم پاک شود (فایل‌ها و دیتابیس) تا فضای هاست آزاد شود</label>
+  {{if .P.Domain}}<p class="small">سایت: <a dir="ltr" href="{{.P.URL}}" target="_blank" rel="noopener">{{.P.URL}}</a></p>{{end}}
+  {{if .CanWipe}}<p class="small warn del-wipenote">با تیک بالا: بدون بکاپ و برای همیشه، فقط وردپرس همین آدرس پاک می‌شود — فایل‌هایش، دیتابیس و کاربر دیتابیسش، و ساب‌دامینش فقط اگر wpauto ساخته باشد. دامنه‌ی اصلی و سایت‌های دیگر دست نمی‌خورند. پروژه فقط بعد از پاک شدن کامل سایت حذف می‌شود.</p>
+  {{else}}<p class="small muted del-why">{{.WipeWhy}}</p>{{end}}
+  <label class="check"><input type="checkbox" name="sure" value="1" required class="del-sure"> مطمئنم؛ این کار برگشت‌پذیر نیست</label>
+  <div class="del-actions"><button type="submit" class="danger del-go">حذف</button> <a class="btn ghost del-cancel" href="{{.CancelLink}}">انصراف</a></div>
+</form>{{end}}
+{{define "delscript"}}<script>
+(function(){
+  // delete dialogs: «حذف» stays disabled until «مطمئنم» is ticked; without JS the server checks it
+  document.querySelectorAll('form[data-delform]').forEach(function(f){
+    var sure=f.querySelector('.del-sure'), go=f.querySelector('.del-go'), wipe=f.querySelector('.del-wipe');
+    function upd(){ go.disabled=!sure.checked; go.textContent=(wipe&&wipe.checked)?'حذف پروژه و سایت روی هاست':'حذف'; }
+    sure.addEventListener('change',upd); if(wipe) wipe.addEventListener('change',upd); upd();
+    var c=f.querySelector('.del-cancel'), d=f.closest('dialog');
+    if(c&&d) c.addEventListener('click',function(e){ e.preventDefault(); d.close(); });
+  });
+  // a «حذف» link opens its <dialog>; browsers without <dialog> follow the link to the confirm page
+  document.querySelectorAll('[data-dialog]').forEach(function(a){
+    var d=document.getElementById(a.getAttribute('data-dialog'));
+    if(!d||typeof d.showModal!=='function') return;
+    a.addEventListener('click',function(e){ e.preventDefault(); d.showModal(); });
+  });
+})();
+</script>{{end}}

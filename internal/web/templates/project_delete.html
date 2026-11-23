@@ -1,0 +1,12 @@
+<!doctype html>
+<html lang="fa" dir="rtl">
+<head>{{template "head" .}}<title>حذف پروژه · {{.P.Name}} | wpauto</title></head>
+<body>
+{{template "nav" .}}
+<main class="narrow">
+  {{template "flash" .}}
+  <section class="card" id="delpage">{{template "delproject" .Del}}</section>
+</main>
+{{template "delscript"}}
+</body>
+</html>

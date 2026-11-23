@@ -30,7 +30,7 @@
       <td dir="ltr">{{.Created.Format "2006-01-02"}}</td>
       <td class="inline">
         {{if not (and $.Project (eq .ID $.Project.ID))}}<form method="post" action="{{$.BasePath}}projects/{{.ID}}/activate"><input type="hidden" name="csrf" value="{{$.CSRF}}"><input type="hidden" name="back" value="{{$.BasePath}}"><button class="small" type="submit">فعال کن</button></form>{{end}}
-        <form method="post" action="{{$.BasePath}}projects/{{.ID}}/delete" onsubmit="return confirm(this.purge.checked?'پروژه همراه اجراها و پیش‌نویسش حذف شود؟':'پروژه حذف شود؟ اجراها و پیش‌نویس می‌مانند.')"><input type="hidden" name="csrf" value="{{$.CSRF}}"><label class="small inline-check"><input type="checkbox" name="purge" checked> با اجراها و پیش‌نویس</label> <button class="ghost danger small" type="submit">حذف</button></form>
+        <a class="btn ghost danger small" href="{{$.BasePath}}p/{{.ID}}/delete">حذف…</a>
       </td>
     </tr>
     {{end}}

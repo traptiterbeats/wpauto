@@ -41,8 +41,7 @@ func (s *Server) handleProjectNew(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, back+sep+"err="+url.QueryEscape(msg), http.StatusSeeOther)
 	}
 	nf = newProjectForm{Name: strings.TrimSpace(r.FormValue("name")), Domain: strings.TrimSpace(r.FormValue("domain")),
-		HostURL: strings.TrimSpace(r.FormValue("host_url")), HostUser: strings.TrimSpace(r.FormValue("host_user")),
-		Profile: r.FormValue("host_profile")}
+		HostURL: strings.TrimSpace(r.FormValue("host_url")), HostUser: strings.TrimSpace(r.FormValue("host_user"))}
 	addr, err := parseSite(nf.Domain)
 	if err != nil {
 		fail(err.Error())
@@ -61,7 +60,7 @@ func (s *Server) handleProjectNew(w http.ResponseWriter, r *http.Request) {
 		if nf.HostURL == "" {
 			nf.HostURL = "https://" + addr.Parent + ":2083"
 		}
-		if hc, err = s.parseHostInput(nf.HostURL, nf.HostUser, r.FormValue("host_secret"), nf.Profile, true); err != nil {
+		if hc, err = s.parseHostInput(nf.HostURL, nf.HostUser, r.FormValue("host_secret"), "", true); err != nil {
 			fail(err.Error())
 			return
 		}
@@ -99,6 +98,20 @@ func (s *Server) handleProjectOp(w http.ResponseWriter, r *http.Request) {
 		}
 		err = s.projects.SetActive(id)
 	case "delete":
+		// every delete form (home dialog, project page, confirm page, projects list) needs the tick
+		if r.FormValue("sure") == "" {
+			err = errors.New("برای حذف پروژه، تیک «مطمئنم» را بزنید")
+			break
+		}
+		if r.FormValue("wipe_site") != "" {
+			// the site on the host goes first (visible run); the project only when that succeeds
+			var runID string
+			if runID, err = s.startSiteWipe(id); err == nil {
+				http.Redirect(w, r, s.cfg.BasePath+"runs/"+runID, http.StatusSeeOther)
+				return
+			}
+			break
+		}
 		err, msg = s.deleteProject(id, r.FormValue("purge") != "")
 	case "address":
 		// a project's address is entered once (at creation or here); task forms only read it
@@ -146,6 +159,12 @@ func (s *Server) handleProjectOp(w http.ResponseWriter, r *http.Request) {
 		sep = "&"
 	}
 	if err != nil {
+		if eb := s.safeBack(r.FormValue("errback")); eb != "" {
+			back, sep = eb, "?"
+			if strings.Contains(back, "?") {
+				sep = "&"
+			}
+		}
 		http.Redirect(w, r, back+sep+"err="+url.QueryEscape(err.Error()), http.StatusSeeOther)
 		return
 	}

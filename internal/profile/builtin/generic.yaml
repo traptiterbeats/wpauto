@@ -2,6 +2,10 @@
 id: generic
 name: cPanel عمومی
 description: هر هاست cPanel استاندارد (Jupiter یا Paper Lantern)
+# match: cPanel host names this profile is picked for automatically (projects have no profile
+# select). "example-host.com" fits that name and every name under it; ".example-host.com" only
+# names under it. The longest matching entry of all profiles wins; nothing matches → generic.
+# match: [example-host.com]
 port: 2083
 # session = login with username/password (works everywhere)
 # token   = cPanel API token (Manage API Tokens must be enabled on the host)

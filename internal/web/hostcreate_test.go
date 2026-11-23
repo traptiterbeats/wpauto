@@ -41,7 +41,7 @@ func TestCreateProjectWithHost(t *testing.T) {
 		t.Error("home form lacks the prefilled cPanel address logic")
 	}
 	r, body := e.homeCreate(url.Values{"name": {"احمد"}, "domain": {"ahmad.example.com"}, "host_url": {fake.URL},
-		"host_user": {"kfncspot"}, "host_secret": {secret}, "host_profile": {"fake"}})
+		"host_user": {"kfncspot"}, "host_secret": {secret}, "host_profile": {"generic"}})
 	p, ok := projectNamed(e, "احمد")
 	if !ok {
 		t.Fatal("project not created")
@@ -93,7 +93,7 @@ func TestCreateProjectWithHost(t *testing.T) {
 
 	// a second project on the same domain gets an independent record
 	r, _ = e.homeCreate(url.Values{"name": {"سهند"}, "domain": {"sah.example.com"}, "host_url": {fake.URL},
-		"host_user": {"kfncspot"}, "host_secret": {secret}, "host_profile": {"fake"}})
+		"host_user": {"kfncspot"}, "host_secret": {secret}, "host_profile": {"generic"}})
 	if st := e.waitRun(r.Request.URL.Query().Get("run")); st != "success" {
 		t.Fatalf("second check: %s", st)
 	}

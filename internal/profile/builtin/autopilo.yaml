@@ -1,6 +1,8 @@
 id: autopilo
 name: autopilo.ir
 description: cPanel 138 (Jupiter) · بدون API Token و SSH · PHP پیش‌فرض 8.5 · CSF فعال
+# picked automatically for projects whose cPanel address is on this host
+match: [autopilo.ir]
 port: 2083
 auth: session
 insecure_tls: false

@@ -26,7 +26,7 @@ func newBareEnv(t *testing.T) *homeEnv {
 	dir := t.TempDir()
 	t.Setenv("WPAUTO_DIR", dir)
 	_ = os.MkdirAll(filepath.Join(dir, "profiles"), 0o700)
-	_ = os.WriteFile(filepath.Join(dir, "profiles", "fake.yaml"), []byte("id: fake\nname: fake\ninsecure_tls: true\n"), 0o600)
+	_ = os.WriteFile(filepath.Join(dir, "profiles", "fake.yaml"), []byte("id: fake\nname: fake\ninsecure_tls: true\nmatch: [127.0.0.1]\n"), 0o600)
 	cfg, pass, _ := config.New(1)
 	s, err := New(cfg, "9.9.9-test")
 	if err != nil {
@@ -82,7 +82,7 @@ func TestProjectHostInlineFormWhenNoHost(t *testing.T) {
 	}
 	page := e.page("p/" + p.ID + "/host")
 	for _, want := range []string{`id="hostform"`, `action="` + bp + `p/` + p.ID + `/host/save"`,
-		`name="url"`, `value="https://autopilo.ir:2083"`, `name="username"`, `name="secret" type="password"`, `name="profile"`,
+		`name="url"`, `value="https://autopilo.ir:2083"`, `name="username"`, `name="secret" type="password"`,
 		"ذخیره و بررسی", "هاست این پروژه هنوز وصل نشده",
 		`<a href="` + bp + `p/` + p.ID + `/wordpress">وردپرس</a>`, `<strong aria-current="page">بررسی هاست</strong>`,
 		`href="` + bp + `p/` + p.ID + `/wordpress" id="backbtn"`} {
@@ -92,6 +92,9 @@ func TestProjectHostInlineFormWhenNoHost(t *testing.T) {
 	}
 	if strings.Contains(page, `id="hostsummary"`) {
 		t.Error("summary shown without a host")
+	}
+	if strings.Contains(page, `name="profile"`) || strings.Contains(page, "<select") {
+		t.Error("project host form still offers a profile select")
 	}
 	sameCSRF(t, "project host", page)
 
@@ -253,7 +256,7 @@ func TestProjectHostSaveCheckAndSeparate(t *testing.T) {
 		t.Fatal("password not updated, or user/URL changed")
 	}
 	// deleting a project deletes its host record, and only that one
-	r, _ = e.post("projects/"+p2.ID+"/delete", url.Values{"csrf": {csrf}, "back": {bp}})
+	r, _ = e.post("projects/"+p2.ID+"/delete", url.Values{"csrf": {csrf}, "back": {bp}, "sure": {"1"}})
 	if _, ok := e.s.store.Get(h2.ID); ok {
 		t.Fatal("deleted project's host record is still there")
 	}
